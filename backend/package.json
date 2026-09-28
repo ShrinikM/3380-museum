@@ -1,0 +1,13 @@
+{
+  "engines": {
+    "node": ">=22.0.0"
+  },
+
+  "dependencies": {
+    "bcrypt":"6.0.0",
+    "mysql2": "3.24.4"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

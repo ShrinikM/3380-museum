@@ -1,0 +1,21 @@
+{
+  "name": "3380-museum",
+  "version": "1.0.0",
+  "description": "Team #3:",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShrinikM/3380-museum.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ShrinikM/3380-museum/issues"
+  },
+  "homepage": "https://github.com/ShrinikM/3380-museum#readme"
+}
