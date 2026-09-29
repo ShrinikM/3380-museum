@@ -1,39 +1,53 @@
+import { Link } from 'react-router-dom'
+import Card from '../components/Card'
+
 function Dashboard() {
-  return(
+  return (
     <div className="dashboard">
-      <h1>Museum Database</h1>
-      <p>Welcome to the Museum of Fine Arts, Houston database.</p>
+      <div className="dashboard-header">
+        <h1>Museum Database</h1>
+        <p>Welcome to the Museum of Fine Arts, Houston database.</p>
+      </div>
 
       <div className="dashboard-cards">
-        <div className="dashboard-card">
-          <h2>Artists</h2>
-          <p>Manage museum artists.</p>
-        </div>
+        <Card
+          title="Artists"
+          description="Manage museum artists and their information."
+          link="#"
+          linkText="View Artists →"
+        />
 
-        <div className="dashboard-card">
-          <h2>Artworks</h2>
-          <p>Manage museum artworks.</p>
-        </div>
+        <Card
+          title="Artworks"
+          description="Manage artworks and their collections."
+          link="#"
+          linkText="View Artworks →"
+        />
 
-        <div className="dashboard-card">
-          <h2>Exhibitions</h2>
-          <p>Manage exhibitions and displayed artworks.</p>
-        </div>
+        <Card
+          title="Exhibitions"
+          description="Manage exhibitions and displayed artworks."
+          link="/exhibitions"
+        />
 
-        <div className="dashboard-card">
-          <h2>Tickets</h2>
-          <p>Manage exhibition tickets and sales.</p>
-        </div>
+        <Card
+          title="Tickets"
+          description="Manage exhibition tickets and ticket sales."
+          link="/tickets"
+        />
 
-        <div className="dashboard-card">
-          <h2>Memberships</h2>
-          <p>Manage museum memberships.</p>
-        </div>
+        <Card
+          title="Memberships"
+          description="Manage museum memberships and member information."
+          link="/memberships"
+        />
 
-        <div className="dashboard-card">
-          <h2>Gift Shop & Cafe</h2>
-          <p>Manage items and sales.</p>
-        </div>
+        <Card
+          title="Gift Shop & Cafe"
+          description="Manage items, sales, and museum services."
+          link="#"
+          linkText="View Sales →"
+        />
       </div>
     </div>
   )
