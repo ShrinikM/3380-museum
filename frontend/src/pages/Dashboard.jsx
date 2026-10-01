@@ -12,9 +12,8 @@ function Dashboard() {
       <div className="dashboard-cards">
         <Card
           title="Artists"
-          description="Manage museum artists and their information."
-          link="#"
-          linkText="View Artists →"
+          description="Manage museum artists and their information." 
+          link=" /artists"
         />
 
         <Card

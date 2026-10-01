@@ -5,6 +5,9 @@ import Dashboard from './pages/Dashboard'
 import Exhibitions from './pages/Exhibitions'
 import Tickets from './pages/Tickets'
 import Memberships from './pages/Memberships'
+
+import Artists from './pages/Artists'
+
 import './App.css'
 
 function App() {
