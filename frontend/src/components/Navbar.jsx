@@ -1,17 +1,28 @@
-import{ Link } from 'react-router-dom'
+import{ BellIcon } from './Icons'
 
 function Navbar(){
   return(
-    <nav className="navbar">
-      <div className="navbar-title">MFA Houston</div>
-
-      <div className="navbar-links">
-        <Link to="/">Dashboard</Link>
-        <Link to="/exhibitions">Exhibitions</Link>
-        <Link to="/tickets">Tickets</Link>
-        <Link to="/memberships">Memberships</Link>
+    <header className="navbar">
+      <div className="navbar-brand">
+        <span className="brand-mark">M</span>
+        <span className="brand-name">MFA Houston</span>
+        <span className="brand-sub">Museum Database</span>
       </div>
-    </nav>
+
+      <div className="navbar-right">
+        <button className="icon-btn">
+          <BellIcon size={15} />
+        </button>
+
+        <div className="user">
+          <span className="avatar">VK</span>
+          <div className="user-info">
+            <div className="user-name">Valeriia Krokhotina</div>
+            <div className="user-role">Administrator</div>
+          </div>
+        </div>
+      </div>
+    </header>
   )
 }
 
