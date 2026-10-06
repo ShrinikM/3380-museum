@@ -7,6 +7,7 @@ import Tickets from './pages/Tickets'
 import Memberships from './pages/Memberships'
 import GiftShop from './pages/GiftShop'
 import Cafe from './pages/Cafe'
+import Artists from './pages/Artists'
 import './App.css'
 
 
@@ -40,7 +41,7 @@ function App(){
           <Routes>
             <Route path="/" element={<Dashboard />} />
 
-            <Route path="/artists" element={<ComingSoon title="Artists" />} />
+            <Route path="/artists" element={<Artists />} />
             <Route path="/artworks" element={<ComingSoon title="Artworks" />} />
             <Route path="/collections" element={<ComingSoon title="Collections" />} />
             <Route path="/exhibitions" element={<Exhibitions />} />
