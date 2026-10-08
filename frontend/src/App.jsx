@@ -40,8 +40,8 @@ function App(){
           <Routes>
             <Route path="/" element={<Dashboard />} />
 
-            <Route path="/artists" element={<ComingSoon title="Artists" />} />
-            <Route path="/artworks" element={<ComingSoon title="Artworks" />} />
+            <Route path="/artists" element={<Artists />} />
+            <Route path="/artworks" element={<Artworks />} />
             <Route path="/collections" element={<ComingSoon title="Collections" />} />
             <Route path="/exhibitions" element={<Exhibitions />} />
 
