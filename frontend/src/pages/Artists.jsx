@@ -1,31 +1,19 @@
 import { useState, useEffect } from 'react'
 import{ Badge, Panel, Modal } from '../components/ui'
+import { callApi } from '../api'
+import { useRole } from '../context/role'
 
 function Artists() {
+  const { canEdit } = useRole()
+  const allowEdit = canEdit('/artists')
   const today = new Date().toISOString().split('T')[0]
-  const [artists, setArtists] = useState([
-    {
-      ArtistID: 1,
-      FirstName: 'Vincent',
-      LastName: 'van Gogh',
-      BirthYear: '1853-03-30',
-      DeathYear: '1890-07-29',
-      Nationality: 'Dutch',
-      CreatedBy: 1
-    },
-    {
-      ArtistID: 2,
-      FirstName: 'Pablo',
-      LastName: 'Picasso',
-      BirthYear: '1881-10-25',
-      DeathYear: '1973-04-08',
-      Nationality: 'Spanish',
-      CreatedBy: 1
-    }
-  ])
+  const [artists, setArtists] = useState([])
+  const [loadError, setLoadError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
   const [nationality, setNationality] = useState('all')
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState({
     FirstName: '',
     LastName: '',
@@ -36,17 +24,21 @@ function Artists() {
   })
 
   useEffect(() => {
-    fetchArtists()
-  }, [])
-
-  const fetchArtists = async () => {
-    try {
-      const res = await fetch('/api/artists')
-      const data = await res.json()
-      setArtists(data)
-    } catch (err) {
-      console.error('Error fetching artists:', err)
+    async function loadArtists() {
+      try {
+        const data = await callApi('/api/artists', 'GET')
+        setArtists(data)
+        setLoadError('')
+      } catch (err) {
+        setLoadError('Could not load artists: ' + err.message)
+      }
     }
+
+    loadArtists()
+  }, [reloadCount])
+
+  const refetchArtists = () => {
+    setReloadCount(reloadCount + 1)
   }
 
   const handleChange = (e) => {
@@ -64,7 +56,26 @@ function Artists() {
     })
   }
 
-  const handleSubmit = (e) => {
+  const openAddModal = () => {
+    resetForm()
+    setEditingId(null)
+    setOpen(true)
+  }
+
+  const openEditModal = (artist) => {
+    setFormData({
+      FirstName: artist.FirstName,
+      LastName: artist.LastName,
+      BirthYear: artist.BirthYear,
+      DeathYear: artist.DeathYear || '',
+      Nationality: artist.Nationality,
+      CreatedBy: ''
+    })
+    setEditingId(artist.ArtistID)
+    setOpen(true)
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     if(formData.BirthYear > today){
@@ -104,38 +115,46 @@ function Artists() {
       return
     }
 
-    const newArtist = {
-      ArtistID: Math.max(...artists.map((artist)=> artist.ArtistID), 0) + 1,
+    const artistData = {
       FirstName: formData.FirstName,
       LastName: formData.LastName,
       BirthYear: formData.BirthYear,
-      DeathYear: formData.DeathYear,
-      Nationality: formData.Nationality,
-      CreatedBy: formData.CreatedBy
+      DeathYear: formData.DeathYear || null,
+      Nationality: formData.Nationality
     }
 
-    setArtists([...artists, newArtist])
+    try {
+      if(editingId === null){
+        artistData.CreatedBy = formData.CreatedBy ? Number(formData.CreatedBy) : null
+        await callApi('/api/artists', 'POST', artistData)
+      } else {
+        await callApi('/api/artists/' + editingId, 'PUT', artistData)
+      }
+    } catch (err) {
+      alert(err.message)
+      return
+    }
 
-    setFormData({
-      FirstName: '',
-      LastName: '',
-      BirthYear: '',
-      DeathYear: '',
-      Nationality: '',
-      CreatedBy: ''
-    })
-
+    resetForm()
     setOpen(false)
+    refetchArtists()
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     const confirmed = window.confirm('Are you sure you want to delete this artist?')
 
     if(!confirmed){
       return
     }
 
-    setArtists(artists.filter((artist)=> artist.ArtistID !== id))
+    try {
+      await callApi('/api/artists/' + id, 'DELETE')
+    } catch (err) {
+      alert(err.message)
+      return
+    }
+
+    refetchArtists()
   }
 
   const nationalities = [
@@ -171,9 +190,11 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
         </p>
       </div>
 
-      <button className="btn primary" onClick={()=> setOpen(true)}>
-        Add Artist
-      </button>
+      {allowEdit && (
+        <button className="btn primary" onClick={openAddModal}>
+          Add Artist
+        </button>
+      )}
     </div>
 
     <div className="grid-3 section-gap-sm">
@@ -214,6 +235,8 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
       </select>
     </div>
 
+    {loadError && <p className="empty">{loadError}</p>}
+
     <div className="card table-wrap">
       <table className="data-table">
         <thead>
@@ -222,8 +245,9 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
             <th>Birth Date</th>
             <th>Death Date</th>
             <th>Nationality</th>
+            <th>Artworks</th>
             <th>Created By</th>
-            <th>Actions</th>
+            {allowEdit && <th>Actions</th>}
           </tr>
         </thead>
 
@@ -259,17 +283,32 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
               </td>
 
               <td className="mono">
+                {item.ArtworkCount}
+              </td>
+
+              <td className="mono">
                 {item.CreatedBy || '-'}
               </td>
 
-              <td>
-                <button
-                  className="btn danger"
-                  onClick={()=> handleDelete(item.ArtistID)}
-                >
-                  Delete
-                </button>
-              </td>
+              {allowEdit && (
+                <td>
+                  <div className="row-actions">
+                    <button
+                      className="btn secondary"
+                      onClick={()=> openEditModal(item)}
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="btn danger"
+                      onClick={()=> handleDelete(item.ArtistID)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -278,7 +317,7 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
 
     <Modal
       open={open}
-      title="Add Artist"
+      title={editingId === null ? 'Add Artist' : 'Edit Artist'}
       onClose={()=> setOpen(false)}
     >
       <form onSubmit={handleSubmit} className="form-grid">
@@ -337,17 +376,19 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
           />
         </div>
 
-        <div className="form-group">
-          <label>Created By</label>
-          <input
-            name="CreatedBy"
-            type="number"
-            min="1"
-            value={formData.CreatedBy}
-            onChange={handleChange}
-            placeholder="Staff ID"
-          />
-        </div>
+        {editingId === null && (
+          <div className="form-group">
+            <label>Created By</label>
+            <input
+              name="CreatedBy"
+              type="number"
+              min="1"
+              value={formData.CreatedBy}
+              onChange={handleChange}
+              placeholder="Staff ID"
+            />
+          </div>
+        )}
 
         <div className="form-actions">
           <button
@@ -362,7 +403,7 @@ const livingArtists = artists.filter((artist)=> !artist.DeathYear)
           </button>
 
           <button type="submit" className="btn primary">
-            Add Artist
+            {editingId === null ? 'Add Artist' : 'Save Changes'}
           </button>
         </div>
 

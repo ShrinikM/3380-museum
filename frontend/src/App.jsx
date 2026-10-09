@@ -8,6 +8,9 @@ import Memberships from './pages/Memberships'
 import GiftShop from './pages/GiftShop'
 import Cafe from './pages/Cafe'
 import Artists from './pages/Artists'
+import Artworks from './pages/Artworks'
+import Login from './pages/Login'
+import{ useRole } from './context/role'
 import './App.css'
 
 
@@ -16,6 +19,15 @@ function ComingSoon({ title }){
     <div className="page">
       <h1 className="page-title">{title}</h1>
       <p className="page-subtitle">This page is being built.</p>
+    </div>
+  )
+}
+
+function NoAccess(){
+  return(
+    <div className="page">
+      <h1 className="page-title">No access</h1>
+      <p className="page-subtitle">Your role cannot view this page.</p>
     </div>
   )
 }
@@ -30,6 +42,19 @@ function NotFound(){
 }
 
 function App(){
+  const { user, canView } = useRole()
+
+  if(user === null){
+    return <Login />
+  }
+
+  const protect = (path, page) => {
+    if(canView(path)){
+      return page
+    }
+    return <NoAccess />
+  }
+
   return(
     <>
       <Navbar />
@@ -41,18 +66,18 @@ function App(){
           <Routes>
             <Route path="/" element={<Dashboard />} />
 
-            <Route path="/artists" element={<Artists />} />
-            <Route path="/artworks" element={<ComingSoon title="Artworks" />} />
-            <Route path="/collections" element={<ComingSoon title="Collections" />} />
-            <Route path="/exhibitions" element={<Exhibitions />} />
+            <Route path="/artists" element={protect('/artists', <Artists />)} />
+            <Route path="/artworks" element={protect('/artworks', <Artworks />)} />
+            <Route path="/collections" element={protect('/collections', <ComingSoon title="Collections" />)} />
+            <Route path="/exhibitions" element={protect('/exhibitions', <Exhibitions />)} />
 
-            <Route path="/tickets" element={<Tickets />} />
-            <Route path="/memberships" element={<Memberships />} />
-            <Route path="/gift-shop" element={<GiftShop />} />
-            <Route path="/cafe" element={<Cafe />} />
+            <Route path="/tickets" element={protect('/tickets', <Tickets />)} />
+            <Route path="/memberships" element={protect('/memberships', <Memberships />)} />
+            <Route path="/gift-shop" element={protect('/gift-shop', <GiftShop />)} />
+            <Route path="/cafe" element={protect('/cafe', <Cafe />)} />
 
-            <Route path="/donations" element={<ComingSoon title="Donations" />} />
-            <Route path="/staff" element={<ComingSoon title="Staff" />} />
+            <Route path="/donations" element={protect('/donations', <ComingSoon title="Donations" />)} />
+            <Route path="/staff" element={protect('/staff', <ComingSoon title="Staff" />)} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

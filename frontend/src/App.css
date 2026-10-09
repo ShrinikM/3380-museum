@@ -572,3 +572,8 @@ a:focus-visible, button:focus-visible{ outline: 2px solid var(--primary); outlin
   .grid-3, .grid-4, .module-grid, .form-grid, .checklist{ grid-template-columns: 1fr;}
   .page-header{ flex-direction: column; gap: 12px;}
 }
+
+.login-page{ min-height: 100vh; display: grid; place-items: center; padding: 32px;}
+.login-card{ width: 100%; max-width: 380px; padding: 32px;}
+.login-form{ display: grid; gap: 18px; margin-top: 24px;}
+.login-error{ color: var(--danger); font-size: 13px;}
