@@ -1,6 +1,7 @@
 export const TICKET_TYPES = ['Adult', 'Senior', 'Student', 'Child', 'Member']
 export const MEMBERSHIP_TYPES = ['Individual', 'Family', 'Student', 'Senior']
-export const STAFF_ROLES = ['Admin', 'Curator', 'Exhibition Manager', 'Gift Shop', 'Ticket Desk', 'Cafe']
+export const ARTWORK_TYPES = ['Painting', 'Sculpture', 'Drawing', 'Print', 'Photography', 'Mixed Media']
+export const STAFF_ROLES =['Admin', 'Curator', 'Exhibition Manager', 'Gift Shop', 'Ticket Desk', 'Cafe']
 
 export const PAYMENT_METHODS = {
   membership: ['Cash', 'Credit Card', 'Debit Card', 'Bank Transfer'],

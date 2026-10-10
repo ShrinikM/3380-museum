@@ -4,6 +4,7 @@ import{
   ArtistIcon, ArtworkIcon, CollectionIcon, ExhibitionIcon,
   TicketIcon, MemberIcon, GiftIcon, DonationIcon, StaffIcon,
 } from '../components/Icons'
+import{ useRole } from '../context/role'
 
 const modules = [
   { link: '/artists', title: 'Artists', Icon: ArtistIcon, count: '2,841',
@@ -35,6 +36,9 @@ const activity = [
 ]
 
 function Dashboard(){
+  const { canView } = useRole()
+  const visibleModules = modules.filter((m)=> canView(m.link))
+
   return(
     <div className="page">
       <div className="dashboard-header">
@@ -53,7 +57,7 @@ function Dashboard(){
         <section>
           <div className="section-label">Database Modules</div>
           <div className="module-grid">
-            {modules.map((m)=> <Card key={m.title} {...m} />)}
+            {visibleModules.map((m)=> <Card key={m.title} {...m} />)}
           </div>
         </section>
 
