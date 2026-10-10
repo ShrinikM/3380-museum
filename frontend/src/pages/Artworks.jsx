@@ -1,406 +1,361 @@
-import { useState, useEffect } from 'react'
-import{ Badge, Panel, Modal } from '../components/ui'
-import { callApi } from '../api'
-import { useRole } from '../context/role'
-import { ARTWORK_TYPES } from '../data/constants'
+import React, { useState, useEffect } from 'react'
 
 function Artworks() {
-  const { canEdit } = useRole()
-  const allowEdit = canEdit('/artworks')
-  const today = new Date().toISOString().split('T')[0]
   const [artworks, setArtworks] = useState([])
   const [artists, setArtists] = useState([])
   const [collections, setCollections] = useState([])
-  const [loadError, setLoadError] = useState('')
-  const [reloadCount, setReloadCount] = useState(0)
-  const [search, setSearch] = useState('')
-  const [type, setType] = useState('all')
-  const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterMedium, setFilterMedium] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [error, setError] = useState('')
+
   const [formData, setFormData] = useState({
     Title: '',
-    Type: '',
     ArtistID: '',
+    CreationYear: '',
+    Medium: '',
+    Dimensions: '',
     CollectionID: '',
-    DateCreated: '',
+    Department: '',
     CreatedBy: ''
   })
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const artworkData = await callApi('/api/artworks', 'GET')
-        const artistData = await callApi('/api/artists', 'GET')
-        const collectionData = await callApi('/api/collections', 'GET')
-        setArtworks(artworkData)
-        setArtists(artistData)
-        setCollections(collectionData)
-        setLoadError('')
-      } catch (err) {
-        setLoadError('Could not load artworks: ' + err.message)
-      }
+    fetchArtworks()
+    fetchDropdowns()
+  }, [])
+
+  const fetchArtworks = async () => {
+    try {
+      const res = await fetch('/api/artworks')
+      const data = await res.json()
+      if (Array.isArray(data)) setArtworks(data)
+    } catch (err) {
+      console.error('Error fetching artworks:', err)
     }
+  }
 
-    loadData()
-  }, [reloadCount])
-
-  const refetchArtworks = () => {
-    setReloadCount(reloadCount + 1)
+  const fetchDropdowns = async () => {
+    try {
+      const [artistsRes, collectionsRes] = await Promise.all([
+        fetch('/api/artists'),
+        fetch('/api/collections')
+      ])
+      if (artistsRes.ok) {
+        const artistsData = await artistsRes.json()
+        if (Array.isArray(artistsData)) setArtists(artistsData)
+      }
+      if (collectionsRes.ok) {
+        const collectionsData = await collectionsRes.json()
+        if (Array.isArray(collectionsData)) setCollections(collectionsData)
+      }
+    } catch (err) {
+      console.error('Error fetching dropdown data:', err)
+    }
   }
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const resetForm = () => {
-    setFormData({
-      Title: '',
-      Type: '',
-      ArtistID: '',
-      CollectionID: '',
-      DateCreated: '',
-      CreatedBy: ''
-    })
-  }
-
-  const openAddModal = () => {
-    resetForm()
-    setEditingId(null)
-    setOpen(true)
-  }
-
-  const openEditModal = (artwork) => {
-    setFormData({
-      Title: artwork.Title,
-      Type: artwork.Type,
-      ArtistID: String(artwork.ArtistID),
-      CollectionID: String(artwork.CollectionID),
-      DateCreated: artwork.DateCreated,
-      CreatedBy: ''
-    })
-    setEditingId(artwork.ArtworkID)
-    setOpen(true)
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
-
-    if(formData.DateCreated > today){
-      alert('Date Created cannot be in the future.')
-      return
-    }
-
-    if(formData.CreatedBy && Number(formData.CreatedBy) < 1){
-      alert('Created By must be a positive Staff ID.')
-      return
-    }
-
-    const artworkData = {
-      Title: formData.Title,
-      Type: formData.Type,
-      ArtistID: Number(formData.ArtistID),
-      CollectionID: Number(formData.CollectionID),
-      DateCreated: formData.DateCreated
-    }
-
+    setError('')
     try {
-      if(editingId === null){
-        artworkData.CreatedBy = formData.CreatedBy ? Number(formData.CreatedBy) : null
-        await callApi('/api/artworks', 'POST', artworkData)
+      const res = await fetch('/api/artworks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      })
+      if (res.ok) {
+        fetchArtworks()
+        setFormData({
+          Title: '',
+          ArtistID: '',
+          CreationYear: '',
+          Medium: '',
+          Dimensions: '',
+          CollectionID: '',
+          Department: '',
+          CreatedBy: ''
+        })
+        setIsModalOpen(false)
       } else {
-        await callApi('/api/artworks/' + editingId, 'PUT', artworkData)
+        const errData = await res.json()
+        setError(errData.message || 'Failed to save artwork record.')
       }
     } catch (err) {
-      alert(err.message)
-      return
+      console.error('Error adding artwork:', err)
+      setError('Server error while saving artwork.')
     }
-
-    resetForm()
-    setOpen(false)
-    refetchArtworks()
   }
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm('Are you sure you want to delete this artwork?')
-
-    if(!confirmed){
-      return
-    }
-
+    if (!window.confirm('Are you sure you want to delete this artwork?')) return
     try {
-      await callApi('/api/artworks/' + id, 'DELETE')
+      const res = await fetch(`/api/artworks/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        fetchArtworks()
+      }
     } catch (err) {
-      alert(err.message)
-      return
+      console.error('Error deleting artwork:', err)
     }
-
-    refetchArtworks()
   }
 
-  const filtered = artworks.filter((artwork)=>{
-    const searchText = search.toLowerCase()
-
-    const matchesSearch =
-      artwork.Title.toLowerCase().includes(searchText) ||
-      artwork.ArtistName.toLowerCase().includes(searchText) ||
-      artwork.CollectionName.toLowerCase().includes(searchText)
-
-    const matchesType =
-      type === 'all' || artwork.Type === type
-
-    return matchesSearch && matchesType
+  // Filter artworks by title or artist name search
+  const filteredArtworks = artworks.filter((item) => {
+    const titleMatch = (item.Title || '').toLowerCase().includes(searchTerm.toLowerCase())
+    const artistMatch = item.ArtistName ? item.ArtistName.toLowerCase().includes(searchTerm.toLowerCase()) : false
+    const mediumMatch = filterMedium ? item.Medium === filterMedium : true
+    return (titleMatch || artistMatch) && mediumMatch
   })
 
-  const artistsRepresented = new Set(artworks.map((artwork)=> artwork.ArtistID))
-  const collectionsUsed = new Set(artworks.map((artwork)=> artwork.CollectionID))
+  // Get list of unique mediums for filter dropdown
+  const uniqueMediums = [...new Set(artworks.map((a) => a.Medium).filter(Boolean))]
 
   return (
     <div className="page">
+      {/* Header Section */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Artworks</h1>
           <p className="page-subtitle">
-            Manage museum artworks and their information.
+            Catalog entries including artist details, medium, creation year, and assigned collection.
           </p>
         </div>
-
-        {allowEdit && (
-          <button className="btn primary" onClick={openAddModal}>
-            Add Artwork
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            + Add Artwork
           </button>
-        )}
+        </div>
       </div>
 
-      <div className="grid-3 section-gap-sm">
-        <Panel className="summary-card">
-          <div className="summary-value">{artworks.length}</div>
-          <div className="summary-label">Total Artworks</div>
-        </Panel>
+      {/* Main Table Card */}
+      <div className="card">
+        {/* Toolbar & Search */}
+        <div className="toolbar" style={{ padding: '16px 20px 0 20px' }}>
+          <div className="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search by title or artist..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-        <Panel className="summary-card">
-          <div className="summary-value">{artistsRepresented.size}</div>
-          <div className="summary-label">Artists Represented</div>
-        </Panel>
+          <div className="filter-select">
+            <select value={filterMedium} onChange={(e) => setFilterMedium(e.target.value)}>
+              <option value="">All Mediums</option>
+              {uniqueMediums.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
 
-        <Panel className="summary-card">
-          <div className="summary-value">{collectionsUsed.size}</div>
-          <div className="summary-label">Collections</div>
-        </Panel>
-      </div>
+          <div className="record-count">{filteredArtworks.length} records found</div>
+        </div>
 
-      <div className="toolbar">
-        <input
-          value={search}
-          onChange={(e)=> setSearch(e.target.value)}
-          placeholder="Search artworks..."
-        />
-
-        <select
-          value={type}
-          onChange={(e)=> setType(e.target.value)}
-        >
-          <option value="all">All Types</option>
-
-          {ARTWORK_TYPES.map((item)=>(
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {loadError && <p className="empty">{loadError}</p>}
-
-      <div className="card table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Artwork</th>
-              <th>Artist</th>
-              <th>Collection</th>
-              <th>Type</th>
-              <th>Date Created</th>
-              <th>Created By</th>
-              {allowEdit && <th>Actions</th>}
-            </tr>
-          </thead>
-
-          <tbody>
-            {filtered.map((item)=>(
-              <tr key={item.ArtworkID}>
-                <td>
-                  <div className="strong">
-                    {item.Title}
-                  </div>
-                  <div className="cell-sub mono">
-                    #{String(item.ArtworkID).padStart(5, '0')}
-                  </div>
-                </td>
-
-                <td>
-                  {item.ArtistName}
-                </td>
-
-                <td>
-                  {item.CollectionName}
-                </td>
-
-                <td>
-                  <Badge
-                    variant="active"
-                    label={item.Type || 'Unknown'}
-                  />
-                </td>
-
-                <td className="mono">
-                  {item.DateCreated}
-                </td>
-
-                <td className="mono">
-                  {item.CreatedBy || '-'}
-                </td>
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        className="btn secondary"
-                        onClick={()=> openEditModal(item)}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        className="btn danger"
-                        onClick={()=> handleDelete(item.ArtworkID)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
+        {/* Data Table */}
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title & Medium</th>
+                <th>Artist</th>
+                <th>Year</th>
+                <th>Dimensions</th>
+                <th>Collection</th>
+                <th>Department</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredArtworks.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="empty">
+                    No artworks found matching your criteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredArtworks.map((item) => (
+                  <tr key={item.ArtworkID}>
+                    <td className="mono">{item.ArtworkID}</td>
+                    <td>
+                      <div className="strong">{item.Title}</div>
+                      <div className="cell-sub">{item.Medium || 'Medium Unspecified'}</div>
+                    </td>
+                    <td>
+                      {item.ArtistName || (item.ArtistID ? `Artist #${item.ArtistID}` : 'Unknown Artist')}
+                    </td>
+                    <td className="mono">{item.CreationYear || '—'}</td>
+                    <td className="muted small">{item.Dimensions || '—'}</td>
+                    <td>
+                      {item.CollectionName ? (
+                        <span className="chip chip-primary">{item.CollectionName}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {item.Department ? (
+                        <span className="badge badge-active">{item.Department}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
+                        <button
+                          className="icon-action delete"
+                          title="Delete Artwork"
+                          onClick={() => handleDelete(item.ArtworkID)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <Modal
-        open={open}
-        title={editingId === null ? 'Add Artwork' : 'Edit Artwork'}
-        onClose={()=> setOpen(false)}
-      >
-        <form onSubmit={handleSubmit} className="form-grid">
-
-          <div className="form-group">
-            <label>Title</label>
-            <input
-              name="Title"
-              value={formData.Title}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Type</label>
-            <select
-              name="Type"
-              value={formData.Type}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select a type</option>
-
-              {ARTWORK_TYPES.map((item)=>(
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Artist</label>
-            <select
-              name="ArtistID"
-              value={formData.ArtistID}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select an artist</option>
-
-              {artists.map((artist)=>(
-                <option key={artist.ArtistID} value={artist.ArtistID}>
-                  {artist.FirstName} {artist.LastName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Collection</label>
-            <select
-              name="CollectionID"
-              value={formData.CollectionID}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select a collection</option>
-
-              {collections.map((collection)=>(
-                <option key={collection.CollectionID} value={collection.CollectionID}>
-                  {collection.Name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Date Created</label>
-            <input
-              name="DateCreated"
-              type="date"
-              max={today}
-              value={formData.DateCreated}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          {editingId === null && (
-            <div className="form-group">
-              <label>Created By</label>
-              <input
-                name="CreatedBy"
-                type="number"
-                min="1"
-                value={formData.CreatedBy}
-                onChange={handleChange}
-                placeholder="Staff ID"
-              />
+      {/* Modal Dialog for Adding Artwork */}
+      {isModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>New Artwork Entry</h2>
+              <button className="modal-close" onClick={() => setIsModalOpen(false)}>
+                &times;
+              </button>
             </div>
-          )}
 
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={()=>{
-                resetForm()
-                setOpen(false)
-              }}
-            >
-              Cancel
-            </button>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body">
+                {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
 
-            <button type="submit" className="btn primary">
-              {editingId === null ? 'Add Artwork' : 'Save Changes'}
-            </button>
+                <div className="form-grid">
+                  <div className="field span-2">
+                    <label className="field-label">Artwork Title</label>
+                    <input
+                      className="input"
+                      name="Title"
+                      placeholder="e.g. Starry Night"
+                      value={formData.Title}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Artist</label>
+                    <select className="input" name="ArtistID" value={formData.ArtistID} onChange={handleChange} required>
+                      <option value="">Select Artist...</option>
+                      {artists.map((a) => (
+                        <option key={a.ArtistID} value={a.ArtistID}>
+                          {a.FirstName} {a.LastName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Creation Year</label>
+                    <input
+                      className="input mono"
+                      type="number"
+                      name="CreationYear"
+                      placeholder="e.g. 1889"
+                      value={formData.CreationYear}
+                      onChange={handleChange}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Medium</label>
+                    <input
+                      className="input"
+                      name="Medium"
+                      placeholder="e.g. Oil on canvas"
+                      value={formData.Medium}
+                      onChange={handleChange}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Dimensions</label>
+                    <input
+                      className="input"
+                      name="Dimensions"
+                      placeholder="e.g. 73.7 cm × 92.1 cm"
+                      value={formData.Dimensions}
+                      onChange={handleChange}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Collection</label>
+                    <select className="input" name="CollectionID" value={formData.CollectionID} onChange={handleChange}>
+                      <option value="">None / Unassigned</option>
+                      {collections.map((c) => (
+                        <option key={c.CollectionID} value={c.CollectionID}>
+                          {c.Name || c.CollectionName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Department</label>
+                    <input
+                      className="input"
+                      name="Department"
+                      placeholder="e.g. European Painting"
+                      value={formData.Department}
+                      onChange={handleChange}
+                    />
+                  </div>
+
+                  <div className="field span-2">
+                    <label className="field-label">Created By (Staff ID) <span className="optional">(Optional)</span></label>
+                    <input
+                      className="input mono"
+                      name="CreatedBy"
+                      placeholder="Staff ID number"
+                      value={formData.CreatedBy}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none' }}>
+                <div className="modal-actions" style={{ width: '100%' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    Save Artwork
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
-
-        </form>
-      </Modal>
+        </div>
+      )}
     </div>
   )
 }

@@ -3,7 +3,6 @@ import{
   DashboardIcon, ArtistIcon, ArtworkIcon, CollectionIcon, ExhibitionIcon,
   TicketIcon, MemberIcon, GiftIcon, CafeIcon, DonationIcon, StaffIcon,
 } from './Icons'
-import{ useRole } from '../context/role'
 
 const SECTIONS = [
   { label: 'Overview', items: [
@@ -28,32 +27,22 @@ const SECTIONS = [
 ]
 
 function Sidebar(){
-  const { canView } = useRole()
-
   return(
     <aside className="sidebar">
       <nav>
-        {SECTIONS.map((section)=>{
-          const visibleItems = section.items.filter((item)=> canView(item.to))
+        {SECTIONS.map((section)=>(
+          <div className="sidebar-section" key={section.label}>
+            <div className="sidebar-label">{section.label}</div>
 
-          if(visibleItems.length === 0){
-            return null
-          }
-
-          return(
-            <div className="sidebar-section" key={section.label}>
-              <div className="sidebar-label">{section.label}</div>
-
-              {visibleItems.map(({ to, text, Icon })=>(
-                <NavLink key={to} to={to} end={to === '/'}
-                  className={({ isActive })=> 'sidebar-link' + (isActive ? ' active' : '')}>
-                  <Icon size={14} />
-                  {text}
-                </NavLink>
-              ))}
-            </div>
-          )
-        })}
+            {section.items.map(({ to, text, Icon })=>(
+              <NavLink key={to} to={to} end={to === '/'}
+                className={({ isActive })=> 'sidebar-link' + (isActive ? ' active' : '')}>
+                <Icon size={14} />
+                {text}
+              </NavLink>
+            ))}
+          </div>
+        ))}
       </nav>
     </aside>
   )

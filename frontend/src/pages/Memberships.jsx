@@ -1,9 +1,9 @@
 import{ useState } from 'react'
-import{ Badge, Panel, StatCard, Modal } from '../components/ui'
+import{ Badge, Panel, StatCard } from '../components/ui'
 
 const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
 
-const initialMemberships = [
+const memberships = [
   {
     id: 1,
     firstName: 'Patricia',
@@ -52,136 +52,10 @@ const membershipPrices = {
   Senior: 60,
 }
 
-const membershipDiscounts = {
-  Individual: 5,
-  Family: 10,
-  Student: 10,
-  Senior: 15,
-}
-
 function Memberships(){
-  const [memberships, setMemberships] = useState(initialMemberships)
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
   const [status, setStatus] = useState('all')
-  const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    type: '',
-    startDate: '',
-    endDate: '',
-    price: '',
-    discount: '',
-    payment: ''
-  })
-  const maxEndDate = formData.startDate
-    ? new Date(new Date(formData.startDate).setFullYear(new Date(formData.startDate).getFullYear() + 1)).toISOString().split('T')[0]
-    : undefined
-
-  const handleChange = (e) => {
-    const { name, value } = e.target
-
-    if(name === 'type'){
-      setFormData({
-        ...formData,
-        type: value,
-        price: value ? membershipPrices[value] : '',
-        discount: value ? membershipDiscounts[value] : ''
-      })
-      return
-    }
-
-    setFormData({ ...formData, [name]: value })
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-
-    const firstName = formData.firstName.trim()
-    const lastName = formData.lastName.trim()
-    const email = formData.email.trim()
-    const price = Number(formData.price)
-    const discount = Number(formData.discount)
-
-    const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
-
-    if(!textPattern.test(firstName)){
-      alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
-      return
-    }
-
-    if(!textPattern.test(lastName)){
-      alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
-      return
-    }
-
-    if(price <= 0){
-      alert('Price must be greater than 0.')
-      return
-    }
-
-    if(discount < 0 || discount > 100){
-      alert('Discount must be between 0 and 100.')
-      return
-    }
-
-    if(formData.endDate < formData.startDate){
-      alert('End Date cannot be before Start Date.')
-      return
-    }
-
-    const maxEndDate = new Date(formData.startDate)
-    maxEndDate.setFullYear(maxEndDate.getFullYear() + 1)
-
-    if(new Date(formData.endDate) > maxEndDate){
-      alert('Membership cannot be longer than 1 year.')
-      return
-    }
-
-    const newMembership = {
-      id: Math.max(...memberships.map((member)=> member.id), 0) + 1,
-      firstName,
-      lastName,
-      email,
-      type: formData.type,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      price,
-      discount,
-      payment: formData.payment,
-      status: formData.startDate > new Date().toISOString().split('T')[0]
-        ? 'upcoming'
-        : 'active'
-    }
-
-    setMemberships([...memberships, newMembership])
-
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      type: '',
-      startDate: '',
-      endDate: '',
-      price: '',
-      discount: '',
-      payment: ''
-    })
-
-    setOpen(false)
-  }
-
-  const handleDelete = (id) => {
-    const confirmed = window.confirm('Are you sure you want to delete this membership?')
-
-    if(!confirmed){
-      return
-    }
-
-    setMemberships(memberships.filter((member)=> member.id !== id))
-  }
 
   const active = memberships.filter((member)=> member.status === 'active')
   const upcoming = memberships.filter((member)=> member.status === 'upcoming')
@@ -212,9 +86,7 @@ function Memberships(){
           </p>
         </div>
 
-        <button className="btn primary" onClick={()=> setOpen(true)}>
-          Add Membership
-        </button>
+        <button className="btn primary">Add Membership</button>
       </div>
 
       <div className="grid-4 section-gap-sm">
@@ -284,7 +156,6 @@ function Memberships(){
               <th>Discount</th>
               <th>Payment</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
 
@@ -311,166 +182,11 @@ function Memberships(){
                 <td className="mono">{member.discount}%</td>
                 <td className="muted nowrap">{member.payment}</td>
                 <td><Badge variant={member.status} /></td>
-                <td>
-                  <button
-                    className="btn danger"
-                    onClick={()=> handleDelete(member.id)}
-                  >
-                    Delete
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      <Modal
-        open={open}
-        title="Add Membership"
-        onClose={()=> setOpen(false)}
-      >
-        <form className="form-grid" onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>First Name</label>
-            <input
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Last Name</label>
-            <input
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Type</label>
-            <select
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Type</option>
-              {membershipTypes.map((membershipType)=>(
-                <option key={membershipType} value={membershipType}>
-                  {membershipType}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Start Date</label>
-            <input
-              name="startDate"
-              type="date"
-              value={formData.startDate}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>End Date</label>
-            <input
-              name="endDate"
-              type="date"
-              value={formData.endDate}
-              onChange={handleChange}
-              min={formData.startDate}
-              max={maxEndDate}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Price</label>
-            <input
-              name="price"
-              type="number"
-              min="0.01"
-              max="999999.99"
-              step="0.01"
-              value={formData.price}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Discount %</label>
-            <input
-              name="discount"
-              type="number"
-              value={formData.discount}
-              readOnly
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Payment</label>
-            <select
-              name="payment"
-              value={formData.payment}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Payment</option>
-              <option value="Cash">Cash</option>
-              <option value="Credit Card">Credit Card</option>
-              <option value="Debit Card">Debit Card</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-            </select>
-          </div>
-
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={()=>{
-                setFormData({
-                  firstName: '',
-                  lastName: '',
-                  email: '',
-                  type: '',
-                  startDate: '',
-                  endDate: '',
-                  price: '',
-                  discount: '',
-                  payment: ''
-                })
-                setOpen(false)
-              }}
-            >
-              Cancel
-            </button>
-
-            <button type="submit" className="btn primary">
-              Add Membership
-            </button>
-          </div>
-        </form>
-      </Modal>
     </div>
   )
 }
