@@ -1,5 +1,6 @@
-import{ useState } from 'react'
-import{ Badge, StatCard, Modal } from '../components/ui'
+import { useState } from 'react'
+import { Badge, StatCard, Modal } from '../components/ui'
+import { addActivity } from './Dashboard'
 
 const ticketTypes = ['Adult', 'Senior', 'Student', 'Child', 'Member']
 
@@ -20,13 +21,14 @@ const ticketPrices = {
   Member: 18,
 }
 
-function Tickets(){
+function Tickets() {
   const today = new Date().toISOString().split('T')[0]
 
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
   const [exhibition, setExhibition] = useState('all')
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
 
   const [tickets, setTickets] = useState([
     {
@@ -63,13 +65,16 @@ function Tickets(){
     TicketType: '',
     Price: '',
     SaleDate: '',
-    MembershipID: ''
+    MembershipID: '',
   })
 
-  const revenue = tickets.reduce((sum, ticket)=> sum + ticket.Price, 0)
-  const memberTickets = tickets.filter((ticket)=> ticket.TicketType === 'Member').length
+  const revenue = tickets.reduce((sum, ticket) => sum + ticket.Price, 0)
 
-  const filtered = tickets.filter((ticket)=>{
+  const memberTickets = tickets.filter(
+    (ticket) => ticket.TicketType === 'Member'
+  ).length
+
+  const filtered = tickets.filter((ticket) => {
     const matchesSearch =
       ticket.TicketID.toString().includes(search) ||
       ticket.ExhibitionName.toLowerCase().includes(search.toLowerCase()) ||
@@ -79,13 +84,17 @@ function Tickets(){
       type === 'all' || ticket.TicketType === type
 
     const matchesExhibition =
-      exhibition === 'all' || ticket.ExhibitionID.toString() === exhibition
+      exhibition === 'all' ||
+      ticket.ExhibitionID.toString() === exhibition
 
     return matchesSearch && matchesType && matchesExhibition
   })
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
   }
 
   const handleTypeChange = (e) => {
@@ -94,15 +103,16 @@ function Tickets(){
     setFormData({
       ...formData,
       TicketType: value,
-      Price: ticketPrices[value] || '',
-      MembershipID: value === 'Member' ? formData.MembershipID : ''
+      Price: value ? ticketPrices[value] : '',
+      MembershipID: value === 'Member' ? formData.MembershipID : '',
     })
   }
 
   const handleMembershipChange = (e) => {
     const membershipID = e.target.value
+
     const membership = memberships.find(
-      (member)=> member.MembershipID === Number(membershipID)
+      (member) => member.MembershipID === Number(membershipID)
     )
 
     const basePrice = ticketPrices[formData.TicketType] || 0
@@ -112,7 +122,7 @@ function Tickets(){
     setFormData({
       ...formData,
       MembershipID: membershipID,
-      Price: membershipID ? price.toFixed(2) : basePrice
+      Price: membershipID ? price.toFixed(2) : basePrice,
     })
   }
 
@@ -122,49 +132,91 @@ function Tickets(){
       TicketType: '',
       Price: '',
       SaleDate: '',
-      MembershipID: ''
+      MembershipID: '',
     })
+  }
+
+  const openAddModal = () => {
+    resetForm()
+    setEditingId(null)
+    setOpen(true)
+  }
+
+  const openEditModal = (ticket) => {
+    setEditingId(ticket.TicketID)
+
+    setFormData({
+      ExhibitionID: String(ticket.ExhibitionID),
+      TicketType: ticket.TicketType,
+      Price: String(ticket.Price),
+      SaleDate: ticket.SaleDate,
+      MembershipID: ticket.MembershipID
+        ? String(ticket.MembershipID)
+        : '',
+    })
+
+    setOpen(true)
+  }
+
+  const closeModal = () => {
+    resetForm()
+    setEditingId(null)
+    setOpen(false)
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
 
-    if(!formData.ExhibitionID){
+    if (!formData.ExhibitionID) {
       alert('Please select an Exhibition.')
       return
     }
 
-    if(!formData.TicketType){
+    if (!formData.TicketType) {
       alert('Please select a Ticket Type.')
       return
     }
 
-    if(!formData.SaleDate){
+    if (!formData.SaleDate) {
       alert('Please select a Sale Date.')
       return
     }
 
-    if(formData.SaleDate > today){
+    if (formData.SaleDate > today) {
       alert('Sale Date cannot be in the future.')
       return
     }
 
-    if(formData.TicketType === 'Member' && !formData.MembershipID){
+    if (
+      formData.TicketType === 'Member' &&
+      !formData.MembershipID
+    ) {
       alert('Member tickets require a Membership.')
       return
     }
 
-    if(formData.TicketType !== 'Member' && formData.MembershipID){
+    if (
+      formData.TicketType !== 'Member' &&
+      formData.MembershipID
+    ) {
       alert('Only Member tickets can have a Membership.')
       return
     }
 
     const selectedExhibition = exhibitions.find(
-      (item)=> item.ExhibitionID === Number(formData.ExhibitionID)
+      (item) => item.ExhibitionID === Number(formData.ExhibitionID)
     )
 
-    const newTicket = {
-      TicketID: Math.max(...tickets.map((ticket)=> ticket.TicketID), 0) + 1,
+    if (!selectedExhibition) {
+      alert('Please select a valid Exhibition.')
+      return
+    }
+
+    const selectedMembership = memberships.find(
+      (member) => member.MembershipID === Number(formData.MembershipID)
+    )
+
+    const ticketData = {
       ExhibitionID: Number(formData.ExhibitionID),
       ExhibitionName: selectedExhibition.Name,
       TicketType: formData.TicketType,
@@ -172,29 +224,66 @@ function Tickets(){
       SaleDate: formData.SaleDate,
       MembershipID: formData.MembershipID
         ? Number(formData.MembershipID)
-        : null
+        : null,
     }
 
-    setTickets([...tickets, newTicket])
-    resetForm()
-    setOpen(false)
+    if (editingId !== null) {
+      setTickets((currentTickets) =>
+        currentTickets.map((ticket) =>
+          ticket.TicketID === editingId
+            ? { ...ticket, ...ticketData }
+            : ticket
+        )
+      )
+
+      addActivity(
+        'Ticket updated',
+        `#${String(editingId).padStart(5, '0')} — ${selectedExhibition.Name}`
+      )
+    } else {
+      const newTicket = {
+        TicketID:
+          Math.max(...tickets.map((ticket) => ticket.TicketID), 0) + 1,
+        ...ticketData,
+      }
+
+      setTickets((currentTickets) => [...currentTickets, newTicket])
+
+      addActivity(
+        'Ticket added',
+        `${selectedExhibition.Name} — ${ticketData.TicketType} ($${ticketData.Price.toFixed(2)})${
+          selectedMembership ? ` — ${selectedMembership.Name}` : ''
+        }`
+      )
+    }
+
+    closeModal()
   }
 
   const handleDelete = (ticketID) => {
+    const ticket = tickets.find(
+      (item) => item.TicketID === ticketID
+    )
+
     const confirmed = window.confirm(
       'Are you sure you want to delete this ticket?'
     )
 
-    if(!confirmed){
+    if (!confirmed) {
       return
     }
 
-    setTickets(
-      tickets.filter((ticket)=> ticket.TicketID !== ticketID)
+    setTickets((currentTickets) =>
+      currentTickets.filter((item) => item.TicketID !== ticketID)
+    )
+
+    addActivity(
+      'Ticket deleted',
+      `#${String(ticketID).padStart(5, '0')} — ${ticket?.ExhibitionName || 'Unknown exhibition'}`
     )
   }
 
-  return(
+  return (
     <div className="page">
       <div className="page-header">
         <div>
@@ -206,10 +295,7 @@ function Tickets(){
 
         <button
           className="btn primary"
-          onClick={()=>{
-            resetForm()
-            setOpen(true)
-          }}
+          onClick={openAddModal}
         >
           Add Ticket
         </button>
@@ -231,30 +317,36 @@ function Tickets(){
         <StatCard
           label="Member Tickets"
           value={memberTickets}
-          delta={`${tickets.length ? Math.round((memberTickets / tickets.length) * 100) : 0}%`}
+          delta={`${
+            tickets.length
+              ? Math.round((memberTickets / tickets.length) * 100)
+              : 0
+          }%`}
           deltaLabel="of all tickets"
         />
 
         <StatCard
           label="Avg. Ticket Price"
-          value={`$${(tickets.length ? revenue / tickets.length : 0).toFixed(2)}`}
+          value={`$${(
+            tickets.length ? revenue / tickets.length : 0
+          ).toFixed(2)}`}
         />
       </div>
 
       <div className="toolbar">
         <input
           value={search}
-          onChange={(e)=> setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tickets..."
         />
 
         <select
           value={type}
-          onChange={(e)=> setType(e.target.value)}
+          onChange={(e) => setType(e.target.value)}
         >
           <option value="all">All Types</option>
 
-          {ticketTypes.map((ticketType)=>(
+          {ticketTypes.map((ticketType) => (
             <option key={ticketType} value={ticketType}>
               {ticketType}
             </option>
@@ -263,11 +355,11 @@ function Tickets(){
 
         <select
           value={exhibition}
-          onChange={(e)=> setExhibition(e.target.value)}
+          onChange={(e) => setExhibition(e.target.value)}
         >
           <option value="all">All Exhibitions</option>
 
-          {exhibitions.map((item)=>(
+          {exhibitions.map((item) => (
             <option
               key={item.ExhibitionID}
               value={item.ExhibitionID}
@@ -293,7 +385,7 @@ function Tickets(){
           </thead>
 
           <tbody>
-            {filtered.map((ticket)=>(
+            {filtered.map((ticket) => (
               <tr key={ticket.TicketID}>
                 <td className="mono">
                   #{String(ticket.TicketID).padStart(5, '0')}
@@ -312,45 +404,58 @@ function Tickets(){
                   ${ticket.Price.toFixed(2)}
                 </td>
 
-                <td className="mono">
-                  {ticket.SaleDate}
+                <td className="mono">{ticket.SaleDate}</td>
+
+                <td>
+                  {ticket.MembershipID ? (
+                    <span className="chip chip-primary">
+                      {
+                        memberships.find(
+                          (member) =>
+                            member.MembershipID === ticket.MembershipID
+                        )?.Name
+                      }
+                    </span>
+                  ) : (
+                    <span className="muted">-</span>
+                  )}
                 </td>
 
                 <td>
-                  {ticket.MembershipID
-                    ? (
-                      <span className="chip chip-primary">
-                        {memberships.find(
-                          (member)=> member.MembershipID === ticket.MembershipID
-                        )?.Name}
-                      </span>
-                    )
-                    : (
-                      <span className="muted">-</span>
-                    )}
-                </td>
+                  <div className="row-actions">
+                    <button
+                      className="btn secondary"
+                      onClick={() => openEditModal(ticket)}
+                    >
+                      Edit
+                    </button>
 
-                <td>
-                  <button
-                    className="btn danger"
-                    onClick={()=> handleDelete(ticket.TicketID)}
-                  >
-                    Delete
-                  </button>
+                    <button
+                      className="btn danger"
+                      onClick={() => handleDelete(ticket.TicketID)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={7} className="empty">
+                  No tickets found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <Modal
         open={open}
-        title="Add Ticket"
-        onClose={()=>{
-          resetForm()
-          setOpen(false)
-        }}
+        title={editingId !== null ? 'Edit Ticket' : 'Add Ticket'}
+        onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="form-group">
@@ -364,7 +469,7 @@ function Tickets(){
             >
               <option value="">Select Exhibition</option>
 
-              {exhibitions.map((item)=>(
+              {exhibitions.map((item) => (
                 <option
                   key={item.ExhibitionID}
                   value={item.ExhibitionID}
@@ -386,11 +491,8 @@ function Tickets(){
             >
               <option value="">Select Type</option>
 
-              {ticketTypes.map((ticketType)=>(
-                <option
-                  key={ticketType}
-                  value={ticketType}
-                >
+              {ticketTypes.map((ticketType) => (
+                <option key={ticketType} value={ticketType}>
                   {ticketType}
                 </option>
               ))}
@@ -427,15 +529,15 @@ function Tickets(){
           <div className="form-group">
             <label>Membership</label>
 
-            <select 
-              name="MembershipID" 
-              value={formData.MembershipID} 
-              onChange={handleMembershipChange} 
-              disabled={formData.TicketType !== 'Member'} 
+            <select
+              name="MembershipID"
+              value={formData.MembershipID}
+              onChange={handleMembershipChange}
+              disabled={formData.TicketType !== 'Member'}
             >
               <option value="">No Membership</option>
 
-              {memberships.map((member)=>(
+              {memberships.map((member) => (
                 <option
                   key={member.MembershipID}
                   value={member.MembershipID}
@@ -450,10 +552,7 @@ function Tickets(){
             <button
               type="button"
               className="btn secondary"
-              onClick={()=>{
-                resetForm()
-                setOpen(false)
-              }}
+              onClick={closeModal}
             >
               Cancel
             </button>
@@ -462,7 +561,7 @@ function Tickets(){
               type="submit"
               className="btn primary"
             >
-              Add Ticket
+              {editingId !== null ? 'Save Changes' : 'Add Ticket'}
             </button>
           </div>
         </form>

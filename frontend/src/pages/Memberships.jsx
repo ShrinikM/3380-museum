@@ -1,5 +1,6 @@
-import{ useState } from 'react'
-import{ Badge, Panel, StatCard, Modal } from '../components/ui'
+import { useState } from 'react'
+import { Badge, Panel, StatCard, Modal } from '../components/ui'
+import { addActivity } from './Dashboard'
 
 const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
 
@@ -59,41 +60,80 @@ const membershipDiscounts = {
   Senior: 15,
 }
 
-function Memberships(){
+const emptyForm = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  type: '',
+  startDate: '',
+  endDate: '',
+  price: '',
+  discount: '',
+  payment: '',
+}
+
+function Memberships() {
   const [memberships, setMemberships] = useState(initialMemberships)
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
   const [status, setStatus] = useState('all')
   const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    type: '',
-    startDate: '',
-    endDate: '',
-    price: '',
-    discount: '',
-    payment: ''
-  })
+  const [editingId, setEditingId] = useState(null)
+  const [formData, setFormData] = useState(emptyForm)
+
   const maxEndDate = formData.startDate
-    ? new Date(new Date(formData.startDate).setFullYear(new Date(formData.startDate).getFullYear() + 1)).toISOString().split('T')[0]
+    ? new Date(
+        new Date(formData.startDate).setFullYear(
+          new Date(formData.startDate).getFullYear() + 1
+        )
+      )
+        .toISOString()
+        .split('T')[0]
     : undefined
 
   const handleChange = (e) => {
     const { name, value } = e.target
 
-    if(name === 'type'){
+    if (name === 'type') {
       setFormData({
         ...formData,
         type: value,
         price: value ? membershipPrices[value] : '',
-        discount: value ? membershipDiscounts[value] : ''
+        discount: value ? membershipDiscounts[value] : '',
       })
       return
     }
 
     setFormData({ ...formData, [name]: value })
+  }
+
+  const closeModal = () => {
+    setFormData(emptyForm)
+    setEditingId(null)
+    setOpen(false)
+  }
+
+  const openAddModal = () => {
+    setFormData(emptyForm)
+    setEditingId(null)
+    setOpen(true)
+  }
+
+  const openEditModal = (member) => {
+    setFormData({
+      firstName: member.firstName,
+      lastName: member.lastName,
+      email: member.email,
+      type: member.type,
+      startDate: member.startDate,
+      endDate: member.endDate,
+      price: member.price,
+      discount: member.discount,
+      payment: member.payment,
+    })
+
+    setEditingId(member.id)
+    setOpen(true)
   }
 
   const handleSubmit = (e) => {
@@ -107,89 +147,136 @@ function Memberships(){
 
     const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
-    if(!textPattern.test(firstName)){
+    if (!textPattern.test(firstName)) {
       alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
       return
     }
 
-    if(!textPattern.test(lastName)){
+    if (!textPattern.test(lastName)) {
       alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
       return
     }
 
-    if(price <= 0){
+    if (!formData.type || !membershipTypes.includes(formData.type)) {
+      alert('Please select a valid membership type.')
+      return
+    }
+
+    if (!Number.isFinite(price) || price <= 0) {
       alert('Price must be greater than 0.')
       return
     }
 
-    if(discount < 0 || discount > 100){
+    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
       alert('Discount must be between 0 and 100.')
       return
     }
 
-    if(formData.endDate < formData.startDate){
+    if (!formData.startDate || !formData.endDate) {
+      alert('Please select both Start Date and End Date.')
+      return
+    }
+
+    if (formData.endDate < formData.startDate) {
       alert('End Date cannot be before Start Date.')
       return
     }
 
-    const maxEndDate = new Date(formData.startDate)
-    maxEndDate.setFullYear(maxEndDate.getFullYear() + 1)
+    const maxAllowedEndDate = new Date(formData.startDate)
+    maxAllowedEndDate.setFullYear(maxAllowedEndDate.getFullYear() + 1)
 
-    if(new Date(formData.endDate) > maxEndDate){
+    if (new Date(formData.endDate) > maxAllowedEndDate) {
       alert('Membership cannot be longer than 1 year.')
       return
     }
 
-    const newMembership = {
-      id: Math.max(...memberships.map((member)=> member.id), 0) + 1,
-      firstName,
-      lastName,
-      email,
-      type: formData.type,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      price,
-      discount,
-      payment: formData.payment,
-      status: formData.startDate > new Date().toISOString().split('T')[0]
-        ? 'upcoming'
-        : 'active'
-    }
-
-    setMemberships([...memberships, newMembership])
-
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      type: '',
-      startDate: '',
-      endDate: '',
-      price: '',
-      discount: '',
-      payment: ''
-    })
-
-    setOpen(false)
-  }
-
-  const handleDelete = (id) => {
-    const confirmed = window.confirm('Are you sure you want to delete this membership?')
-
-    if(!confirmed){
+    if (!formData.payment) {
+      alert('Please select a payment method.')
       return
     }
 
-    setMemberships(memberships.filter((member)=> member.id !== id))
+    const newStatus =
+      formData.startDate > new Date().toISOString().split('T')[0]
+        ? 'upcoming'
+        : 'active'
+
+    const memberName = `${firstName} ${lastName}`
+
+    if (editingId !== null) {
+      setMemberships((current) =>
+        current.map((member) =>
+          member.id === editingId
+            ? {
+                ...member,
+                firstName,
+                lastName,
+                email,
+                type: formData.type,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                price,
+                discount,
+                payment: formData.payment,
+                status: newStatus,
+              }
+            : member
+        )
+      )
+
+      addActivity('Membership updated', memberName)
+    } else {
+      const newMembership = {
+        id: Math.max(...memberships.map((member) => member.id), 0) + 1,
+        firstName,
+        lastName,
+        email,
+        type: formData.type,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        price,
+        discount,
+        payment: formData.payment,
+        status: newStatus,
+      }
+
+      setMemberships((current) => [...current, newMembership])
+
+      addActivity('Membership added', memberName)
+    }
+
+    closeModal()
   }
 
-  const active = memberships.filter((member)=> member.status === 'active')
-  const upcoming = memberships.filter((member)=> member.status === 'upcoming')
-  const expired = memberships.filter((member)=> member.status === 'expired')
+  const handleDelete = (id) => {
+    const member = memberships.find((item) => item.id === id)
 
-  const revenue = memberships.reduce((sum, member)=> sum + member.price, 0)
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this membership?'
+    )
 
-  const filtered = memberships.filter((member)=>{
+    if (!confirmed) {
+      return
+    }
+
+    setMemberships((current) =>
+      current.filter((item) => item.id !== id)
+    )
+
+    addActivity(
+      'Membership deleted',
+      member
+        ? `${member.firstName} ${member.lastName}`
+        : `Membership #${id}`
+    )
+  }
+
+  const active = memberships.filter((member) => member.status === 'active')
+  const upcoming = memberships.filter((member) => member.status === 'upcoming')
+  const expired = memberships.filter((member) => member.status === 'expired')
+
+  const revenue = memberships.reduce((sum, member) => sum + member.price, 0)
+
+  const filtered = memberships.filter((member) => {
     const name = `${member.firstName} ${member.lastName}`.toLowerCase()
 
     const matchesSearch =
@@ -202,7 +289,7 @@ function Memberships(){
     return matchesSearch && matchesType && matchesStatus
   })
 
-  return(
+  return (
     <div className="page">
       <div className="page-header">
         <div>
@@ -212,7 +299,7 @@ function Memberships(){
           </p>
         </div>
 
-        <button className="btn primary" onClick={()=> setOpen(true)}>
+        <button className="btn primary" onClick={openAddModal}>
           Add Membership
         </button>
       </div>
@@ -221,17 +308,21 @@ function Memberships(){
         <StatCard label="Active Members" value={active.length} />
         <StatCard label="Upcoming" value={upcoming.length} />
         <StatCard label="Expired" value={expired.length} />
-        <StatCard label="Membership Revenue" value={`$${revenue.toFixed(2)}`} />
+        <StatCard
+          label="Membership Revenue"
+          value={`$${revenue.toFixed(2)}`}
+        />
       </div>
 
       <div className="grid-4 section-gap-sm tight">
-        {membershipTypes.map((membershipType)=>(
+        {membershipTypes.map((membershipType) => (
           <Panel key={membershipType} className="price-card">
             <div className="price-top">
               <div>
                 <div className="stat-label">{membershipType}</div>
                 <div className="price-value">
-                  ${membershipPrices[membershipType]}<span>/yr</span>
+                  ${membershipPrices[membershipType]}
+                  <span>/yr</span>
                 </div>
               </div>
 
@@ -242,7 +333,8 @@ function Memberships(){
             </div>
 
             <div className="price-count">
-              {active.filter((member)=> member.type === membershipType).length} active
+              {active.filter((member) => member.type === membershipType).length}{' '}
+              active
             </div>
           </Panel>
         ))}
@@ -251,20 +343,20 @@ function Memberships(){
       <div className="toolbar">
         <input
           value={search}
-          onChange={(e)=> setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search members or email..."
         />
 
-        <select value={type} onChange={(e)=> setType(e.target.value)}>
+        <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="all">All Types</option>
-          {membershipTypes.map((membershipType)=>(
+          {membershipTypes.map((membershipType) => (
             <option key={membershipType} value={membershipType}>
               {membershipType}
             </option>
           ))}
         </select>
 
-        <select value={status} onChange={(e)=> setStatus(e.target.value)}>
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="upcoming">Upcoming</option>
@@ -289,7 +381,7 @@ function Memberships(){
           </thead>
 
           <tbody>
-            {filtered.map((member)=>(
+            {filtered.map((member) => (
               <tr key={member.id}>
                 <td>
                   <div className="strong">
@@ -310,25 +402,45 @@ function Memberships(){
                 <td className="mono">${member.price.toFixed(2)}</td>
                 <td className="mono">{member.discount}%</td>
                 <td className="muted nowrap">{member.payment}</td>
-                <td><Badge variant={member.status} /></td>
                 <td>
-                  <button
-                    className="btn danger"
-                    onClick={()=> handleDelete(member.id)}
-                  >
-                    Delete
-                  </button>
+                  <Badge variant={member.status} />
+                </td>
+
+                <td>
+                  <div className="row-actions">
+                    <button
+                      className="btn secondary"
+                      onClick={() => openEditModal(member)}
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="btn danger"
+                      onClick={() => handleDelete(member.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={9} className="empty">
+                  No memberships found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <Modal
         open={open}
-        title="Add Membership"
-        onClose={()=> setOpen(false)}
+        title={editingId !== null ? 'Edit Membership' : 'Add Membership'}
+        onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="form-group">
@@ -371,7 +483,7 @@ function Memberships(){
               required
             >
               <option value="">Select Type</option>
-              {membershipTypes.map((membershipType)=>(
+              {membershipTypes.map((membershipType) => (
                 <option key={membershipType} value={membershipType}>
                   {membershipType}
                 </option>
@@ -397,7 +509,7 @@ function Memberships(){
               type="date"
               value={formData.endDate}
               onChange={handleChange}
-              min={formData.startDate}
+              min={formData.startDate || undefined}
               max={maxEndDate}
               required
             />
@@ -447,26 +559,13 @@ function Memberships(){
             <button
               type="button"
               className="btn secondary"
-              onClick={()=>{
-                setFormData({
-                  firstName: '',
-                  lastName: '',
-                  email: '',
-                  type: '',
-                  startDate: '',
-                  endDate: '',
-                  price: '',
-                  discount: '',
-                  payment: ''
-                })
-                setOpen(false)
-              }}
+              onClick={closeModal}
             >
               Cancel
             </button>
 
             <button type="submit" className="btn primary">
-              Add Membership
+              {editingId !== null ? 'Save Changes' : 'Add Membership'}
             </button>
           </div>
         </form>

@@ -1,5 +1,6 @@
-import{ useState } from 'react'
-import{ Badge, StatCard, Modal } from './ui'
+import { useState } from 'react'
+import { Badge, StatCard, Modal } from './ui'
+import { addActivity } from '../pages/Dashboard'
 
 const giftShopItems = [
   { ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Category: 'Books', StaffID: 1, StaffName: 'Maya Patel', Price: 45, Stock: 32 },
@@ -35,14 +36,14 @@ const giftShopSales = [
 ]
 
 const cafeSales = [
-  { SaleID: 1, ItemID: 1, Quantity: 2, SalePrice: 5.5, SaleDate: '2026-09-05', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 2, ItemID: 4, Quantity: 1, SalePrice: 11.5, SaleDate: '2026-09-06', PaymentMethod: 'Mobile Pay', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: 1, MemberName: 'Patricia Holloway' },
-  { SaleID: 3, ItemID: 3, Quantity: 3, SalePrice: 4.25, SaleDate: '2026-09-12', PaymentMethod: 'Cash', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 4, ItemID: 5, Quantity: 2, SalePrice: 12, SaleDate: '2026-09-14', PaymentMethod: 'Debit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 5, ItemID: 2, Quantity: 1, SalePrice: 5, SaleDate: '2026-09-20', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: 2, MemberName: 'James Kowalski' },
-  { SaleID: 6, ItemID: 6, Quantity: 2, SalePrice: 7.5, SaleDate: '2026-09-22', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 7, ItemID: 7, Quantity: 1, SalePrice: 6.75, SaleDate: '2026-09-25', PaymentMethod: 'Cash', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 8, ItemID: 8, Quantity: 4, SalePrice: 3, SaleDate: '2026-09-27', PaymentMethod: 'Mobile Pay', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
+  { SaleID: 1, ItemID: 1, ItemName: 'Cappuccino', Quantity: 2, SalePrice: 5.5, SaleDate: '2026-09-05', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
+  { SaleID: 2, ItemID: 4, ItemName: 'Caprese Sandwich', Quantity: 1, SalePrice: 11.5, SaleDate: '2026-09-06', PaymentMethod: 'Mobile Pay', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: 1, MemberName: 'Patricia Holloway' },
+  { SaleID: 3, ItemID: 3, ItemName: 'Butter Croissant', Quantity: 3, SalePrice: 4.25, SaleDate: '2026-09-12', PaymentMethod: 'Cash', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
+  { SaleID: 4, ItemID: 5, ItemName: 'Seasonal Salad', Quantity: 2, SalePrice: 12, SaleDate: '2026-09-14', PaymentMethod: 'Debit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
+  { SaleID: 5, ItemID: 2, ItemName: 'Cold Brew', Quantity: 1, SalePrice: 5, SaleDate: '2026-09-20', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: 2, MemberName: 'James Kowalski' },
+  { SaleID: 6, ItemID: 6, ItemName: 'Tomato Basil Soup', Quantity: 2, SalePrice: 7.5, SaleDate: '2026-09-22', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
+  { SaleID: 7, ItemID: 7, ItemName: 'Chocolate Tart', Quantity: 1, SalePrice: 6.75, SaleDate: '2026-09-25', PaymentMethod: 'Cash', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
+  { SaleID: 8, ItemID: 8, ItemName: 'Sparkling Water', Quantity: 4, SalePrice: 3, SaleDate: '2026-09-27', PaymentMethod: 'Mobile Pay', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
 ]
 
 const giftShopCategories = [
@@ -51,7 +52,7 @@ const giftShopCategories = [
   'Home',
   'Stationery',
   'Kids',
-  'Prints'
+  'Prints',
 ]
 
 const cafeCategories = [
@@ -60,113 +61,233 @@ const cafeCategories = [
   'Sandwiches',
   'Salads',
   'Soups',
-  'Desserts'
+  'Desserts',
 ]
 
-function StorePage({ kind }){
+const emptyForm = {
+  ItemName: '',
+  Category: '',
+  Price: '',
+  Stock: '',
+  ItemID: '',
+  Quantity: '',
+  SaleDate: '',
+  PaymentMethod: '',
+  MembershipID: '',
+}
+
+function StorePage({ kind }) {
   const today = new Date().toISOString().split('T')[0]
   const isGiftShop = kind === 'giftshop'
   const title = isGiftShop ? 'Gift Shop' : 'Café'
   const initialItems = isGiftShop ? giftShopItems : cafeItems
   const categories = isGiftShop ? giftShopCategories : cafeCategories
-  const [items, setItems] = useState(initialItems)
-  const [saleData, setSaleData] = useState([])
-  const sales = [...(isGiftShop ? giftShopSales : cafeSales), ...saleData]
+  const initialSales = isGiftShop ? giftShopSales : cafeSales
+
+  const [items, setItems] = useState(() =>
+    initialItems.map((item) => ({ ...item }))
+  )
+
+  const [sales, setSales] = useState(() =>
+    initialSales.map((sale) => ({ ...sale }))
+  )
 
   const [tab, setTab] = useState('items')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [payment, setPayment] = useState('all')
   const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    ItemName: '',
-    Category: '',
-    Price: '',
-    Stock: '',
-    ItemID: '',
-    Quantity: '',
-    SaleDate: '',
-    PaymentMethod: '',
-    MembershipID: ''
-  })
+  const [editingId, setEditingId] = useState(null)
+  const [formData, setFormData] = useState(emptyForm)
+
+  const payments = ['Cash', 'Credit Card', 'Debit Card', 'Mobile Pay']
+
+  const resetForm = () => {
+    setFormData(emptyForm)
+    setEditingId(null)
+  }
+
+  const closeModal = () => {
+    resetForm()
+    setOpen(false)
+  }
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+  }
+
+  const openAddModal = () => {
+    resetForm()
+    setOpen(true)
+  }
+
+  const openEditModal = (item) => {
+    setEditingId(item.ItemID)
+    setFormData({
+      ...emptyForm,
+      ItemName: item.ItemName,
+      Category: item.Category,
+      Price: String(item.Price),
+      Stock: isGiftShop ? String(item.Stock) : '',
+    })
+    setOpen(true)
+  }
+
+  const openEditSaleModal = (sale) => {
+    setEditingId(sale.SaleID)
+    setFormData({
+      ...emptyForm,
+      ItemID: String(sale.ItemID),
+      Quantity: String(sale.Quantity),
+      SaleDate: sale.SaleDate,
+      PaymentMethod: sale.PaymentMethod,
+      MembershipID: sale.MembershipID
+        ? String(sale.MembershipID)
+        : '',
+    })
+    setOpen(true)
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
 
-    if(tab === 'items'){
+    if (tab === 'items') {
       const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9' -]+$/
 
-      if(!textPattern.test(formData.ItemName.trim())){
+      if (!textPattern.test(formData.ItemName.trim())) {
         alert('Item Name can only contain letters, numbers, spaces, hyphens, or apostrophes.')
         return
       }
 
-      if(!formData.Category){
+      if (!formData.Category) {
         alert('Please select a Category.')
         return
       }
 
-      if(Number(formData.Price) <= 0){
+      if (!Number.isFinite(Number(formData.Price)) || Number(formData.Price) <= 0) {
         alert('Price must be greater than 0.')
         return
       }
 
-      if(isGiftShop && Number(formData.Stock) < 0){
-        alert('Stock cannot be negative.')
-        return
+      if (
+        isGiftShop &&
+        (!formData.Stock || !Number.isInteger(Number(formData.Stock)) || Number(formData.Stock) < 0)
+      ) {
+        if (formData.Stock !== '0') {
+          alert('Stock must be a non-negative whole number.')
+          return
+        }
       }
 
-      const newItem = {
-        ItemID: Math.max(...items.map((item)=> item.ItemID), 0) + 1,
+      const itemData = {
         ItemName: formData.ItemName.trim(),
         Category: formData.Category,
-        StaffID: isGiftShop ? 1 : 2,
-        StaffName: isGiftShop ? 'Maya Patel' : 'Carlos Vargas',
         Price: Number(formData.Price),
-        Stock: isGiftShop ? Number(formData.Stock) : undefined
       }
 
-      setItems([...items, newItem])
-    }
-    else{
-      if(!formData.ItemID){
+      if (editingId === null) {
+        const newItem = {
+          ItemID: Math.max(...items.map((item) => item.ItemID), 0) + 1,
+          ...itemData,
+          StaffID: isGiftShop ? 1 : 2,
+          StaffName: isGiftShop ? 'Maya Patel' : 'Carlos Vargas',
+          ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
+        }
+
+        setItems((currentItems) => [...currentItems, newItem])
+
+        addActivity(
+          isGiftShop ? 'Gift shop item added' : 'Café item added',
+          newItem.ItemName
+        )
+      } else {
+        setItems((currentItems) =>
+          currentItems.map((item) =>
+            item.ItemID === editingId
+              ? {
+                  ...item,
+                  ...itemData,
+                  ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
+                }
+              : item
+          )
+        )
+
+        addActivity(
+          isGiftShop ? 'Gift shop item updated' : 'Café item updated',
+          itemData.ItemName
+        )
+      }
+    } else {
+      if (!formData.ItemID) {
         alert('Please select an Item.')
         return
       }
 
-      if(Number(formData.Quantity) < 1){
+      if (!Number.isInteger(Number(formData.Quantity)) || Number(formData.Quantity) < 1) {
         alert('Quantity must be at least 1.')
         return
       }
 
-      if(formData.SaleDate > today){
+      if (!formData.SaleDate) {
+        alert('Please select a Sale Date.')
+        return
+      }
+
+      if (formData.SaleDate > today) {
         alert('Sale Date cannot be in the future.')
         return
       }
 
-      if(!formData.PaymentMethod){
+      if (!formData.PaymentMethod) {
         alert('Please select a Payment Method.')
         return
       }
 
-      if(formData.MembershipID && Number(formData.MembershipID) < 1){
-        alert('Membership ID must be a positive number.')
+      if (formData.MembershipID && (!Number.isInteger(Number(formData.MembershipID)) || Number(formData.MembershipID) < 1)) {
+        alert('Membership ID must be a positive whole number.')
         return
       }
 
-      const item = items.find((item)=> item.ItemID === Number(formData.ItemID))
-      if(isGiftShop && Number(formData.Quantity) > item.Stock){
-        alert('There is not enough stock available.')
+      const item = items.find(
+        (currentItem) => currentItem.ItemID === Number(formData.ItemID)
+      )
+
+      if (!item) {
+        alert('Please select a valid Item.')
         return
       }
 
-      const newSale = {
-        SaleID: Math.max(...sales.map((sale)=> sale.SaleID), 0) + 1,
-        ItemID: Number(formData.ItemID),
+      const originalSale = editingId !== null
+        ? sales.find((sale) => sale.SaleID === editingId)
+        : null
+
+      if (isGiftShop) {
+        const originalQuantity =
+          originalSale && originalSale.ItemID === item.ItemID
+            ? originalSale.Quantity
+            : 0
+
+        const requiredStock = Number(formData.Quantity) - originalQuantity
+
+        const availableStock = originalSale && originalSale.ItemID === item.ItemID
+          ? item.Stock + originalSale.Quantity
+          : item.Stock
+
+        if (Number(formData.Quantity) > availableStock) {
+          alert('There is not enough stock available.')
+          return
+        }
+      }
+
+      const saleDataToSave = {
+        SaleID: editingId !== null
+          ? editingId
+          : Math.max(...sales.map((sale) => sale.SaleID), 0) + 1,
+        ItemID: item.ItemID,
         ItemName: item.ItemName,
         Quantity: Number(formData.Quantity),
         SalePrice: item.Price,
@@ -174,72 +295,147 @@ function StorePage({ kind }){
         PaymentMethod: formData.PaymentMethod,
         StaffID: isGiftShop ? 1 : 2,
         StaffName: isGiftShop ? 'Maya Patel' : 'Carlos Vargas',
-        MembershipID: formData.MembershipID ? Number(formData.MembershipID) : null,
-        MemberName: null
+        MembershipID: formData.MembershipID
+          ? Number(formData.MembershipID)
+          : null,
+        MemberName: originalSale?.MemberName ?? null,
       }
 
-      setSaleData([...saleData, newSale])
-      if(isGiftShop){
-        const newStock = item.Stock - Number(formData.Quantity)
+      if (isGiftShop) {
+        setItems((currentItems) => {
+          let updatedItems = currentItems.map((currentItem) => {
+            if (
+              originalSale &&
+              currentItem.ItemID === originalSale.ItemID
+            ) {
+              return {
+                ...currentItem,
+                Stock: currentItem.Stock + originalSale.Quantity,
+              }
+            }
 
-        setItems(
-          items
-            .map((currentItem)=> 
-              currentItem.ItemID === item.ItemID
-                ? { ...currentItem, Stock: newStock }
-                : currentItem
-            )
-            .filter((currentItem)=> currentItem.Stock > 0)
+            return currentItem
+          })
+
+          updatedItems = updatedItems.map((currentItem) => {
+            if (currentItem.ItemID === item.ItemID) {
+              return {
+                ...currentItem,
+                Stock: currentItem.Stock - Number(formData.Quantity),
+              }
+            }
+
+            return currentItem
+          })
+
+          return updatedItems
+        })
+      }
+
+      if (editingId !== null) {
+        setSales((currentSales) =>
+          currentSales.map((sale) =>
+            sale.SaleID === editingId ? saleDataToSave : sale
+          )
         )
+      } else {
+        setSales((currentSales) => [...currentSales, saleDataToSave])
       }
+
+      addActivity(
+        editingId !== null ? 'Sale updated' : 'Sale recorded',
+        `${saleDataToSave.ItemName} — $${(
+          saleDataToSave.SalePrice * saleDataToSave.Quantity
+        ).toFixed(2)}`
+      )
     }
 
-    setFormData({
-      ItemName: '',
-      Category: '',
-      Price: '',
-      Stock: '',
-      ItemID: '',
-      Quantity: '',
-      SaleDate: '',
-      PaymentMethod: '',
-      MembershipID: ''
-    })
-
-    setOpen(false)
+    closeModal()
   }
 
-  const payments = ['Cash', 'Credit Card', 'Debit Card', 'Mobile Pay']
+  const handleDeleteSale = (saleID) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this sale?'
+    )
 
-  const filteredItems = items.filter((item)=>{
+    if (!confirmed) {
+      return
+    }
+
+    const sale = sales.find((currentSale) => currentSale.SaleID === saleID)
+
+    if (isGiftShop && sale) {
+      setItems((currentItems) =>
+        currentItems.map((item) =>
+          item.ItemID === sale.ItemID
+            ? { ...item, Stock: item.Stock + sale.Quantity }
+            : item
+        )
+      )
+    }
+
+    setSales((currentSales) =>
+      currentSales.filter((currentSale) => currentSale.SaleID !== saleID)
+    )
+
+    addActivity(
+      'Sale deleted',
+      sale
+        ? `${sale.ItemName} — $${total(sale).toFixed(2)}`
+        : `Sale #${saleID}`
+    )
+  }
+
+  const handleDeleteItem = (itemID) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this item?'
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    const hasSales = sales.some((sale) => sale.ItemID === itemID)
+
+    if (hasSales) {
+      alert('This item has sales records. Delete those sales before deleting the item.')
+      return
+    }
+
+    const item = items.find((currentItem) => currentItem.ItemID === itemID)
+
+    setItems((currentItems) =>
+      currentItems.filter((currentItem) => currentItem.ItemID !== itemID)
+    )
+
+    addActivity(
+      isGiftShop ? 'Gift shop item deleted' : 'Café item deleted',
+      item?.ItemName || `Item #${itemID}`
+    )
+  }
+
+  const filteredItems = items.filter((item) => {
     const text = `${item.ItemName} ${item.Category}`.toLowerCase()
     const matchesSearch = text.includes(search.toLowerCase())
-    const matchesCategory = category === 'all' || item.Category === category
+    const matchesCategory =
+      category === 'all' || item.Category === category
 
     return matchesSearch && matchesCategory
   })
 
-  const filteredSales = sales.filter((sale)=>{
+  const filteredSales = sales.filter((sale) => {
     const text = `${sale.SaleID} ${sale.ItemName ?? ''} ${sale.PaymentMethod}`.toLowerCase()
     const matchesSearch = text.includes(search.toLowerCase())
-    const matchesPayment = payment === 'all' || sale.PaymentMethod === payment
+    const matchesPayment =
+      payment === 'all' || sale.PaymentMethod === payment
 
     return matchesSearch && matchesPayment
   })
 
-  const total = (sale)=> Number(sale.SalePrice) * sale.Quantity
-  const handleDeleteSale = (saleID) => {
-    const confirmed = window.confirm('Are you sure you want to delete this sale?')
+  const total = (sale) => Number(sale.SalePrice) * sale.Quantity
+  const revenue = sales.reduce((sum, sale) => sum + total(sale), 0)
 
-    if(!confirmed){
-      return
-    }
-
-    setSaleData(saleData.filter((sale)=> sale.SaleID !== saleID))
-  }
-  const revenue = sales.reduce((sum, sale)=> sum + total(sale), 0)
-
-  return(
+  return (
     <div className="page">
       <div className="page-header">
         <div>
@@ -251,22 +447,9 @@ function StorePage({ kind }){
           </p>
         </div>
 
-        <button 
-          className="btn primary" 
-          onClick={()=>{
-            setFormData({
-              ItemName: '',
-              Category: '',
-              Price: '',
-              Stock: '',
-              ItemID: '',
-              Quantity: '',
-              SaleDate: '',
-              PaymentMethod: '',
-              MembershipID: ''
-            })
-            setOpen(true)
-          }}
+        <button
+          className="btn primary"
+          onClick={openAddModal}
         >
           {tab === 'items' ? 'Add Item' : 'Record Sale'}
         </button>
@@ -275,13 +458,23 @@ function StorePage({ kind }){
       <div className="grid-4 section-gap-sm">
         <StatCard label="Items" value={items.length} />
 
-        {isGiftShop
-          ? <StatCard label="Units in Stock" value={items.reduce((sum, item)=> sum + item.Stock, 0)} />
-          : <StatCard label="Categories" value={categories.length} />}
+        {isGiftShop ? (
+          <StatCard
+            label="Units in Stock"
+            value={items.reduce((sum, item) => sum + item.Stock, 0)}
+          />
+        ) : (
+          <StatCard label="Categories" value={categories.length} />
+        )}
 
-        {isGiftShop
-          ? <StatCard label="Low Stock Items" value={items.filter((item)=> item.Stock < 5).length} />
-          : <StatCard label="Sales Recorded" value={sales.length} />}
+        {isGiftShop ? (
+          <StatCard
+            label="Low Stock Items"
+            value={items.filter((item) => item.Stock < 5).length}
+          />
+        ) : (
+          <StatCard label="Sales Recorded" value={sales.length} />
+        )}
 
         <StatCard label="Revenue" value={`$${revenue.toFixed(2)}`} />
       </div>
@@ -289,14 +482,20 @@ function StorePage({ kind }){
       <div className="tabs">
         <button
           className={`tab${tab === 'items' ? ' active' : ''}`}
-          onClick={()=> setTab('items')}
+          onClick={() => {
+            setTab('items')
+            resetForm()
+          }}
         >
           Items ({items.length})
         </button>
 
         <button
           className={`tab${tab === 'sales' ? ' active' : ''}`}
-          onClick={()=> setTab('sales')}
+          onClick={() => {
+            setTab('sales')
+            resetForm()
+          }}
         >
           Sales ({sales.length})
         </button>
@@ -305,24 +504,34 @@ function StorePage({ kind }){
       <div className="toolbar">
         <input
           value={search}
-          onChange={(e)=> setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder={tab === 'items' ? 'Search items...' : 'Search sales...'}
         />
 
         {tab === 'items' && (
-          <select value={category} onChange={(e)=> setCategory(e.target.value)}>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
             <option value="all">All Categories</option>
-            {categories.map((category)=>(
-              <option key={category} value={category}>{category}</option>
+            {categories.map((itemCategory) => (
+              <option key={itemCategory} value={itemCategory}>
+                {itemCategory}
+              </option>
             ))}
           </select>
         )}
 
         {tab === 'sales' && (
-          <select value={payment} onChange={(e)=> setPayment(e.target.value)}>
+          <select
+            value={payment}
+            onChange={(e) => setPayment(e.target.value)}
+          >
             <option value="all">All Payments</option>
-            {payments.map((payment)=>(
-              <option key={payment} value={payment}>{payment}</option>
+            {payments.map((paymentMethod) => (
+              <option key={paymentMethod} value={paymentMethod}>
+                {paymentMethod}
+              </option>
             ))}
           </select>
         )}
@@ -343,7 +552,7 @@ function StorePage({ kind }){
             </thead>
 
             <tbody>
-              {filteredItems.map((item)=>(
+              {filteredItems.map((item) => (
                 <tr key={item.ItemID}>
                   <td className="strong">{item.ItemName}</td>
                   <td>{item.Category}</td>
@@ -356,29 +565,41 @@ function StorePage({ kind }){
                           <span className="strong">{item.Stock}</span>{' '}
                           <Badge variant="low" label="Low" />
                         </>
-                      ) : item.Stock}
+                      ) : (
+                        item.Stock
+                      )}
                     </td>
                   )}
 
                   <td className="muted">{item.StaffName}</td>
+
                   <td>
-                    <button
-                      className="btn danger"
-                      onClick={()=>{
-                        const confirmed = window.confirm('Are you sure you want to delete this item?')
+                    <div className="row-actions">
+                      <button
+                        className="btn secondary"
+                        onClick={() => openEditModal(item)}
+                      >
+                        Edit
+                      </button>
 
-                        if(!confirmed){
-                          return
-                        }
-
-                        setItems(items.filter((currentItem)=> currentItem.ItemID !== item.ItemID))
-                      }}
-                    >
-                      Delete
-                    </button>
+                      <button
+                        className="btn danger"
+                        onClick={() => handleDeleteItem(item.ItemID)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
+
+              {filteredItems.length === 0 && (
+                <tr>
+                  <td colSpan={isGiftShop ? 6 : 5} className="empty">
+                    No items found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         ) : (
@@ -398,9 +619,11 @@ function StorePage({ kind }){
             </thead>
 
             <tbody>
-              {filteredSales.map((sale)=>(
+              {filteredSales.map((sale) => (
                 <tr key={sale.SaleID}>
-                  <td className="mono">#{String(sale.SaleID).padStart(5, '0')}</td>
+                  <td className="mono">
+                    #{String(sale.SaleID).padStart(5, '0')}
+                  </td>
                   <td className="strong">{sale.ItemName ?? '-'}</td>
                   <td>{sale.Quantity}</td>
                   <td className="mono">${sale.SalePrice.toFixed(2)}</td>
@@ -409,15 +632,32 @@ function StorePage({ kind }){
                   <td className="muted">{sale.PaymentMethod}</td>
                   <td className="muted">{sale.StaffName}</td>
                   <td>
-                    <button
-                      className="btn danger"
-                      onClick={()=> handleDeleteSale(sale.SaleID)}
-                    >
-                      Delete
-                    </button>
+                    <div className="row-actions">
+                      <button
+                        className="btn secondary"
+                        onClick={() => openEditSaleModal(sale)}
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        className="btn danger"
+                        onClick={() => handleDeleteSale(sale.SaleID)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
+
+              {filteredSales.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="empty">
+                    No sales found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -425,8 +665,12 @@ function StorePage({ kind }){
 
       <Modal
         open={open}
-        title={tab === 'items' ? 'Add Item' : 'Record Sale'}
-        onClose={()=> setOpen(false)}
+        title={
+          tab === 'items'
+            ? editingId === null ? 'Add Item' : 'Edit Item'
+            : editingId === null ? 'Record Sale' : 'Edit Sale'
+        }
+        onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
           {tab === 'items' ? (
@@ -450,9 +694,9 @@ function StorePage({ kind }){
                   required
                 >
                   <option value="">Select Category</option>
-                  {categories.map((category)=>(
-                    <option key={category} value={category}>
-                      {category}
+                  {categories.map((itemCategory) => (
+                    <option key={itemCategory} value={itemCategory}>
+                      {itemCategory}
                     </option>
                   ))}
                 </select>
@@ -478,6 +722,7 @@ function StorePage({ kind }){
                     name="Stock"
                     type="number"
                     min="0"
+                    step="1"
                     value={formData.Stock}
                     onChange={handleChange}
                     required
@@ -496,7 +741,7 @@ function StorePage({ kind }){
                   required
                 >
                   <option value="">Select Item</option>
-                  {items.map((item)=>(
+                  {items.map((item) => (
                     <option key={item.ItemID} value={item.ItemID}>
                       {item.ItemName}
                     </option>
@@ -510,6 +755,7 @@ function StorePage({ kind }){
                   name="Quantity"
                   type="number"
                   min="1"
+                  step="1"
                   value={formData.Quantity}
                   onChange={handleChange}
                   required
@@ -537,9 +783,9 @@ function StorePage({ kind }){
                   required
                 >
                   <option value="">Select Payment</option>
-                  {payments.map((payment)=>(
-                    <option key={payment} value={payment}>
-                      {payment}
+                  {payments.map((paymentMethod) => (
+                    <option key={paymentMethod} value={paymentMethod}>
+                      {paymentMethod}
                     </option>
                   ))}
                 </select>
@@ -548,29 +794,18 @@ function StorePage({ kind }){
           )}
 
           <div className="form-actions">
-            <button 
-              type="button" 
-              className="btn secondary" 
-              onClick={()=>{
-                setFormData({
-                  ItemName: '',
-                  Category: '',
-                  Price: '',
-                  Stock: '',
-                  ItemID: '',
-                  Quantity: '',
-                  SaleDate: '',
-                  PaymentMethod: '',
-                  MembershipID: ''
-                })
-                setOpen(false)
-              }} 
-            > 
-              Cancel 
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={closeModal}
+            >
+              Cancel
             </button>
 
             <button type="submit" className="btn primary">
-              {tab === 'items' ? 'Add Item' : 'Record Sale'}
+              {tab === 'items'
+                ? editingId === null ? 'Add Item' : 'Save Changes'
+                : editingId === null ? 'Record Sale' : 'Save Changes'}
             </button>
           </div>
         </form>

@@ -1,7 +1,11 @@
-import{ useState } from 'react'
-import{ Badge, Panel, Modal } from '../components/ui'
+import { useState } from 'react'
+import { Badge, Panel, Modal } from '../components/ui'
+import { useRole } from '../context/role'
+import { addActivity } from './Dashboard'
 
-function Exhibitions(){
+function Exhibitions() {
+  const { canEdit } = useRole()
+  const allowEdit = canEdit('/exhibitions')
   const today = new Date().toISOString().split('T')[0]
 
   const [exhibitions, setExhibitions] = useState([
@@ -34,17 +38,21 @@ function Exhibitions(){
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
 
   const [formData, setFormData] = useState({
     Name: '',
     Description: '',
     StartDate: '',
     EndDate: '',
-    Capacity: ''
+    Capacity: '',
   })
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
   }
 
   const resetForm = () => {
@@ -53,8 +61,33 @@ function Exhibitions(){
       Description: '',
       StartDate: '',
       EndDate: '',
-      Capacity: ''
+      Capacity: '',
     })
+  }
+
+  const closeModal = () => {
+    resetForm()
+    setEditingId(null)
+    setOpen(false)
+  }
+
+  const openAddModal = () => {
+    resetForm()
+    setEditingId(null)
+    setOpen(true)
+  }
+
+  const openEditModal = (exhibition) => {
+    setFormData({
+      Name: exhibition.Name,
+      Description: exhibition.Description,
+      StartDate: exhibition.StartDate,
+      EndDate: exhibition.EndDate,
+      Capacity: String(exhibition.Capacity),
+    })
+
+    setEditingId(exhibition.ExhibitionID)
+    setOpen(true)
   }
 
   const handleSubmit = (e) => {
@@ -64,94 +97,134 @@ function Exhibitions(){
     const description = formData.Description.trim()
     const capacity = Number(formData.Capacity)
 
-    const textPattern = /^[A-Za-z0-9À-ÖØ-öø-ÿ\s.,:;!?'"()&'-]+$/
+    const textPattern = /^[A-Za-z0-9À-ÖØ-öø-ÿ\s.,:;!?' "()&'-]+$/
 
-    if(!textPattern.test(name)){
-      alert('Exhibition Name contains invalid characters.')
+    if (!name || !textPattern.test(name)) {
+      alert('Please enter a valid exhibition name.')
       return
     }
 
-    if(!textPattern.test(description)){
+    if (description && !textPattern.test(description)) {
       alert('Description contains invalid characters.')
       return
     }
 
-    if(name.length < 1){
-      alert('Exhibition name is required.')
-      return
-    }
-
-    if(!formData.StartDate || !formData.EndDate){
+    if (!formData.StartDate || !formData.EndDate) {
       alert('Start Date and End Date are required.')
       return
     }
 
-    if(formData.EndDate < formData.StartDate){
-      alert('End Date cannot be before Start Date.')
+    if (formData.EndDate <= formData.StartDate) {
+      alert('End Date must be after Start Date.')
       return
     }
 
-    if(capacity < 1 || capacity > 1400){
-      alert('Capacity must be between 1 and 1400.')
+    if (
+      !Number.isInteger(capacity) ||
+      capacity < 1 ||
+      capacity > 1400
+    ) {
+      alert('Capacity must be a whole number between 1 and 1400.')
       return
     }
 
     const duplicate = exhibitions.some(
-      (exhibition)=> exhibition.Name.toLowerCase() === name.toLowerCase()
+      (exhibition) =>
+        exhibition.Name.toLowerCase() === name.toLowerCase() &&
+        exhibition.ExhibitionID !== editingId
     )
 
-    if(duplicate){
+    if (duplicate) {
       alert('An exhibition with this name already exists.')
       return
     }
 
     let newStatus = 'upcoming'
 
-    if(formData.StartDate <= today && formData.EndDate >= today){
+    if (formData.StartDate <= today && formData.EndDate >= today) {
       newStatus = 'active'
     }
 
-    if(formData.EndDate < today){
+    if (formData.EndDate < today) {
       newStatus = 'completed'
     }
 
-    const newExhibition = {
-      ExhibitionID: Math.max(
-        ...exhibitions.map((exhibition)=> exhibition.ExhibitionID),
-        0
-      ) + 1,
-      Name: name,
-      Description: description,
-      StartDate: formData.StartDate,
-      EndDate: formData.EndDate,
-      Capacity: capacity,
-      Tickets: 0,
-      StaffNames: [],
-      ArtworkCount: 0,
-      Status: newStatus
+    if (editingId === null) {
+      const newExhibition = {
+        ExhibitionID:
+          Math.max(
+            ...exhibitions.map((exhibition) => exhibition.ExhibitionID),
+            0
+          ) + 1,
+        Name: name,
+        Description: description,
+        StartDate: formData.StartDate,
+        EndDate: formData.EndDate,
+        Capacity: capacity,
+        Tickets: 0,
+        StaffNames: [],
+        ArtworkCount: 0,
+        Status: newStatus,
+      }
+
+      setExhibitions((current) => [...current, newExhibition])
+
+      addActivity('Exhibition added', name)
+    } else {
+      const confirmed = window.confirm(
+        'Are you sure you want to save these changes to this exhibition?'
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      setExhibitions((current) =>
+        current.map((exhibition) =>
+          exhibition.ExhibitionID === editingId
+            ? {
+                ...exhibition,
+                Name: name,
+                Description: description,
+                StartDate: formData.StartDate,
+                EndDate: formData.EndDate,
+                Capacity: capacity,
+                Status: newStatus,
+              }
+            : exhibition
+        )
+      )
+
+      addActivity('Exhibition updated', name)
     }
 
-    setExhibitions([...exhibitions, newExhibition])
-
-    resetForm()
-    setOpen(false)
+    closeModal()
   }
 
   const handleDelete = (id) => {
+    const exhibition = exhibitions.find(
+      (item) => item.ExhibitionID === id
+    )
+
     const confirmed = window.confirm(
       'Are you sure you want to delete this exhibition?'
     )
 
-    if(!confirmed){
+    if (!confirmed) {
       return
     }
 
-    setExhibitions(
-      exhibitions.filter((exhibition)=> exhibition.ExhibitionID !== id)
+    setExhibitions((current) =>
+      current.filter((item) => item.ExhibitionID !== id)
+    )
+
+    addActivity(
+      'Exhibition deleted',
+      exhibition?.Name || `Exhibition #${id}`
     )
   }
 
-  const filtered = exhibitions.filter((exhibition)=>{
+  const filtered = exhibitions.filter((exhibition) => {
     const matchesSearch =
       exhibition.Name.toLowerCase().includes(search.toLowerCase()) ||
       exhibition.Description.toLowerCase().includes(search.toLowerCase())
@@ -162,9 +235,8 @@ function Exhibitions(){
     return matchesSearch && matchesStatus
   })
 
-  return(
+  return (
     <div className="page">
-
       <div className="page-header">
         <div>
           <h1 className="page-title">Exhibitions</h1>
@@ -173,66 +245,56 @@ function Exhibitions(){
           </p>
         </div>
 
-        <button
-          className="btn primary"
-          onClick={()=>{
-            resetForm()
-            setOpen(true)
-          }}
-        >
-          Add Exhibition
-        </button>
+        {allowEdit && (
+          <button className="btn primary" onClick={openAddModal}>
+            Add Exhibition
+          </button>
+        )}
       </div>
 
       <div className="grid-3 section-gap-sm">
-
         <Panel className="summary-card">
           <div className="summary-value">
-            {exhibitions.filter((e)=> e.Status === 'active').length}
+            {exhibitions.filter((e) => e.Status === 'active').length}
           </div>
           <div className="summary-label">Active Exhibitions</div>
         </Panel>
 
         <Panel className="summary-card">
           <div className="summary-value">
-            {exhibitions.filter((e)=> e.Status === 'upcoming').length}
+            {exhibitions.filter((e) => e.Status === 'upcoming').length}
           </div>
           <div className="summary-label">Upcoming Exhibitions</div>
         </Panel>
 
         <Panel className="summary-card">
           <div className="summary-value">
-            {exhibitions.filter((e)=> e.Status === 'completed').length}
+            {exhibitions.filter((e) => e.Status === 'completed').length}
           </div>
           <div className="summary-label">Completed Exhibitions</div>
         </Panel>
-
       </div>
 
       <div className="toolbar">
-
         <input
           value={search}
-          onChange={(e)=> setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search exhibitions..."
         />
 
         <select
           value={status}
-          onChange={(e)=> setStatus(e.target.value)}
+          onChange={(e) => setStatus(e.target.value)}
         >
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="upcoming">Upcoming</option>
           <option value="completed">Completed</option>
         </select>
-
       </div>
 
       <div className="card table-wrap">
-
         <table className="data-table">
-
           <thead>
             <tr>
               <th>Exhibition</th>
@@ -242,15 +304,13 @@ function Exhibitions(){
               <th>Staff</th>
               <th>Artworks</th>
               <th>Status</th>
-              <th>Actions</th>
+              {allowEdit && <th>Actions</th>}
             </tr>
           </thead>
 
           <tbody>
-
-            {filtered.map((exhibition)=>(
+            {filtered.map((exhibition) => (
               <tr key={exhibition.ExhibitionID}>
-
                 <td>
                   <div className="strong">{exhibition.Name}</div>
                   <div className="cell-sub">
@@ -258,13 +318,8 @@ function Exhibitions(){
                   </div>
                 </td>
 
-                <td className="mono">
-                  {exhibition.StartDate}
-                </td>
-
-                <td className="mono">
-                  {exhibition.EndDate}
-                </td>
+                <td className="mono">{exhibition.StartDate}</td>
+                <td className="mono">{exhibition.EndDate}</td>
 
                 <td>
                   {exhibition.Tickets} / {exhibition.Capacity}
@@ -276,46 +331,51 @@ function Exhibitions(){
                     : '-'}
                 </td>
 
-                <td>
-                  {exhibition.ArtworkCount}
-                </td>
+                <td>{exhibition.ArtworkCount}</td>
 
                 <td>
                   <Badge variant={exhibition.Status} />
                 </td>
 
-                <td>
-                  <button
-                    className="btn danger"
-                    onClick={()=> handleDelete(exhibition.ExhibitionID)}
-                  >
-                    Delete
-                  </button>
-                </td>
+                {allowEdit && (
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        className="btn secondary"
+                        onClick={() => openEditModal(exhibition)}
+                      >
+                        Edit
+                      </button>
 
+                      <button
+                        className="btn danger"
+                        onClick={() => handleDelete(exhibition.ExhibitionID)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
 
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={allowEdit ? 8 : 7} className="empty">
+                  No exhibitions found.
+                </td>
+              </tr>
+            )}
           </tbody>
-
         </table>
-
       </div>
 
       <Modal
         open={open}
-        title="Add Exhibition"
-        onClose={()=>{
-          resetForm()
-          setOpen(false)
-        }}
+        title={editingId === null ? 'Add Exhibition' : 'Edit Exhibition'}
+        onClose={closeModal}
       >
-
-        <form
-          className="form-grid"
-          onSubmit={handleSubmit}
-        >
-
+        <form className="form-grid" onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Name</label>
             <input
@@ -333,6 +393,7 @@ function Exhibitions(){
               type="number"
               min="1"
               max="1400"
+              step="1"
               value={formData.Capacity}
               onChange={handleChange}
               required
@@ -355,7 +416,7 @@ function Exhibitions(){
             <input
               name="EndDate"
               type="date"
-              min={formData.StartDate}
+              min={formData.StartDate || undefined}
               value={formData.EndDate}
               onChange={handleChange}
               required
@@ -372,31 +433,20 @@ function Exhibitions(){
           </div>
 
           <div className="form-actions">
-
             <button
               type="button"
               className="btn secondary"
-              onClick={()=>{
-                resetForm()
-                setOpen(false)
-              }}
+              onClick={closeModal}
             >
               Cancel
             </button>
 
-            <button
-              type="submit"
-              className="btn primary"
-            >
-              Add Exhibition
+            <button type="submit" className="btn primary">
+              {editingId === null ? 'Add Exhibition' : 'Save Changes'}
             </button>
-
           </div>
-
         </form>
-
       </Modal>
-
     </div>
   )
 }

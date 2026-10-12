@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
-import{ Badge, Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { ARTWORK_TYPES } from '../data/constants'
+import { addActivity } from './Dashboard'
 
 function Artworks() {
   const { canEdit } = useRole()
   const allowEdit = canEdit('/artworks')
   const today = new Date().toISOString().split('T')[0]
+
   const [artworks, setArtworks] = useState([])
   const [artists, setArtists] = useState([])
   const [collections, setCollections] = useState([])
@@ -17,13 +19,14 @@ function Artworks() {
   const [type, setType] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+
   const [formData, setFormData] = useState({
     Title: '',
     Type: '',
     ArtistID: '',
     CollectionID: '',
     DateCreated: '',
-    CreatedBy: ''
+    CreatedBy: '',
   })
 
   useEffect(() => {
@@ -32,6 +35,7 @@ function Artworks() {
         const artworkData = await callApi('/api/artworks', 'GET')
         const artistData = await callApi('/api/artists', 'GET')
         const collectionData = await callApi('/api/collections', 'GET')
+
         setArtworks(artworkData)
         setArtists(artistData)
         setCollections(collectionData)
@@ -45,11 +49,14 @@ function Artworks() {
   }, [reloadCount])
 
   const refetchArtworks = () => {
-    setReloadCount(reloadCount + 1)
+    setReloadCount((count) => count + 1)
   }
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
   }
 
   const resetForm = () => {
@@ -59,7 +66,7 @@ function Artworks() {
       ArtistID: '',
       CollectionID: '',
       DateCreated: '',
-      CreatedBy: ''
+      CreatedBy: '',
     })
   }
 
@@ -71,13 +78,16 @@ function Artworks() {
 
   const openEditModal = (artwork) => {
     setFormData({
-      Title: artwork.Title,
-      Type: artwork.Type,
-      ArtistID: String(artwork.ArtistID),
-      CollectionID: String(artwork.CollectionID),
-      DateCreated: artwork.DateCreated,
-      CreatedBy: ''
+      Title: artwork.Title || '',
+      Type: artwork.Type || '',
+      ArtistID: String(artwork.ArtistID ?? ''),
+      CollectionID: String(artwork.CollectionID ?? ''),
+      DateCreated: artwork.DateCreated
+        ? artwork.DateCreated.split('T')[0]
+        : '',
+      CreatedBy: '',
     })
+
     setEditingId(artwork.ArtworkID)
     setOpen(true)
   }
@@ -85,30 +95,44 @@ function Artworks() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if(formData.DateCreated > today){
+    if (formData.DateCreated > today) {
       alert('Date Created cannot be in the future.')
       return
     }
 
-    if(formData.CreatedBy && Number(formData.CreatedBy) < 1){
+    if (
+      formData.CreatedBy &&
+      Number(formData.CreatedBy) < 1
+    ) {
       alert('Created By must be a positive Staff ID.')
       return
     }
 
     const artworkData = {
-      Title: formData.Title,
+      Title: formData.Title.trim(),
       Type: formData.Type,
       ArtistID: Number(formData.ArtistID),
       CollectionID: Number(formData.CollectionID),
-      DateCreated: formData.DateCreated
+      DateCreated: formData.DateCreated,
     }
 
     try {
-      if(editingId === null){
-        artworkData.CreatedBy = formData.CreatedBy ? Number(formData.CreatedBy) : null
+      if (editingId === null) {
+        artworkData.CreatedBy = formData.CreatedBy
+          ? Number(formData.CreatedBy)
+          : null
+
         await callApi('/api/artworks', 'POST', artworkData)
+
+        addActivity('Artwork added', artworkData.Title)
       } else {
-        await callApi('/api/artworks/' + editingId, 'PUT', artworkData)
+        await callApi(
+          '/api/artworks/' + editingId,
+          'PUT',
+          artworkData
+        )
+
+        addActivity('Artwork updated', artworkData.Title)
       }
     } catch (err) {
       alert(err.message)
@@ -121,11 +145,21 @@ function Artworks() {
   }
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm('Are you sure you want to delete this artwork?')
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this artwork?'
+    )
 
-    if(!confirmed){
+    if (!confirmed) {
       return
     }
+
+    const artwork = artworks.find(
+      (item) => item.ArtworkID === id
+    )
+
+    const artworkTitle = artwork
+      ? artwork.Title
+      : `Artwork #${id}`
 
     try {
       await callApi('/api/artworks/' + id, 'DELETE')
@@ -134,16 +168,17 @@ function Artworks() {
       return
     }
 
+    addActivity('Artwork deleted', artworkTitle)
     refetchArtworks()
   }
 
-  const filtered = artworks.filter((artwork)=>{
+  const filtered = artworks.filter((artwork) => {
     const searchText = search.toLowerCase()
 
     const matchesSearch =
-      artwork.Title.toLowerCase().includes(searchText) ||
-      artwork.ArtistName.toLowerCase().includes(searchText) ||
-      artwork.CollectionName.toLowerCase().includes(searchText)
+      (artwork.Title || '').toLowerCase().includes(searchText) ||
+      (artwork.ArtistName || '').toLowerCase().includes(searchText) ||
+      (artwork.CollectionName || '').toLowerCase().includes(searchText)
 
     const matchesType =
       type === 'all' || artwork.Type === type
@@ -151,8 +186,13 @@ function Artworks() {
     return matchesSearch && matchesType
   })
 
-  const artistsRepresented = new Set(artworks.map((artwork)=> artwork.ArtistID))
-  const collectionsUsed = new Set(artworks.map((artwork)=> artwork.CollectionID))
+  const artistsRepresented = new Set(
+    artworks.map((artwork) => artwork.ArtistID)
+  )
+
+  const collectionsUsed = new Set(
+    artworks.map((artwork) => artwork.CollectionID)
+  )
 
   return (
     <div className="page">
@@ -165,7 +205,10 @@ function Artworks() {
         </div>
 
         {allowEdit && (
-          <button className="btn primary" onClick={openAddModal}>
+          <button
+            className="btn primary"
+            onClick={openAddModal}
+          >
             Add Artwork
           </button>
         )}
@@ -173,17 +216,23 @@ function Artworks() {
 
       <div className="grid-3 section-gap-sm">
         <Panel className="summary-card">
-          <div className="summary-value">{artworks.length}</div>
+          <div className="summary-value">
+            {artworks.length}
+          </div>
           <div className="summary-label">Total Artworks</div>
         </Panel>
 
         <Panel className="summary-card">
-          <div className="summary-value">{artistsRepresented.size}</div>
+          <div className="summary-value">
+            {artistsRepresented.size}
+          </div>
           <div className="summary-label">Artists Represented</div>
         </Panel>
 
         <Panel className="summary-card">
-          <div className="summary-value">{collectionsUsed.size}</div>
+          <div className="summary-value">
+            {collectionsUsed.size}
+          </div>
           <div className="summary-label">Collections</div>
         </Panel>
       </div>
@@ -191,17 +240,17 @@ function Artworks() {
       <div className="toolbar">
         <input
           value={search}
-          onChange={(e)=> setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search artworks..."
         />
 
         <select
           value={type}
-          onChange={(e)=> setType(e.target.value)}
+          onChange={(e) => setType(e.target.value)}
         >
           <option value="all">All Types</option>
 
-          {ARTWORK_TYPES.map((item)=>(
+          {ARTWORK_TYPES.map((item) => (
             <option key={item} value={item}>
               {item}
             </option>
@@ -209,7 +258,9 @@ function Artworks() {
         </select>
       </div>
 
-      {loadError && <p className="empty">{loadError}</p>}
+      {loadError && (
+        <p className="empty">{loadError}</p>
+      )}
 
       <div className="card table-wrap">
         <table className="data-table">
@@ -226,24 +277,18 @@ function Artworks() {
           </thead>
 
           <tbody>
-            {filtered.map((item)=>(
+            {filtered.map((item) => (
               <tr key={item.ArtworkID}>
                 <td>
-                  <div className="strong">
-                    {item.Title}
-                  </div>
+                  <div className="strong">{item.Title}</div>
                   <div className="cell-sub mono">
                     #{String(item.ArtworkID).padStart(5, '0')}
                   </div>
                 </td>
 
-                <td>
-                  {item.ArtistName}
-                </td>
+                <td>{item.ArtistName}</td>
 
-                <td>
-                  {item.CollectionName}
-                </td>
+                <td>{item.CollectionName}</td>
 
                 <td>
                   <Badge
@@ -253,7 +298,9 @@ function Artworks() {
                 </td>
 
                 <td className="mono">
-                  {item.DateCreated}
+                  {item.DateCreated
+                    ? item.DateCreated.split('T')[0]
+                    : '-'}
                 </td>
 
                 <td className="mono">
@@ -265,14 +312,14 @@ function Artworks() {
                     <div className="row-actions">
                       <button
                         className="btn secondary"
-                        onClick={()=> openEditModal(item)}
+                        onClick={() => openEditModal(item)}
                       >
                         Edit
                       </button>
 
                       <button
                         className="btn danger"
-                        onClick={()=> handleDelete(item.ArtworkID)}
+                        onClick={() => handleDelete(item.ArtworkID)}
                       >
                         Delete
                       </button>
@@ -281,6 +328,17 @@ function Artworks() {
                 )}
               </tr>
             ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td
+                  colSpan={allowEdit ? 7 : 6}
+                  className="empty"
+                >
+                  No artworks found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -288,10 +346,9 @@ function Artworks() {
       <Modal
         open={open}
         title={editingId === null ? 'Add Artwork' : 'Edit Artwork'}
-        onClose={()=> setOpen(false)}
+        onClose={() => setOpen(false)}
       >
         <form onSubmit={handleSubmit} className="form-grid">
-
           <div className="form-group">
             <label>Title</label>
             <input
@@ -312,7 +369,7 @@ function Artworks() {
             >
               <option value="">Select a type</option>
 
-              {ARTWORK_TYPES.map((item)=>(
+              {ARTWORK_TYPES.map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
@@ -330,8 +387,11 @@ function Artworks() {
             >
               <option value="">Select an artist</option>
 
-              {artists.map((artist)=>(
-                <option key={artist.ArtistID} value={artist.ArtistID}>
+              {artists.map((artist) => (
+                <option
+                  key={artist.ArtistID}
+                  value={artist.ArtistID}
+                >
                   {artist.FirstName} {artist.LastName}
                 </option>
               ))}
@@ -348,8 +408,11 @@ function Artworks() {
             >
               <option value="">Select a collection</option>
 
-              {collections.map((collection)=>(
-                <option key={collection.CollectionID} value={collection.CollectionID}>
+              {collections.map((collection) => (
+                <option
+                  key={collection.CollectionID}
+                  value={collection.CollectionID}
+                >
                   {collection.Name}
                 </option>
               ))}
@@ -386,7 +449,7 @@ function Artworks() {
             <button
               type="button"
               className="btn secondary"
-              onClick={()=>{
+              onClick={() => {
                 resetForm()
                 setOpen(false)
               }}
@@ -394,11 +457,15 @@ function Artworks() {
               Cancel
             </button>
 
-            <button type="submit" className="btn primary">
-              {editingId === null ? 'Add Artwork' : 'Save Changes'}
+            <button
+              type="submit"
+              className="btn primary"
+            >
+              {editingId === null
+                ? 'Add Artwork'
+                : 'Save Changes'}
             </button>
           </div>
-
         </form>
       </Modal>
     </div>

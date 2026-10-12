@@ -10,6 +10,7 @@ import Cafe from './pages/Cafe'
 import Artists from './pages/Artists'
 import Artworks from './pages/Artworks'
 import Login from './pages/Login'
+import Collections from './pages/Collections'
 import{ useRole } from './context/role'
 import './App.css'
 
@@ -68,7 +69,7 @@ function App(){
 
             <Route path="/artists" element={protect('/artists', <Artists />)} />
             <Route path="/artworks" element={protect('/artworks', <Artworks />)} />
-            <Route path="/collections" element={protect('/collections', <ComingSoon title="Collections" />)} />
+            <Route path="/collections" element={protect('/collections', <Collections />)} />
             <Route path="/exhibitions" element={protect('/exhibitions', <Exhibitions />)} />
 
             <Route path="/tickets" element={protect('/tickets', <Tickets />)} />
