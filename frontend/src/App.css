@@ -729,3 +729,19 @@ a:focus-visible, button:focus-visible{ outline: 2px solid var(--primary); outlin
     width: 350px;
   }
 }
+
+.login-form .form-group {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.login-form .form-group label {
+  min-width: 0;
+}
+
+.login-form .btn.primary {
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+}
