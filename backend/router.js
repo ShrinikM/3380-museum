@@ -1,8 +1,9 @@
 const artistRoutes = require("./routers/artist");
 const artworkRoutes = require("./routers/artwork");
 const collectionRoutes = require("./routers/collection");
+const exhibitionRoutes = require("./routers/exhibition");
 
-const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes);
+const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes);
 
 const databaseErrorCodes = [
   "ECONNREFUSED",
@@ -28,6 +29,7 @@ function sendError(res, error) {
   if (error.status) {
     sendJson(res, error.status, { error: error.message });
   } else if (databaseErrorCodes.includes(error.code)) {
+    console.log("Database error:", error.code, error.message);
     sendJson(res, 503, { error: "Database is unavailable" });
   } else {
     console.log(error);
