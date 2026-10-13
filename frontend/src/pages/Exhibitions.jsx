@@ -1,44 +1,24 @@
-import { useState } from 'react'
+
+import { useState, useEffect } from 'react'
 import { Badge, Panel, Modal } from '../components/ui'
 import { useRole } from '../context/role'
 import { addActivity } from './Dashboard'
+import { callApi } from '../api'
 
 function Exhibitions() {
   const { canEdit } = useRole()
   const allowEdit = canEdit('/exhibitions')
   const today = new Date().toISOString().split('T')[0]
 
-  const [exhibitions, setExhibitions] = useState([
-    {
-      ExhibitionID: 1,
-      Name: 'Modern Art',
-      Description: 'Modern and contemporary artwork exhibition.',
-      StartDate: '2026-09-01',
-      EndDate: '2026-12-15',
-      Capacity: 500,
-      Tickets: 320,
-      StaffNames: ['K. Martinez'],
-      ArtworkCount: 24,
-      Status: 'active',
-    },
-    {
-      ExhibitionID: 2,
-      Name: 'Ancient Americas',
-      Description: 'Art and objects from ancient American cultures.',
-      StartDate: '2026-10-10',
-      EndDate: '2027-02-20',
-      Capacity: 180,
-      Tickets: 0,
-      StaffNames: ['T. Okafor'],
-      ArtworkCount: 18,
-      Status: 'upcoming',
-    },
-  ])
-
+  const [exhibitions, setExhibitions] = useState([])
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [loadError, setLoadError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [reloadCount, setReloadCount] = useState(0)
 
   const [formData, setFormData] = useState({
     Name: '',
@@ -47,6 +27,51 @@ function Exhibitions() {
     EndDate: '',
     Capacity: '',
   })
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadExhibitions() {
+      setLoading(true)
+
+      try {
+        const data = await callApi('/api/exhibitions', 'GET')
+
+        if (!Array.isArray(data)) {
+          throw new Error('The server returned an invalid exhibitions response.')
+        }
+
+        if (!cancelled) {
+          setExhibitions(
+            data.map((exhibition) => ({
+              ...exhibition,
+              Capacity: Number(exhibition.Capacity),
+              Tickets: Number(exhibition.Tickets ?? 0),
+              ArtworkCount: Number(exhibition.ArtworkCount ?? 0),
+              StaffNames: Array.isArray(exhibition.StaffNames)
+                ? exhibition.StaffNames
+                : [],
+            }))
+          )
+          setLoadError('')
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError('Could not load exhibitions: ' + err.message)
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadExhibitions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [reloadCount])
 
   const handleChange = (e) => {
     setFormData({
@@ -80,7 +105,7 @@ function Exhibitions() {
   const openEditModal = (exhibition) => {
     setFormData({
       Name: exhibition.Name,
-      Description: exhibition.Description,
+      Description: exhibition.Description || '',
       StartDate: exhibition.StartDate,
       EndDate: exhibition.EndDate,
       Capacity: String(exhibition.Capacity),
@@ -90,8 +115,12 @@ function Exhibitions() {
     setOpen(true)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+
+    if (saving) {
+      return
+    }
 
     const name = formData.Name.trim()
     const description = formData.Description.trim()
@@ -104,8 +133,18 @@ function Exhibitions() {
       return
     }
 
+    if (name.length > 255) {
+      alert('Exhibition name must be 255 characters or fewer.')
+      return
+    }
+
     if (description && !textPattern.test(description)) {
       alert('Description contains invalid characters.')
+      return
+    }
+
+    if (description.length > 255) {
+      alert('Description must be 255 characters or fewer.')
       return
     }
 
@@ -139,38 +178,7 @@ function Exhibitions() {
       return
     }
 
-    let newStatus = 'upcoming'
-
-    if (formData.StartDate <= today && formData.EndDate >= today) {
-      newStatus = 'active'
-    }
-
-    if (formData.EndDate < today) {
-      newStatus = 'completed'
-    }
-
-    if (editingId === null) {
-      const newExhibition = {
-        ExhibitionID:
-          Math.max(
-            ...exhibitions.map((exhibition) => exhibition.ExhibitionID),
-            0
-          ) + 1,
-        Name: name,
-        Description: description,
-        StartDate: formData.StartDate,
-        EndDate: formData.EndDate,
-        Capacity: capacity,
-        Tickets: 0,
-        StaffNames: [],
-        ArtworkCount: 0,
-        Status: newStatus,
-      }
-
-      setExhibitions((current) => [...current, newExhibition])
-
-      addActivity('Exhibition added', name)
-    } else {
+    if (editingId !== null) {
       const confirmed = window.confirm(
         'Are you sure you want to save these changes to this exhibition?'
       )
@@ -178,30 +186,41 @@ function Exhibitions() {
       if (!confirmed) {
         return
       }
-
-      setExhibitions((current) =>
-        current.map((exhibition) =>
-          exhibition.ExhibitionID === editingId
-            ? {
-                ...exhibition,
-                Name: name,
-                Description: description,
-                StartDate: formData.StartDate,
-                EndDate: formData.EndDate,
-                Capacity: capacity,
-                Status: newStatus,
-              }
-            : exhibition
-        )
-      )
-
-      addActivity('Exhibition updated', name)
     }
 
-    closeModal()
+    const payload = {
+      Name: name,
+      Description: description,
+      StartDate: formData.StartDate,
+      EndDate: formData.EndDate,
+      Capacity: capacity,
+    }
+
+    setSaving(true)
+
+    try {
+      if (editingId === null) {
+        await callApi('/api/exhibitions', 'POST', payload)
+        addActivity('Exhibition added', name)
+      } else {
+        await callApi(
+          `/api/exhibitions/${editingId}`,
+          'PUT',
+          payload
+        )
+        addActivity('Exhibition updated', name)
+      }
+
+      closeModal()
+      setReloadCount((count) => count + 1)
+    } catch (err) {
+      alert('Could not save exhibition: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     const exhibition = exhibitions.find(
       (item) => item.ExhibitionID === id
     )
@@ -214,20 +233,26 @@ function Exhibitions() {
       return
     }
 
-    setExhibitions((current) =>
-      current.filter((item) => item.ExhibitionID !== id)
-    )
+    try {
+      await callApi(`/api/exhibitions/${id}`, 'DELETE')
 
-    addActivity(
-      'Exhibition deleted',
-      exhibition?.Name || `Exhibition #${id}`
-    )
+      addActivity(
+        'Exhibition deleted',
+        exhibition?.Name || `Exhibition #${id}`
+      )
+
+      setReloadCount((count) => count + 1)
+    } catch (err) {
+      alert('Could not delete exhibition: ' + err.message)
+    }
   }
 
   const filtered = exhibitions.filter((exhibition) => {
     const matchesSearch =
-      exhibition.Name.toLowerCase().includes(search.toLowerCase()) ||
-      exhibition.Description.toLowerCase().includes(search.toLowerCase())
+      (exhibition.Name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (exhibition.Description || '')
+        .toLowerCase()
+        .includes(search.toLowerCase())
 
     const matchesStatus =
       status === 'all' || exhibition.Status === status
@@ -246,11 +271,27 @@ function Exhibitions() {
         </div>
 
         {allowEdit && (
-          <button className="btn primary" onClick={openAddModal}>
+          <button
+            className="btn primary"
+            onClick={openAddModal}
+            disabled={loading || saving}
+          >
             Add Exhibition
           </button>
         )}
       </div>
+
+      {loadError && (
+        <div className="error-message" role="alert">
+          {loadError}
+          <button
+            className="btn secondary"
+            onClick={() => setReloadCount((count) => count + 1)}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="grid-3 section-gap-sm">
         <Panel className="summary-card">
@@ -309,57 +350,71 @@ function Exhibitions() {
           </thead>
 
           <tbody>
-            {filtered.map((exhibition) => (
-              <tr key={exhibition.ExhibitionID}>
-                <td>
-                  <div className="strong">{exhibition.Name}</div>
-                  <div className="cell-sub">
-                    {exhibition.Description || '-'}
-                  </div>
+            {loading && (
+              <tr>
+                <td colSpan={allowEdit ? 8 : 7} className="empty">
+                  Loading exhibitions...
                 </td>
+              </tr>
+            )}
 
-                <td className="mono">{exhibition.StartDate}</td>
-                <td className="mono">{exhibition.EndDate}</td>
-
-                <td>
-                  {exhibition.Tickets} / {exhibition.Capacity}
-                </td>
-
-                <td>
-                  {exhibition.StaffNames.length > 0
-                    ? exhibition.StaffNames.join(', ')
-                    : '-'}
-                </td>
-
-                <td>{exhibition.ArtworkCount}</td>
-
-                <td>
-                  <Badge variant={exhibition.Status} />
-                </td>
-
-                {allowEdit && (
+            {!loading &&
+              !loadError &&
+              filtered.map((exhibition) => (
+                <tr key={exhibition.ExhibitionID}>
                   <td>
-                    <div className="row-actions">
-                      <button
-                        className="btn secondary"
-                        onClick={() => openEditModal(exhibition)}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        className="btn danger"
-                        onClick={() => handleDelete(exhibition.ExhibitionID)}
-                      >
-                        Delete
-                      </button>
+                    <div className="strong">{exhibition.Name}</div>
+                    <div className="cell-sub">
+                      {exhibition.Description || '-'}
                     </div>
                   </td>
-                )}
-              </tr>
-            ))}
 
-            {filtered.length === 0 && (
+                  <td className="mono">{exhibition.StartDate}</td>
+                  <td className="mono">{exhibition.EndDate}</td>
+
+                  <td>
+                    {exhibition.Tickets} / {exhibition.Capacity}
+                  </td>
+
+                  <td>
+                    {exhibition.StaffNames.length > 0
+                      ? exhibition.StaffNames.join(', ')
+                      : '-'}
+                  </td>
+
+                  <td>{exhibition.ArtworkCount}</td>
+
+                  <td>
+                    <Badge variant={exhibition.Status} />
+                  </td>
+
+                  {allowEdit && (
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          className="btn secondary"
+                          onClick={() => openEditModal(exhibition)}
+                          disabled={saving}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          className="btn danger"
+                          onClick={() =>
+                            handleDelete(exhibition.ExhibitionID)
+                          }
+                          disabled={saving}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+
+            {!loading && !loadError && filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 8 : 7} className="empty">
                   No exhibitions found.
@@ -382,6 +437,7 @@ function Exhibitions() {
               name="Name"
               value={formData.Name}
               onChange={handleChange}
+              maxLength={255}
               required
             />
           </div>
@@ -429,6 +485,7 @@ function Exhibitions() {
               name="Description"
               value={formData.Description}
               onChange={handleChange}
+              maxLength={255}
             />
           </div>
 
@@ -437,12 +494,21 @@ function Exhibitions() {
               type="button"
               className="btn secondary"
               onClick={closeModal}
+              disabled={saving}
             >
               Cancel
             </button>
 
-            <button type="submit" className="btn primary">
-              {editingId === null ? 'Add Exhibition' : 'Save Changes'}
+            <button
+              type="submit"
+              className="btn primary"
+              disabled={saving}
+            >
+              {saving
+                ? 'Saving...'
+                : editingId === null
+                  ? 'Add Exhibition'
+                  : 'Save Changes'}
             </button>
           </div>
         </form>
