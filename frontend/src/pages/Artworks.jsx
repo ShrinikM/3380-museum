@@ -1,9 +1,9 @@
+
 import { useState, useEffect } from 'react'
 import { Badge, Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { ARTWORK_TYPES } from '../data/constants'
-import { addActivity } from './Dashboard'
 
 function Artworks() {
   const { canEdit } = useRole()
@@ -100,10 +100,7 @@ function Artworks() {
       return
     }
 
-    if (
-      formData.CreatedBy &&
-      Number(formData.CreatedBy) < 1
-    ) {
+    if (formData.CreatedBy && Number(formData.CreatedBy) < 1) {
       alert('Created By must be a positive Staff ID.')
       return
     }
@@ -123,16 +120,12 @@ function Artworks() {
           : null
 
         await callApi('/api/artworks', 'POST', artworkData)
-
-        addActivity('Artwork added', artworkData.Title)
       } else {
         await callApi(
           '/api/artworks/' + editingId,
           'PUT',
           artworkData
         )
-
-        addActivity('Artwork updated', artworkData.Title)
       }
     } catch (err) {
       alert(err.message)
@@ -149,9 +142,7 @@ function Artworks() {
       'Are you sure you want to delete this artwork?'
     )
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     const artwork = artworks.find(
       (item) => item.ArtworkID === id
@@ -167,8 +158,6 @@ function Artworks() {
       alert(err.message)
       return
     }
-
-    addActivity('Artwork deleted', artworkTitle)
     refetchArtworks()
   }
 
@@ -199,13 +188,11 @@ function Artworks() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Artworks</h1>
-          <p className="page-subtitle">
-            Manage museum artworks and their information.
-          </p>
         </div>
 
         {allowEdit && (
           <button
+            type="button"
             className="btn primary"
             onClick={openAddModal}
           >
@@ -216,9 +203,7 @@ function Artworks() {
 
       <div className="grid-3 section-gap-sm">
         <Panel className="summary-card">
-          <div className="summary-value">
-            {artworks.length}
-          </div>
+          <div className="summary-value">{artworks.length}</div>
           <div className="summary-label">Total Artworks</div>
         </Panel>
 
@@ -238,18 +223,28 @@ function Artworks() {
       </div>
 
       <div className="toolbar">
+        <label htmlFor="artwork-search" className="sr-only">
+          Search artworks
+        </label>
         <input
+          id="artwork-search"
+          type="search"
+          name="artworkSearch"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search artworks..."
         />
 
+        <label htmlFor="artwork-type-filter" className="sr-only">
+          Filter by artwork type
+        </label>
         <select
+          id="artwork-type-filter"
+          name="artworkType"
           value={type}
           onChange={(e) => setType(e.target.value)}
         >
           <option value="all">All Types</option>
-
           {ARTWORK_TYPES.map((item) => (
             <option key={item} value={item}>
               {item}
@@ -259,20 +254,23 @@ function Artworks() {
       </div>
 
       {loadError && (
-        <p className="empty">{loadError}</p>
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
       )}
 
       <div className="card table-wrap">
         <table className="data-table">
+          <caption className="sr-only">Museum artworks</caption>
           <thead>
             <tr>
-              <th>Artwork</th>
-              <th>Artist</th>
-              <th>Collection</th>
-              <th>Type</th>
-              <th>Date Created</th>
-              <th>Created By</th>
-              {allowEdit && <th>Actions</th>}
+              <th scope="col">Artwork</th>
+              <th scope="col">Artist</th>
+              <th scope="col">Collection</th>
+              <th scope="col">Type</th>
+              <th scope="col">Date Created</th>
+              <th scope="col">Created By</th>
+              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -287,7 +285,6 @@ function Artworks() {
                 </td>
 
                 <td>{item.ArtistName}</td>
-
                 <td>{item.CollectionName}</td>
 
                 <td>
@@ -303,23 +300,25 @@ function Artworks() {
                     : '-'}
                 </td>
 
-                <td className="mono">
-                  {item.CreatedBy || '-'}
-                </td>
+                <td className="mono">{item.CreatedBy || '-'}</td>
 
                 {allowEdit && (
                   <td>
                     <div className="row-actions">
                       <button
+                        type="button"
                         className="btn secondary"
                         onClick={() => openEditModal(item)}
+                        aria-label={`Edit ${item.Title}`}
                       >
                         Edit
                       </button>
 
                       <button
+                        type="button"
                         className="btn danger"
                         onClick={() => handleDelete(item.ArtworkID)}
+                        aria-label={`Delete ${item.Title}`}
                       >
                         Delete
                       </button>
@@ -350,9 +349,11 @@ function Artworks() {
       >
         <form onSubmit={handleSubmit} className="form-grid">
           <div className="form-group">
-            <label>Title</label>
+            <label htmlFor="artwork-title">Title</label>
             <input
+              id="artwork-title"
               name="Title"
+              autoComplete="off"
               value={formData.Title}
               onChange={handleChange}
               required
@@ -360,15 +361,15 @@ function Artworks() {
           </div>
 
           <div className="form-group">
-            <label>Type</label>
+            <label htmlFor="artwork-type">Type</label>
             <select
+              id="artwork-type"
               name="Type"
               value={formData.Type}
               onChange={handleChange}
               required
             >
               <option value="">Select a type</option>
-
               {ARTWORK_TYPES.map((item) => (
                 <option key={item} value={item}>
                   {item}
@@ -378,15 +379,15 @@ function Artworks() {
           </div>
 
           <div className="form-group">
-            <label>Artist</label>
+            <label htmlFor="artwork-artist">Artist</label>
             <select
+              id="artwork-artist"
               name="ArtistID"
               value={formData.ArtistID}
               onChange={handleChange}
               required
             >
               <option value="">Select an artist</option>
-
               {artists.map((artist) => (
                 <option
                   key={artist.ArtistID}
@@ -399,15 +400,15 @@ function Artworks() {
           </div>
 
           <div className="form-group">
-            <label>Collection</label>
+            <label htmlFor="artwork-collection">Collection</label>
             <select
+              id="artwork-collection"
               name="CollectionID"
               value={formData.CollectionID}
               onChange={handleChange}
               required
             >
               <option value="">Select a collection</option>
-
               {collections.map((collection) => (
                 <option
                   key={collection.CollectionID}
@@ -420,8 +421,9 @@ function Artworks() {
           </div>
 
           <div className="form-group">
-            <label>Date Created</label>
+            <label htmlFor="artwork-date-created">Date Created</label>
             <input
+              id="artwork-date-created"
               name="DateCreated"
               type="date"
               max={today}
@@ -433,11 +435,14 @@ function Artworks() {
 
           {editingId === null && (
             <div className="form-group">
-              <label>Created By</label>
+              <label htmlFor="artwork-created-by">Created By</label>
               <input
+                id="artwork-created-by"
                 name="CreatedBy"
                 type="number"
                 min="1"
+                step="1"
+                inputMode="numeric"
                 value={formData.CreatedBy}
                 onChange={handleChange}
                 placeholder="Staff ID"
@@ -457,13 +462,8 @@ function Artworks() {
               Cancel
             </button>
 
-            <button
-              type="submit"
-              className="btn primary"
-            >
-              {editingId === null
-                ? 'Add Artwork'
-                : 'Save Changes'}
+            <button type="submit" className="btn primary">
+              {editingId === null ? 'Add Artwork' : 'Save Changes'}
             </button>
           </div>
         </form>

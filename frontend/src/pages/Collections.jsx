@@ -1,8 +1,8 @@
+
 import { useState, useEffect } from 'react'
 import { Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
-import { addActivity } from './Dashboard'
 
 function Collections() {
   const { canEdit } = useRole()
@@ -82,29 +82,17 @@ function Collections() {
     try {
       if (editingId === null) {
         await callApi('/api/collections', 'POST', collectionData)
-
-        addActivity(
-          'Collection added',
-          collectionData.Name
-        )
       } else {
         const confirmed = window.confirm(
           'Are you sure you want to save these changes to this collection?'
         )
 
-        if (!confirmed) {
-          return
-        }
+        if (!confirmed) return
 
         await callApi(
           '/api/collections/' + editingId,
           'PUT',
           collectionData
-        )
-
-        addActivity(
-          'Collection updated',
-          collectionData.Name
         )
       }
     } catch (err) {
@@ -118,25 +106,14 @@ function Collections() {
   }
 
   const handleDelete = async (id) => {
-    const collection = collections.find(
-      (item) => item.CollectionID === id
-    )
-
     const confirmed = window.confirm(
       'Are you sure you want to delete this collection?'
     )
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     try {
       await callApi('/api/collections/' + id, 'DELETE')
-
-      addActivity(
-        'Collection deleted',
-        collection?.Name || `Collection #${id}`
-      )
     } catch (err) {
       alert(err.message)
       return
@@ -162,13 +139,11 @@ function Collections() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Collections</h1>
-          <p className="page-subtitle">
-            Manage museum art collections.
-          </p>
         </div>
 
         {allowEdit && (
           <button
+            type="button"
             className="btn primary"
             onClick={openAddModal}
           >
@@ -201,23 +176,34 @@ function Collections() {
       </div>
 
       <div className="toolbar">
+        <label htmlFor="collection-search" className="sr-only">
+          Search collections
+        </label>
         <input
+          id="collection-search"
+          type="search"
+          name="collectionSearch"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search collections..."
         />
       </div>
 
-      {loadError && <p className="empty">{loadError}</p>}
+      {loadError && (
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
+      )}
 
       <div className="card table-wrap">
         <table className="data-table">
+          <caption className="sr-only">Museum collections</caption>
           <thead>
             <tr>
-              <th>Collection #</th>
-              <th>Name</th>
-              <th>Description</th>
-              {allowEdit && <th>Actions</th>}
+              <th scope="col">Collection #</th>
+              <th scope="col">Name</th>
+              <th scope="col">Description</th>
+              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -238,15 +224,19 @@ function Collections() {
                   <td>
                     <div className="row-actions">
                       <button
+                        type="button"
                         className="btn secondary"
                         onClick={() => openEditModal(item)}
+                        aria-label={`Edit ${item.Name}`}
                       >
                         Edit
                       </button>
 
                       <button
+                        type="button"
                         className="btn danger"
                         onClick={() => handleDelete(item.CollectionID)}
+                        aria-label={`Delete ${item.Name}`}
                       >
                         Delete
                       </button>
@@ -275,11 +265,16 @@ function Collections() {
         title={editingId === null ? 'Add Collection' : 'Edit Collection'}
         onClose={() => setOpen(false)}
       >
-        <form onSubmit={handleSubmit} className="form-grid">
+        <form
+          onSubmit={handleSubmit}
+          className="form-grid"
+        >
           <div className="form-group">
-            <label>Name</label>
+            <label htmlFor="collection-name">Name</label>
             <input
+              id="collection-name"
               name="Name"
+              autoComplete="off"
               value={formData.Name}
               onChange={handleChange}
               required
@@ -287,11 +282,13 @@ function Collections() {
           </div>
 
           <div className="form-group">
-            <label>Description</label>
-            <input
+            <label htmlFor="collection-description">Description</label>
+            <textarea
+              id="collection-description"
               name="Description"
               value={formData.Description}
               onChange={handleChange}
+              rows={3}
             />
           </div>
 

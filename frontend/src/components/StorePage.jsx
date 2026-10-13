@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Badge, StatCard, Modal } from './ui'
-import { addActivity } from '../pages/Dashboard'
+import { StatCard, Modal } from './ui'
 
 const giftShopItems = [
   { ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Category: 'Books', StaffID: 1, StaffName: 'Maya Patel', Price: 45, Stock: 32 },
@@ -199,10 +198,6 @@ function StorePage({ kind }) {
 
         setItems((currentItems) => [...currentItems, newItem])
 
-        addActivity(
-          isGiftShop ? 'Gift shop item added' : 'Café item added',
-          newItem.ItemName
-        )
       } else {
         setItems((currentItems) =>
           currentItems.map((item) =>
@@ -214,11 +209,6 @@ function StorePage({ kind }) {
                 }
               : item
           )
-        )
-
-        addActivity(
-          isGiftShop ? 'Gift shop item updated' : 'Café item updated',
-          itemData.ItemName
         )
       }
     } else {
@@ -270,8 +260,6 @@ function StorePage({ kind }) {
           originalSale && originalSale.ItemID === item.ItemID
             ? originalSale.Quantity
             : 0
-
-        const requiredStock = Number(formData.Quantity) - originalQuantity
 
         const availableStock = originalSale && originalSale.ItemID === item.ItemID
           ? item.Stock + originalSale.Quantity
@@ -342,12 +330,6 @@ function StorePage({ kind }) {
         setSales((currentSales) => [...currentSales, saleDataToSave])
       }
 
-      addActivity(
-        editingId !== null ? 'Sale updated' : 'Sale recorded',
-        `${saleDataToSave.ItemName} — $${(
-          saleDataToSave.SalePrice * saleDataToSave.Quantity
-        ).toFixed(2)}`
-      )
     }
 
     closeModal()
@@ -378,12 +360,6 @@ function StorePage({ kind }) {
       currentSales.filter((currentSale) => currentSale.SaleID !== saleID)
     )
 
-    addActivity(
-      'Sale deleted',
-      sale
-        ? `${sale.ItemName} — $${total(sale).toFixed(2)}`
-        : `Sale #${saleID}`
-    )
   }
 
   const handleDeleteItem = (itemID) => {
@@ -408,10 +384,6 @@ function StorePage({ kind }) {
       currentItems.filter((currentItem) => currentItem.ItemID !== itemID)
     )
 
-    addActivity(
-      isGiftShop ? 'Gift shop item deleted' : 'Café item deleted',
-      item?.ItemName || `Item #${itemID}`
-    )
   }
 
   const filteredItems = items.filter((item) => {
@@ -440,11 +412,6 @@ function StorePage({ kind }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">{title}</h1>
-          <p className="page-subtitle">
-            {isGiftShop
-              ? 'Retail inventory, prices, and stock levels.'
-              : 'Café menu items and prices.'}
-          </p>
         </div>
 
         <button
@@ -560,14 +527,7 @@ function StorePage({ kind }) {
 
                   {isGiftShop && (
                     <td>
-                      {item.Stock < 5 ? (
-                        <>
-                          <span className="strong">{item.Stock}</span>{' '}
-                          <Badge variant="low" label="Low" />
-                        </>
-                      ) : (
-                        item.Stock
-                      )}
+                      <span className="strong">{item.Stock}</span>
                     </td>
                   )}
 

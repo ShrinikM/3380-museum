@@ -21,8 +21,6 @@ function Login() {
     <div className="login-page">
       <div className="card login-card">
         <h1 className="page-title">MFA Houston</h1>
-        <p className="page-subtitle">Sign in to the Museum Database.</p>
-
         <form onSubmit={handleSubmit} className="login-form">
 
           <div className="form-group">

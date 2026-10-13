@@ -1,6 +1,6 @@
+
 import { useState } from 'react'
 import { Badge, Panel, StatCard, Modal } from '../components/ui'
-import { addActivity } from './Dashboard'
 
 const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
 
@@ -200,8 +200,6 @@ function Memberships() {
         ? 'upcoming'
         : 'active'
 
-    const memberName = `${firstName} ${lastName}`
-
     if (editingId !== null) {
       setMemberships((current) =>
         current.map((member) =>
@@ -222,8 +220,6 @@ function Memberships() {
             : member
         )
       )
-
-      addActivity('Membership updated', memberName)
     } else {
       const newMembership = {
         id: Math.max(...memberships.map((member) => member.id), 0) + 1,
@@ -240,33 +236,20 @@ function Memberships() {
       }
 
       setMemberships((current) => [...current, newMembership])
-
-      addActivity('Membership added', memberName)
     }
 
     closeModal()
   }
 
   const handleDelete = (id) => {
-    const member = memberships.find((item) => item.id === id)
-
     const confirmed = window.confirm(
       'Are you sure you want to delete this membership?'
     )
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     setMemberships((current) =>
       current.filter((item) => item.id !== id)
-    )
-
-    addActivity(
-      'Membership deleted',
-      member
-        ? `${member.firstName} ${member.lastName}`
-        : `Membership #${id}`
     )
   }
 
@@ -278,10 +261,11 @@ function Memberships() {
 
   const filtered = memberships.filter((member) => {
     const name = `${member.firstName} ${member.lastName}`.toLowerCase()
+    const searchText = search.toLowerCase()
 
     const matchesSearch =
-      name.includes(search.toLowerCase()) ||
-      member.email.toLowerCase().includes(search.toLowerCase())
+      name.includes(searchText) ||
+      member.email.toLowerCase().includes(searchText)
 
     const matchesType = type === 'all' || member.type === type
     const matchesStatus = status === 'all' || member.status === status
@@ -294,12 +278,15 @@ function Memberships() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Memberships</h1>
-          <p className="page-subtitle">
-            Member accounts, membership periods, and discounts.
-          </p>
         </div>
 
-        <button className="btn primary" onClick={openAddModal}>
+        <button
+          type="button"
+          className="btn primary"
+          onClick={openAddModal}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
           Add Membership
         </button>
       </div>
@@ -341,13 +328,27 @@ function Memberships() {
       </div>
 
       <div className="toolbar">
+        <label htmlFor="membership-search" className="sr-only">
+          Search members by name or email
+        </label>
         <input
+          id="membership-search"
+          name="membershipSearch"
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search members or email..."
         />
 
-        <select value={type} onChange={(e) => setType(e.target.value)}>
+        <label htmlFor="membership-type-filter" className="sr-only">
+          Filter by membership type
+        </label>
+        <select
+          id="membership-type-filter"
+          name="membershipType"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+        >
           <option value="all">All Types</option>
           {membershipTypes.map((membershipType) => (
             <option key={membershipType} value={membershipType}>
@@ -356,7 +357,15 @@ function Memberships() {
           ))}
         </select>
 
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+        <label htmlFor="membership-status-filter" className="sr-only">
+          Filter by membership status
+        </label>
+        <select
+          id="membership-status-filter"
+          name="membershipStatus"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="upcoming">Upcoming</option>
@@ -366,17 +375,18 @@ function Memberships() {
 
       <div className="card table-wrap">
         <table className="data-table">
+          <caption className="sr-only">Museum memberships</caption>
           <thead>
             <tr>
-              <th>Member</th>
-              <th>Type</th>
-              <th>Start Date</th>
-              <th>End Date</th>
-              <th>Price</th>
-              <th>Discount</th>
-              <th>Payment</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th scope="col">Member</th>
+              <th scope="col">Type</th>
+              <th scope="col">Start Date</th>
+              <th scope="col">End Date</th>
+              <th scope="col">Price</th>
+              <th scope="col">Discount</th>
+              <th scope="col">Payment</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
 
@@ -403,21 +413,28 @@ function Memberships() {
                 <td className="mono">{member.discount}%</td>
                 <td className="muted nowrap">{member.payment}</td>
                 <td>
-                  <Badge variant={member.status} />
+                  <Badge
+                    variant={member.status}
+                    label={member.status}
+                  />
                 </td>
 
                 <td>
                   <div className="row-actions">
                     <button
+                      type="button"
                       className="btn secondary"
                       onClick={() => openEditModal(member)}
+                      aria-label={`Edit membership for ${member.firstName} ${member.lastName}`}
                     >
                       Edit
                     </button>
 
                     <button
+                      type="button"
                       className="btn danger"
                       onClick={() => handleDelete(member.id)}
+                      aria-label={`Delete membership for ${member.firstName} ${member.lastName}`}
                     >
                       Delete
                     </button>
@@ -444,9 +461,13 @@ function Memberships() {
       >
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>First Name</label>
+            <label htmlFor="membership-first-name">First Name</label>
             <input
+              id="membership-first-name"
               name="firstName"
+              type="text"
+              autoComplete="given-name"
+              maxLength={100}
               value={formData.firstName}
               onChange={handleChange}
               required
@@ -454,9 +475,13 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>Last Name</label>
+            <label htmlFor="membership-last-name">Last Name</label>
             <input
+              id="membership-last-name"
               name="lastName"
+              type="text"
+              autoComplete="family-name"
+              maxLength={100}
               value={formData.lastName}
               onChange={handleChange}
               required
@@ -464,10 +489,13 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>Email</label>
+            <label htmlFor="membership-email">Email</label>
             <input
+              id="membership-email"
               name="email"
               type="email"
+              autoComplete="email"
+              maxLength={255}
               value={formData.email}
               onChange={handleChange}
               required
@@ -475,8 +503,9 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>Type</label>
+            <label htmlFor="membership-type">Type</label>
             <select
+              id="membership-type"
               name="type"
               value={formData.type}
               onChange={handleChange}
@@ -492,8 +521,9 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>Start Date</label>
+            <label htmlFor="membership-start-date">Start Date</label>
             <input
+              id="membership-start-date"
               name="startDate"
               type="date"
               value={formData.startDate}
@@ -503,8 +533,9 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>End Date</label>
+            <label htmlFor="membership-end-date">End Date</label>
             <input
+              id="membership-end-date"
               name="endDate"
               type="date"
               value={formData.endDate}
@@ -516,8 +547,9 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>Price</label>
+            <label htmlFor="membership-price">Price ($)</label>
             <input
+              id="membership-price"
               name="price"
               type="number"
               min="0.01"
@@ -530,18 +562,22 @@ function Memberships() {
           </div>
 
           <div className="form-group">
-            <label>Discount %</label>
+            <label htmlFor="membership-discount">Discount (%)</label>
             <input
+              id="membership-discount"
               name="discount"
               type="number"
+              min="0"
+              max="100"
               value={formData.discount}
               readOnly
             />
           </div>
 
           <div className="form-group">
-            <label>Payment</label>
+            <label htmlFor="membership-payment">Payment</label>
             <select
+              id="membership-payment"
               name="payment"
               value={formData.payment}
               onChange={handleChange}

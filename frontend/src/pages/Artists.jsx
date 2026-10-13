@@ -1,8 +1,8 @@
+
 import { useState, useEffect } from 'react'
 import { Badge, Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
-import { addActivity } from './Dashboard'
 
 function Artists() {
   const { canEdit } = useRole()
@@ -156,16 +156,12 @@ function Artists() {
           : null
 
         await callApi('/api/artists', 'POST', artistData)
-
-        addActivity('Artist added', artistName)
       } else {
         await callApi(
           '/api/artists/' + editingId,
           'PUT',
           artistData
         )
-
-        addActivity('Artist updated', artistName)
       }
     } catch (err) {
       alert(err.message)
@@ -182,9 +178,7 @@ function Artists() {
       'Are you sure you want to delete this artist?'
     )
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     const artist = artists.find(
       (item) => item.ArtistID === id
@@ -200,8 +194,6 @@ function Artists() {
       alert(err.message)
       return
     }
-
-    addActivity('Artist deleted', artistName)
     refetchArtists()
   }
 
@@ -216,7 +208,6 @@ function Artists() {
   const filtered = artists.filter((artist) => {
     const name =
       `${artist.FirstName} ${artist.LastName}`.toLowerCase()
-
     const searchText = search.toLowerCase()
 
     const matchesSearch =
@@ -239,13 +230,11 @@ function Artists() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Artists</h1>
-          <p className="page-subtitle">
-            Manage museum artists and their information.
-          </p>
         </div>
 
         {allowEdit && (
           <button
+            type="button"
             className="btn primary"
             onClick={openAddModal}
           >
@@ -256,9 +245,7 @@ function Artists() {
 
       <div className="grid-3 section-gap-sm">
         <Panel className="summary-card">
-          <div className="summary-value">
-            {artists.length}
-          </div>
+          <div className="summary-value">{artists.length}</div>
           <div className="summary-label">Total Artists</div>
         </Panel>
 
@@ -278,18 +265,28 @@ function Artists() {
       </div>
 
       <div className="toolbar">
+        <label htmlFor="artist-search" className="sr-only">
+          Search artists
+        </label>
         <input
+          id="artist-search"
+          type="search"
+          name="artistSearch"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search artists..."
         />
 
+        <label htmlFor="artist-nationality" className="sr-only">
+          Filter by nationality
+        </label>
         <select
+          id="artist-nationality"
+          name="nationality"
           value={nationality}
           onChange={(e) => setNationality(e.target.value)}
         >
           <option value="all">All Nationalities</option>
-
           {nationalities.map((item) => (
             <option key={item} value={item}>
               {item}
@@ -299,20 +296,23 @@ function Artists() {
       </div>
 
       {loadError && (
-        <p className="empty">{loadError}</p>
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
       )}
 
       <div className="card table-wrap">
         <table className="data-table">
+          <caption className="sr-only">Museum artists</caption>
           <thead>
             <tr>
-              <th>Artist</th>
-              <th>Birth Date</th>
-              <th>Death Date</th>
-              <th>Nationality</th>
-              <th>Artworks</th>
-              <th>Created By</th>
-              {allowEdit && <th>Actions</th>}
+              <th scope="col">Artist</th>
+              <th scope="col">Birth Date</th>
+              <th scope="col">Death Date</th>
+              <th scope="col">Nationality</th>
+              <th scope="col">Artworks</th>
+              <th scope="col">Created By</th>
+              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -347,29 +347,26 @@ function Artists() {
                   />
                 </td>
 
-                <td className="mono">
-                  {item.ArtworkCount}
-                </td>
-
-                <td className="mono">
-                  {item.CreatedBy || '-'}
-                </td>
+                <td className="mono">{item.ArtworkCount}</td>
+                <td className="mono">{item.CreatedBy || '-'}</td>
 
                 {allowEdit && (
                   <td>
                     <div className="row-actions">
                       <button
+                        type="button"
                         className="btn secondary"
                         onClick={() => openEditModal(item)}
+                        aria-label={`Edit ${item.FirstName} ${item.LastName}`}
                       >
                         Edit
                       </button>
 
                       <button
+                        type="button"
                         className="btn danger"
-                        onClick={() =>
-                          handleDelete(item.ArtistID)
-                        }
+                        onClick={() => handleDelete(item.ArtistID)}
+                        aria-label={`Delete ${item.FirstName} ${item.LastName}`}
                       >
                         Delete
                       </button>
@@ -398,14 +395,13 @@ function Artists() {
         title={editingId === null ? 'Add Artist' : 'Edit Artist'}
         onClose={() => setOpen(false)}
       >
-        <form
-          onSubmit={handleSubmit}
-          className="form-grid"
-        >
+        <form onSubmit={handleSubmit} className="form-grid">
           <div className="form-group">
-            <label>First Name</label>
+            <label htmlFor="artist-first-name">First Name</label>
             <input
+              id="artist-first-name"
               name="FirstName"
+              autoComplete="given-name"
               value={formData.FirstName}
               onChange={handleChange}
               required
@@ -413,9 +409,11 @@ function Artists() {
           </div>
 
           <div className="form-group">
-            <label>Last Name</label>
+            <label htmlFor="artist-last-name">Last Name</label>
             <input
+              id="artist-last-name"
               name="LastName"
+              autoComplete="family-name"
               value={formData.LastName}
               onChange={handleChange}
               required
@@ -423,8 +421,9 @@ function Artists() {
           </div>
 
           <div className="form-group">
-            <label>Birth Date</label>
+            <label htmlFor="artist-birth-date">Birth Date</label>
             <input
+              id="artist-birth-date"
               name="BirthYear"
               type="date"
               max={today}
@@ -435,11 +434,12 @@ function Artists() {
           </div>
 
           <div className="form-group">
-            <label>Death Date</label>
+            <label htmlFor="artist-death-date">Death Date</label>
             <input
+              id="artist-death-date"
               name="DeathYear"
               type="date"
-              min={formData.BirthYear}
+              min={formData.BirthYear || undefined}
               max={today}
               value={formData.DeathYear}
               onChange={handleChange}
@@ -447,9 +447,11 @@ function Artists() {
           </div>
 
           <div className="form-group">
-            <label>Nationality</label>
+            <label htmlFor="artist-nationality-input">Nationality</label>
             <input
+              id="artist-nationality-input"
               name="Nationality"
+              autoComplete="country-name"
               value={formData.Nationality}
               onChange={handleChange}
               required
@@ -458,11 +460,14 @@ function Artists() {
 
           {editingId === null && (
             <div className="form-group">
-              <label>Created By</label>
+              <label htmlFor="artist-created-by">Created By</label>
               <input
+                id="artist-created-by"
                 name="CreatedBy"
                 type="number"
                 min="1"
+                step="1"
+                inputMode="numeric"
                 value={formData.CreatedBy}
                 onChange={handleChange}
                 placeholder="Staff ID"
@@ -482,13 +487,8 @@ function Artists() {
               Cancel
             </button>
 
-            <button
-              type="submit"
-              className="btn primary"
-            >
-              {editingId === null
-                ? 'Add Artist'
-                : 'Save Changes'}
+            <button type="submit" className="btn primary">
+              {editingId === null ? 'Add Artist' : 'Save Changes'}
             </button>
           </div>
         </form>
