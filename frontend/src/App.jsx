@@ -11,6 +11,8 @@ import Artists from './pages/Artists'
 import Artworks from './pages/Artworks'
 import Login from './pages/Login'
 import Collections from './pages/Collections'
+import Donations from './pages/Donations'
+import Staff from './pages/Staff'
 import{ useRole } from './context/role'
 import './App.css'
 
@@ -77,8 +79,8 @@ function App(){
             <Route path="/gift-shop" element={protect('/gift-shop', <GiftShop />)} />
             <Route path="/cafe" element={protect('/cafe', <Cafe />)} />
 
-            <Route path="/donations" element={protect('/donations', <ComingSoon title="Donations" />)} />
-            <Route path="/staff" element={protect('/staff', <ComingSoon title="Staff" />)} />
+            <Route path="/donations" element={protect('/donations', <Donations />)} />
+            <Route path="/staff" element={protect('/staff', <Staff />)} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
