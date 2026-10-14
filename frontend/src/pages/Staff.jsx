@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react'
 
 const INITIAL_STAFF = [
@@ -13,86 +12,85 @@ export default function Staff() {
   const [staffMembers, setStaffMembers] = useState(INITIAL_STAFF)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     role: '',
     department: 'Curatorial',
     email: '',
-    status: 'Active',
+    status: 'Active'
   })
 
-  const filteredStaff = staffMembers.filter((item) =>
+  const filteredStaff = staffMembers.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.email.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const handleOpenAdd = () => {
+    setEditingId(null)
+    setFormData({ name: '', role: '', department: 'Curatorial', email: '', status: 'Active' })
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEdit = (item) => {
+    setEditingId(item.id)
+    setFormData({
+      name: item.name,
+      role: item.role,
+      department: item.department,
+      email: item.email,
+      status: item.status
+    })
+    setIsModalOpen(true)
+  }
+
+  const handleDelete = (id) => {
+    setStaffMembers(staffMembers.filter(item => item.id !== id))
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (!formData.name || !formData.role || !formData.email) return
 
-    if (
-      !formData.name.trim() ||
-      !formData.role.trim() ||
-      !formData.email.trim()
-    ) {
-      return
+    if (editingId) {
+      setStaffMembers(staffMembers.map(item =>
+        item.id === editingId
+          ? { ...item, name: formData.name, role: formData.role, department: formData.department, email: formData.email, status: formData.status }
+          : item
+      ))
+    } else {
+      const newStaff = {
+        id: `STF-${Math.floor(100 + Math.random() * 900)}`,
+        name: formData.name,
+        role: formData.role,
+        department: formData.department,
+        email: formData.email,
+        status: formData.status,
+      }
+      setStaffMembers([newStaff, ...staffMembers])
     }
 
-    const newStaff = {
-      id: `STF-${Math.floor(100 + Math.random() * 900)}`,
-      name: formData.name.trim(),
-      role: formData.role.trim(),
-      department: formData.department,
-      email: formData.email.trim(),
-      status: formData.status,
-    }
-
-    setStaffMembers((current) => [newStaff, ...current])
-    setFormData({
-      name: '',
-      role: '',
-      department: 'Curatorial',
-      email: '',
-      status: 'Active',
-    })
     setIsModalOpen(false)
+    setEditingId(null)
+    setFormData({ name: '', role: '', department: 'Curatorial', email: '', status: 'Active' })
   }
 
   return (
     <div className="page">
-      <div className="page-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 className="page-title">Staff Directory</h1>
         </div>
-
-        <button
-          type="button"
-          className="btn primary"
-          onClick={() => setIsModalOpen(true)}
-        >
+        <button className="btn primary" onClick={handleOpenAdd}>
           Add Staff Member
         </button>
       </div>
 
-      <div
-        className="card"
-        style={{
-          marginBottom: '20px',
-          padding: '16px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <label htmlFor="staff-search" className="sr-only">
-          Search staff
-        </label>
+      <div className="card" style={{ marginBottom: '20px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <input
-          id="staff-search"
-          name="search"
-          type="search"
-          aria-label="Search staff by name, role, department, or email"
+          type="text"
           placeholder="Search staff name, role, department..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -101,36 +99,27 @@ export default function Staff() {
             borderRadius: '4px',
             border: '1px solid var(--border, #ccc)',
             width: '280px',
-            fontSize: '14px',
+            fontSize: '14px'
           }}
         />
-
-        <span style={{ fontSize: '14px', color: '#666' }} aria-live="polite">
+        <span style={{ fontSize: '14px', color: '#666' }}>
           {filteredStaff.length} personnel listed
         </span>
       </div>
 
       <div className="card" style={{ overflowX: 'auto' }}>
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            textAlign: 'left',
-            fontSize: '14px',
-          }}
-        >
-          <caption className="sr-only">Museum staff directory</caption>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border, #eee)', color: '#666' }}>
-              <th scope="col" style={{ padding: '12px 16px' }}>STAFF ID</th>
-              <th scope="col" style={{ padding: '12px 16px' }}>NAME</th>
-              <th scope="col" style={{ padding: '12px 16px' }}>ROLE</th>
-              <th scope="col" style={{ padding: '12px 16px' }}>DEPARTMENT</th>
-              <th scope="col" style={{ padding: '12px 16px' }}>EMAIL</th>
-              <th scope="col" style={{ padding: '12px 16px' }}>STATUS</th>
+              <th style={{ padding: '12px 16px' }}>STAFF ID</th>
+              <th style={{ padding: '12px 16px' }}>NAME</th>
+              <th style={{ padding: '12px 16px' }}>ROLE</th>
+              <th style={{ padding: '12px 16px' }}>DEPARTMENT</th>
+              <th style={{ padding: '12px 16px' }}>EMAIL</th>
+              <th style={{ padding: '12px 16px' }}>STATUS</th>
+              <th style={{ padding: '12px 16px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
-
           <tbody>
             {filteredStaff.length > 0 ? (
               filteredStaff.map((item) => (
@@ -141,24 +130,32 @@ export default function Staff() {
                   <td style={{ padding: '12px 16px' }}>{item.department}</td>
                   <td style={{ padding: '12px 16px', color: '#555' }}>{item.email}</td>
                   <td style={{ padding: '12px 16px' }}>
-                    <span
-                      style={{
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        backgroundColor: item.status === 'Active' ? '#e6f4ea' : '#fef3c7',
-                        color: item.status === 'Active' ? '#137333' : '#b45309',
-                      }}
-                    >
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      backgroundColor: item.status === 'Active' ? '#e6f4ea' : '#fef3c7',
+                      color: item.status === 'Active' ? '#137333' : '#b45309'
+                    }}>
                       {item.status}
                     </span>
+                  </td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <button className="btn secondary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => handleOpenEdit(item)}>
+                        Edit
+                      </button>
+                      <button className="btn danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => handleDelete(item.id)}>
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#888' }}>
-                  No staff members found matching your search.
+                <td colSpan="7" style={{ padding: '32px', textAlign: 'center', color: '#888' }}>
+                  No staff members found.
                 </td>
               </tr>
             )}
@@ -167,52 +164,20 @@ export default function Staff() {
       </div>
 
       {isModalOpen && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsModalOpen(false)
-            }
-          }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            className="modal-content card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="staff-modal-title"
-            style={{ width: '420px', padding: '24px', background: '#fff' }}
-          >
-            <h2
-              id="staff-modal-title"
-              style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}
-            >
-              Add Staff Member
+        <div className="modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="modal-content card" style={{ width: '420px', padding: '24px', background: '#fff' }}>
+            <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>
+              {editingId ? 'Edit Staff Member' : 'Add Staff Member'}
             </h2>
-
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '12px' }}>
-                <label htmlFor="staff-name" style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
-                  Full Name
-                </label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Full Name</label>
                 <input
-                  id="staff-name"
-                  name="name"
                   type="text"
-                  autoComplete="name"
                   required
-                  maxLength={255}
                   placeholder="e.g., Jane Doe"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -221,15 +186,10 @@ export default function Staff() {
               </div>
 
               <div style={{ marginBottom: '12px' }}>
-                <label htmlFor="staff-role" style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
-                  Job Role / Title
-                </label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Job Role / Title</label>
                 <input
-                  id="staff-role"
-                  name="role"
                   type="text"
                   required
-                  maxLength={255}
                   placeholder="e.g., Assistant Curator"
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -238,12 +198,8 @@ export default function Staff() {
               </div>
 
               <div style={{ marginBottom: '12px' }}>
-                <label htmlFor="staff-department" style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
-                  Department
-                </label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Department</label>
                 <select
-                  id="staff-department"
-                  name="department"
                   value={formData.department}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
@@ -258,16 +214,10 @@ export default function Staff() {
               </div>
 
               <div style={{ marginBottom: '12px' }}>
-                <label htmlFor="staff-email" style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
-                  Email Address
-                </label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Email Address</label>
                 <input
-                  id="staff-email"
-                  name="email"
                   type="email"
-                  autoComplete="email"
                   required
-                  maxLength={255}
                   placeholder="e.g., j.doe@mfah.org"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -276,12 +226,8 @@ export default function Staff() {
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label htmlFor="staff-status" style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
-                  Status
-                </label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Status</label>
                 <select
-                  id="staff-status"
-                  name="status"
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
@@ -292,15 +238,11 @@ export default function Staff() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  onClick={() => setIsModalOpen(false)}
-                >
+                <button type="button" className="btn secondary" onClick={() => setIsModalOpen(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="btn primary">
-                  Save Staff
+                  {editingId ? 'Save Changes' : 'Save Staff'}
                 </button>
               </div>
             </form>
