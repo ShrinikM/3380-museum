@@ -1,17 +1,8 @@
-
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Badge, StatCard, Modal } from '../components/ui'
 
 const ticketTypes = ['Adult', 'Senior', 'Student', 'Child', 'Member']
 
-const exhibitions = [
-  { ExhibitionID: 1, Name: 'Modern Art' },
-  { ExhibitionID: 2, Name: 'Ancient Americas' },
-]
-
-const memberships = [
-  { MembershipID: 1, Name: 'Patricia Holloway', Type: 'Senior', Discount: 15 },
-]
 
 const ticketPrices = {
   Adult: 25,
@@ -37,38 +28,67 @@ function Tickets() {
   const [exhibition, setExhibition] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [exhibitions, setExhibitions] = useState([])
+  const [memberships, setMemberships] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const [tickets, setTickets] = useState([
-    {
-      TicketID: 1,
-      ExhibitionID: 1,
-      ExhibitionName: 'Modern Art',
-      TicketType: 'Adult',
-      Price: 25,
-      SaleDate: '2026-09-28',
-      MembershipID: null,
-    },
-    {
-      TicketID: 2,
-      ExhibitionID: 1,
-      ExhibitionName: 'Modern Art',
-      TicketType: 'Member',
-      Price: 18,
-      SaleDate: '2026-09-28',
-      MembershipID: 1,
-    },
-    {
-      TicketID: 3,
-      ExhibitionID: 2,
-      ExhibitionName: 'Ancient Americas',
-      TicketType: 'Senior',
-      Price: 20,
-      SaleDate: '2026-09-27',
-      MembershipID: null,
-    },
-  ])
+  const [tickets, setTickets] = useState([])
 
   const [formData, setFormData] = useState(emptyForm)
+
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [
+          ticketsResponse,
+          exhibitionsResponse,
+          membershipsResponse,
+        ] = await Promise.all([
+          fetch('/api/tickets'),
+          fetch('/api/exhibitions'),
+          fetch('/api/memberships'),
+        ])
+
+        if (
+          !ticketsResponse.ok ||
+          !exhibitionsResponse.ok ||
+          !membershipsResponse.ok
+        ) {
+          throw new Error(
+            'Failed to load tickets, exhibitions, or memberships.'
+          )
+        }
+
+        const ticketsData = await ticketsResponse.json()
+        const exhibitionsData = await exhibitionsResponse.json()
+        const membershipsData = await membershipsResponse.json()
+
+        setTickets(
+          ticketsData.map((ticket) => ({
+            ...ticket,
+            Price: Number(ticket.Price),
+          }))
+        )
+
+        setExhibitions(exhibitionsData)
+        setMemberships(membershipsData)
+      } catch (err) {
+        console.error('Error loading Tickets page:', err)
+        setError(err.message || 'Unable to load data from the server.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+
 
   const revenue = tickets.reduce((sum, ticket) => sum + ticket.Price, 0)
 
@@ -119,7 +139,7 @@ function Tickets() {
     )
 
     const basePrice = ticketPrices[formData.TicketType] || 0
-    const discount = membership ? membership.Discount : 0
+    const discount = membership ? Number(membership.DiscountPercent) : 0
     const price = basePrice * (1 - discount / 100)
 
     setFormData({
@@ -161,7 +181,8 @@ function Tickets() {
     setOpen(false)
   }
 
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     if (!formData.ExhibitionID) {
@@ -174,34 +195,23 @@ function Tickets() {
       return
     }
 
-    if (!formData.SaleDate) {
-      alert('Please select a Sale Date.')
+    if (!formData.SaleDate || formData.SaleDate > today) {
+      alert('Please select a valid Sale Date that is not in the future.')
       return
     }
 
-    if (formData.SaleDate > today) {
-      alert('Sale Date cannot be in the future.')
-      return
-    }
-
-    if (
-      formData.TicketType === 'Member' &&
-      !formData.MembershipID
-    ) {
+    if (formData.TicketType === 'Member' && !formData.MembershipID) {
       alert('Member tickets require a Membership.')
       return
     }
 
-    if (
-      formData.TicketType !== 'Member' &&
-      formData.MembershipID
-    ) {
+    if (formData.TicketType !== 'Member' && formData.MembershipID) {
       alert('Only Member tickets can have a Membership.')
       return
     }
 
     const selectedExhibition = exhibitions.find(
-      (item) => item.ExhibitionID === Number(formData.ExhibitionID)
+      (item) => Number(item.ExhibitionID) === Number(formData.ExhibitionID)
     )
 
     if (!selectedExhibition) {
@@ -210,7 +220,7 @@ function Tickets() {
     }
 
     const selectedMembership = memberships.find(
-      (member) => member.MembershipID === Number(formData.MembershipID)
+      (member) => Number(member.MembershipID) === Number(formData.MembershipID)
     )
 
     if (formData.MembershipID && !selectedMembership) {
@@ -227,50 +237,105 @@ function Tickets() {
 
     const ticketData = {
       ExhibitionID: Number(formData.ExhibitionID),
-      ExhibitionName: selectedExhibition.Name,
       TicketType: formData.TicketType,
-      Price: price,
       SaleDate: formData.SaleDate,
       MembershipID: formData.MembershipID
         ? Number(formData.MembershipID)
         : null,
     }
 
-    if (editingId !== null) {
-      setTickets((currentTickets) =>
-        currentTickets.map((ticket) =>
-          ticket.TicketID === editingId
-            ? { ...ticket, ...ticketData }
-            : ticket
-        )
+    try {
+      const response = await fetch(
+        editingId !== null
+          ? `/api/tickets/${editingId}`
+          : '/api/tickets',
+        {
+          method: editingId !== null ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(ticketData),
+        }
       )
-    } else {
-      const newTicket = {
-        TicketID:
-          Math.max(...tickets.map((ticket) => ticket.TicketID), 0) + 1,
-        ...ticketData,
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save ticket.')
       }
 
-      setTickets((currentTickets) => [...currentTickets, newTicket])
-    }
 
-    closeModal()
+      const ticketsResponse = await fetch('/api/tickets')
+
+      if (!ticketsResponse.ok) {
+        throw new Error('Ticket saved, but the ticket list could not be refreshed.')
+      }
+
+      const ticketsData = await ticketsResponse.json()
+
+      setTickets(
+        ticketsData.map((ticket) => ({
+          ...ticket,
+          Price: Number(ticket.Price),
+        }))
+      )
+
+      closeModal()
+    } catch (err) {
+      console.error('Error saving ticket:', err)
+      alert(err.message || 'Unable to save ticket.')
+    }
   }
 
-  const handleDelete = (ticketID) => {
+
+
+  const handleDelete = async (ticketID) => {
     const confirmed = window.confirm(
       'Are you sure you want to delete this ticket?'
     )
 
     if (!confirmed) return
 
-    setTickets((currentTickets) =>
-      currentTickets.filter((item) => item.TicketID !== ticketID)
-    )
+    try {
+      const response = await fetch(`/api/tickets/${ticketID}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete ticket.')
+      }
+
+      const ticketsResponse = await fetch('/api/tickets')
+
+      if (!ticketsResponse.ok) {
+        throw new Error('Ticket deleted, but the list could not be refreshed.')
+      }
+
+      const ticketsData = await ticketsResponse.json()
+
+      setTickets(
+        ticketsData.map((ticket) => ({
+          ...ticket,
+          Price: Number(ticket.Price),
+        }))
+      )
+    } catch (err) {
+      console.error('Error deleting ticket:', err)
+      alert(err.message || 'Unable to delete ticket.')
+    }
   }
 
   return (
     <div className="page">
+      {loading && <p>Loading tickets...</p>}
+
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Tickets</h1>
@@ -303,11 +368,10 @@ function Tickets() {
         <StatCard
           label="Member Tickets"
           value={memberTickets}
-          delta={`${
-            tickets.length
+          delta={`${tickets.length
               ? Math.round((memberTickets / tickets.length) * 100)
               : 0
-          }%`}
+            }%`}
           deltaLabel="of all tickets"
         />
 
@@ -388,7 +452,8 @@ function Tickets() {
           <tbody>
             {filtered.map((ticket) => {
               const member = memberships.find(
-                (item) => item.MembershipID === ticket.MembershipID
+                (item) =>
+                  Number(item.MembershipID) === Number(ticket.MembershipID)
               )
 
               return (

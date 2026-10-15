@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Badge, Panel, StatCard, Modal } from '../components/ui'
 
 const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
@@ -73,7 +73,9 @@ const emptyForm = {
 }
 
 function Memberships() {
-  const [memberships, setMemberships] = useState(initialMemberships)
+  const [memberships, setMemberships] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
   const [status, setStatus] = useState('all')
@@ -81,14 +83,61 @@ function Memberships() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
+
+  useEffect(() => {
+    const loadMemberships = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const response = await fetch('/api/memberships')
+
+        if (!response.ok) {
+          throw new Error('Failed to load memberships.')
+        }
+
+        const data = await response.json()
+
+        setMemberships(
+          data.map((member) => ({
+            id: Number(member.MembershipID),
+            firstName: member.FirstName,
+            lastName: member.LastName,
+            email: member.Email,
+            type: member.MembershipType,
+            startDate: member.StartDate,
+            endDate: member.EndDate,
+            price: Number(member.Price),
+            discount: Number(member.DiscountPercent),
+            payment: member.PaymentMethod,
+            status:
+              member.StartDate > new Date().toISOString().split('T')[0]
+                ? 'upcoming'
+                : member.EndDate < new Date().toISOString().split('T')[0]
+                  ? 'expired'
+                  : 'active',
+          }))
+        )
+      } catch (err) {
+        console.error('Error loading memberships:', err)
+        setError(err.message || 'Unable to load memberships.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadMemberships()
+  }, [])
+
+
   const maxEndDate = formData.startDate
     ? new Date(
-        new Date(formData.startDate).setFullYear(
-          new Date(formData.startDate).getFullYear() + 1
-        )
+      new Date(formData.startDate).setFullYear(
+        new Date(formData.startDate).getFullYear() + 1
       )
-        .toISOString()
-        .split('T')[0]
+    )
+      .toISOString()
+      .split('T')[0]
     : undefined
 
   const handleChange = (e) => {
@@ -136,122 +185,190 @@ function Memberships() {
     setOpen(true)
   }
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
+  
+const handleSubmit = async (e) => {
+  e.preventDefault()
 
-    const firstName = formData.firstName.trim()
-    const lastName = formData.lastName.trim()
-    const email = formData.email.trim()
-    const price = Number(formData.price)
-    const discount = Number(formData.discount)
+  const firstName = formData.firstName.trim()
+  const lastName = formData.lastName.trim()
+  const email = formData.email.trim()
+  const price = Number(formData.price)
+  const discount = Number(formData.discount)
 
-    const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
+  const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
-    if (!textPattern.test(firstName)) {
-      alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
-      return
-    }
+  if (!textPattern.test(firstName)) {
+    alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
+    return
+  }
 
-    if (!textPattern.test(lastName)) {
-      alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
-      return
-    }
+  if (!textPattern.test(lastName)) {
+    alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
+    return
+  }
 
-    if (!formData.type || !membershipTypes.includes(formData.type)) {
-      alert('Please select a valid membership type.')
-      return
-    }
+  if (!membershipTypes.includes(formData.type)) {
+    alert('Please select a valid membership type.')
+    return
+  }
 
-    if (!Number.isFinite(price) || price <= 0) {
-      alert('Price must be greater than 0.')
-      return
-    }
+  if (!Number.isFinite(price) || price <= 0) {
+    alert('Price must be greater than 0.')
+    return
+  }
 
-    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
-      alert('Discount must be between 0 and 100.')
-      return
-    }
+  if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
+    alert('Discount must be between 0 and 100.')
+    return
+  }
 
-    if (!formData.startDate || !formData.endDate) {
-      alert('Please select both Start Date and End Date.')
-      return
-    }
+  if (!formData.startDate || !formData.endDate) {
+    alert('Please select both Start Date and End Date.')
+    return
+  }
 
-    if (formData.endDate < formData.startDate) {
-      alert('End Date cannot be before Start Date.')
-      return
-    }
+  if (formData.endDate < formData.startDate) {
+    alert('End Date cannot be before Start Date.')
+    return
+  }
 
-    const maxAllowedEndDate = new Date(formData.startDate)
-    maxAllowedEndDate.setFullYear(maxAllowedEndDate.getFullYear() + 1)
+  const maxAllowedEndDate = new Date(`${formData.startDate}T00:00:00Z`)
+  maxAllowedEndDate.setUTCFullYear(maxAllowedEndDate.getUTCFullYear() + 1)
 
-    if (new Date(formData.endDate) > maxAllowedEndDate) {
-      alert('Membership cannot be longer than 1 year.')
-      return
-    }
+  if (new Date(`${formData.endDate}T00:00:00Z`) > maxAllowedEndDate) {
+    alert('Membership cannot be longer than 1 year.')
+    return
+  }
 
-    if (!formData.payment) {
-      alert('Please select a payment method.')
-      return
-    }
+  if (!formData.payment) {
+    alert('Please select a payment method.')
+    return
+  }
 
-    const newStatus =
-      formData.startDate > new Date().toISOString().split('T')[0]
-        ? 'upcoming'
-        : 'active'
+  const membershipData = {
+    FirstName: firstName,
+    LastName: lastName,
+    Email: email,
+    MembershipType: formData.type,
+    StartDate: formData.startDate,
+    EndDate: formData.endDate,
+    Price: price,
+    PaymentMethod: formData.payment,
+    DiscountPercent: discount,
+  }
 
-    if (editingId !== null) {
-      setMemberships((current) =>
-        current.map((member) =>
-          member.id === editingId
-            ? {
-                ...member,
-                firstName,
-                lastName,
-                email,
-                type: formData.type,
-                startDate: formData.startDate,
-                endDate: formData.endDate,
-                price,
-                discount,
-                payment: formData.payment,
-                status: newStatus,
-              }
-            : member
-        )
-      )
-    } else {
-      const newMembership = {
-        id: Math.max(...memberships.map((member) => member.id), 0) + 1,
-        firstName,
-        lastName,
-        email,
-        type: formData.type,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        price,
-        discount,
-        payment: formData.payment,
-        status: newStatus,
+  try {
+    const response = await fetch(
+      editingId !== null
+        ? `/api/memberships/${editingId}`
+        : '/api/memberships',
+      {
+        method: editingId !== null ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(membershipData),
       }
+    )
 
-      setMemberships((current) => [...current, newMembership])
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to save membership.')
     }
+
+    const membershipsResponse = await fetch('/api/memberships')
+
+    if (!membershipsResponse.ok) {
+      throw new Error('Membership saved, but the list could not be refreshed.')
+    }
+
+    const membershipsData = await membershipsResponse.json()
+    const today = new Date().toISOString().split('T')[0]
+
+    setMemberships(
+      membershipsData.map((member) => ({
+        id: Number(member.MembershipID),
+        firstName: member.FirstName,
+        lastName: member.LastName,
+        email: member.Email,
+        type: member.MembershipType,
+        startDate: member.StartDate,
+        endDate: member.EndDate,
+        price: Number(member.Price),
+        discount: Number(member.DiscountPercent),
+        payment: member.PaymentMethod,
+        status:
+          member.StartDate > today
+            ? 'upcoming'
+            : member.EndDate < today
+              ? 'expired'
+              : 'active',
+      }))
+    )
 
     closeModal()
+  } catch (err) {
+    console.error('Error saving membership:', err)
+    alert(err.message || 'Unable to save membership.')
   }
+}
 
-  const handleDelete = (id) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this membership?'
+
+  
+const handleDelete = async (id) => {
+  const confirmed = window.confirm(
+    'Are you sure you want to delete this membership?'
+  )
+
+  if (!confirmed) return
+
+  try {
+    const response = await fetch(`/api/memberships/${id}`, {
+      method: 'DELETE',
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to delete membership.')
+    }
+
+    const membershipsResponse = await fetch('/api/memberships')
+
+    if (!membershipsResponse.ok) {
+      throw new Error('Membership deleted, but the list could not be refreshed.')
+    }
+
+    const membershipsData = await membershipsResponse.json()
+    const today = new Date().toISOString().split('T')[0]
+
+    setMemberships(
+      membershipsData.map((member) => ({
+        id: Number(member.MembershipID),
+        firstName: member.FirstName,
+        lastName: member.LastName,
+        email: member.Email,
+        type: member.MembershipType,
+        startDate: member.StartDate,
+        endDate: member.EndDate,
+        price: Number(member.Price),
+        discount: Number(member.DiscountPercent),
+        payment: member.PaymentMethod,
+        status:
+          member.StartDate > today
+            ? 'upcoming'
+            : member.EndDate < today
+              ? 'expired'
+              : 'active',
+      }))
     )
-
-    if (!confirmed) return
-
-    setMemberships((current) =>
-      current.filter((item) => item.id !== id)
-    )
+  } catch (err) {
+    console.error('Error deleting membership:', err)
+    alert(err.message || 'Unable to delete membership.')
   }
+}
+
 
   const active = memberships.filter((member) => member.status === 'active')
   const upcoming = memberships.filter((member) => member.status === 'upcoming')
@@ -275,6 +392,15 @@ function Memberships() {
 
   return (
     <div className="page">
+
+      {loading && <p>Loading memberships...</p>}
+
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Memberships</h1>
