@@ -58,7 +58,7 @@ function Dashboard() {
   return (
     <div className="page">
       <div className="dashboard-header">
-        <h1>Museum Database</h1>
+        <h1>Museum of Fine Arts, Houston</h1>
       </div>
 
       <div className="grid-4 section-gap">
@@ -90,7 +90,7 @@ function Dashboard() {
 
       <section aria-labelledby="database-modules-heading">
         <div className="section-label" id="database-modules-heading">
-          Database Modules
+          Modules
         </div>
 
         <div className="module-grid">

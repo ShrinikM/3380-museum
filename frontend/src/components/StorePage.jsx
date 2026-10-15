@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { StatCard, Modal } from './ui'
+import { Badge, Panel, Modal } from './ui'
 
 const giftShopItems = [
   { ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Category: 'Books', StaffID: 1, StaffName: 'Maya Patel', Price: 45, Stock: 32 },
@@ -86,15 +86,12 @@ function StorePage({ kind }) {
   const [items, setItems] = useState(() =>
     initialItems.map((item) => ({ ...item }))
   )
-
   const [sales, setSales] = useState(() =>
     initialSales.map((sale) => ({ ...sale }))
   )
 
   const [tab, setTab] = useState('items')
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('all')
-  const [payment, setPayment] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
@@ -173,7 +170,9 @@ function StorePage({ kind }) {
 
       if (
         isGiftShop &&
-        (!formData.Stock || !Number.isInteger(Number(formData.Stock)) || Number(formData.Stock) < 0)
+        (!formData.Stock ||
+          !Number.isInteger(Number(formData.Stock)) ||
+          Number(formData.Stock) < 0)
       ) {
         if (formData.Stock !== '0') {
           alert('Stock must be a non-negative whole number.')
@@ -197,7 +196,6 @@ function StorePage({ kind }) {
         }
 
         setItems((currentItems) => [...currentItems, newItem])
-
       } else {
         setItems((currentItems) =>
           currentItems.map((item) =>
@@ -217,7 +215,10 @@ function StorePage({ kind }) {
         return
       }
 
-      if (!Number.isInteger(Number(formData.Quantity)) || Number(formData.Quantity) < 1) {
+      if (
+        !Number.isInteger(Number(formData.Quantity)) ||
+        Number(formData.Quantity) < 1
+      ) {
         alert('Quantity must be at least 1.')
         return
       }
@@ -237,7 +238,11 @@ function StorePage({ kind }) {
         return
       }
 
-      if (formData.MembershipID && (!Number.isInteger(Number(formData.MembershipID)) || Number(formData.MembershipID) < 1)) {
+      if (
+        formData.MembershipID &&
+        (!Number.isInteger(Number(formData.MembershipID)) ||
+          Number(formData.MembershipID) < 1)
+      ) {
         alert('Membership ID must be a positive whole number.')
         return
       }
@@ -251,19 +256,16 @@ function StorePage({ kind }) {
         return
       }
 
-      const originalSale = editingId !== null
-        ? sales.find((sale) => sale.SaleID === editingId)
-        : null
+      const originalSale =
+        editingId !== null
+          ? sales.find((sale) => sale.SaleID === editingId)
+          : null
 
       if (isGiftShop) {
-        const originalQuantity =
+        const availableStock =
           originalSale && originalSale.ItemID === item.ItemID
-            ? originalSale.Quantity
-            : 0
-
-        const availableStock = originalSale && originalSale.ItemID === item.ItemID
-          ? item.Stock + originalSale.Quantity
-          : item.Stock
+            ? item.Stock + originalSale.Quantity
+            : item.Stock
 
         if (Number(formData.Quantity) > availableStock) {
           alert('There is not enough stock available.')
@@ -272,9 +274,10 @@ function StorePage({ kind }) {
       }
 
       const saleDataToSave = {
-        SaleID: editingId !== null
-          ? editingId
-          : Math.max(...sales.map((sale) => sale.SaleID), 0) + 1,
+        SaleID:
+          editingId !== null
+            ? editingId
+            : Math.max(...sales.map((sale) => sale.SaleID), 0) + 1,
         ItemID: item.ItemID,
         ItemName: item.ItemName,
         Quantity: Number(formData.Quantity),
@@ -292,10 +295,7 @@ function StorePage({ kind }) {
       if (isGiftShop) {
         setItems((currentItems) => {
           let updatedItems = currentItems.map((currentItem) => {
-            if (
-              originalSale &&
-              currentItem.ItemID === originalSale.ItemID
-            ) {
+            if (originalSale && currentItem.ItemID === originalSale.ItemID) {
               return {
                 ...currentItem,
                 Stock: currentItem.Stock + originalSale.Quantity,
@@ -329,7 +329,6 @@ function StorePage({ kind }) {
       } else {
         setSales((currentSales) => [...currentSales, saleDataToSave])
       }
-
     }
 
     closeModal()
@@ -340,9 +339,7 @@ function StorePage({ kind }) {
       'Are you sure you want to delete this sale?'
     )
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     const sale = sales.find((currentSale) => currentSale.SaleID === saleID)
 
@@ -359,7 +356,6 @@ function StorePage({ kind }) {
     setSales((currentSales) =>
       currentSales.filter((currentSale) => currentSale.SaleID !== saleID)
     )
-
   }
 
   const handleDeleteItem = (itemID) => {
@@ -367,9 +363,7 @@ function StorePage({ kind }) {
       'Are you sure you want to delete this item?'
     )
 
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     const hasSales = sales.some((sale) => sale.ItemID === itemID)
 
@@ -378,30 +372,20 @@ function StorePage({ kind }) {
       return
     }
 
-    const item = items.find((currentItem) => currentItem.ItemID === itemID)
-
     setItems((currentItems) =>
       currentItems.filter((currentItem) => currentItem.ItemID !== itemID)
     )
-
   }
 
   const filteredItems = items.filter((item) => {
     const text = `${item.ItemName} ${item.Category}`.toLowerCase()
-    const matchesSearch = text.includes(search.toLowerCase())
-    const matchesCategory =
-      category === 'all' || item.Category === category
-
-    return matchesSearch && matchesCategory
+    return text.includes(search.toLowerCase())
   })
 
   const filteredSales = sales.filter((sale) => {
-    const text = `${sale.SaleID} ${sale.ItemName ?? ''} ${sale.PaymentMethod}`.toLowerCase()
-    const matchesSearch = text.includes(search.toLowerCase())
-    const matchesPayment =
-      payment === 'all' || sale.PaymentMethod === payment
-
-    return matchesSearch && matchesPayment
+    const text =
+      `${sale.SaleID} ${sale.ItemName ?? ''} ${sale.PaymentMethod}`.toLowerCase()
+    return text.includes(search.toLowerCase())
   })
 
   const total = (sale) => Number(sale.SalePrice) * sale.Quantity
@@ -415,6 +399,7 @@ function StorePage({ kind }) {
         </div>
 
         <button
+          type="button"
           className="btn primary"
           onClick={openAddModal}
         >
@@ -423,31 +408,42 @@ function StorePage({ kind }) {
       </div>
 
       <div className="grid-4 section-gap-sm">
-        <StatCard label="Items" value={items.length} />
+        <Panel className="summary-card">
+          <div className="summary-value">{items.length.toLocaleString()}</div>
+          <div className="summary-label">Items</div>
+        </Panel>
 
-        {isGiftShop ? (
-          <StatCard
-            label="Units in Stock"
-            value={items.reduce((sum, item) => sum + item.Stock, 0)}
-          />
-        ) : (
-          <StatCard label="Categories" value={categories.length} />
-        )}
+        <Panel className="summary-card">
+          <div className="summary-value">
+            {isGiftShop
+              ? items.reduce((sum, item) => sum + item.Stock, 0).toLocaleString()
+              : categories.length}
+          </div>
+          <div className="summary-label">
+            {isGiftShop ? 'Units in Stock' : 'Categories'}
+          </div>
+        </Panel>
 
-        {isGiftShop ? (
-          <StatCard
-            label="Low Stock Items"
-            value={items.filter((item) => item.Stock < 5).length}
-          />
-        ) : (
-          <StatCard label="Sales Recorded" value={sales.length} />
-        )}
+        <Panel className="summary-card">
+          <div className="summary-value">
+            {isGiftShop
+              ? items.filter((item) => item.Stock < 5).length
+              : sales.length}
+          </div>
+          <div className="summary-label">
+            {isGiftShop ? 'Low Stock Items' : 'Sales Recorded'}
+          </div>
+        </Panel>
 
-        <StatCard label="Revenue" value={`$${revenue.toFixed(2)}`} />
+        <Panel className="summary-card">
+          <div className="summary-value">${revenue.toFixed(2)}</div>
+          <div className="summary-label">Revenue</div>
+        </Panel>
       </div>
 
       <div className="tabs">
         <button
+          type="button"
           className={`tab${tab === 'items' ? ' active' : ''}`}
           onClick={() => {
             setTab('items')
@@ -458,6 +454,7 @@ function StorePage({ kind }) {
         </button>
 
         <button
+          type="button"
           className={`tab${tab === 'sales' ? ' active' : ''}`}
           onClick={() => {
             setTab('sales')
@@ -469,82 +466,73 @@ function StorePage({ kind }) {
       </div>
 
       <div className="toolbar">
+        <label htmlFor="store-search" className="sr-only">
+          Search {tab === 'items' ? 'items' : 'sales'}
+        </label>
+
         <input
+          id="store-search"
+          name="storeSearch"
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={tab === 'items' ? 'Search items...' : 'Search sales...'}
         />
-
-        {tab === 'items' && (
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="all">All Categories</option>
-            {categories.map((itemCategory) => (
-              <option key={itemCategory} value={itemCategory}>
-                {itemCategory}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {tab === 'sales' && (
-          <select
-            value={payment}
-            onChange={(e) => setPayment(e.target.value)}
-          >
-            <option value="all">All Payments</option>
-            {payments.map((paymentMethod) => (
-              <option key={paymentMethod} value={paymentMethod}>
-                {paymentMethod}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
 
-      <div className="card table-wrap">
-        {tab === 'items' ? (
+      {tab === 'items' ? (
+        <div className="card table-wrap">
           <table className="data-table">
+            <caption className="sr-only">{title} items</caption>
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Category</th>
-                <th>Price</th>
-                {isGiftShop && <th>Stock</th>}
-                <th>Responsible Staff</th>
-                <th>Actions</th>
+                <th scope="col">Item</th>
+                <th scope="col">Category</th>
+                <th scope="col">Price</th>
+                {isGiftShop && <th scope="col">Stock</th>}
+                <th scope="col">Staff</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {filteredItems.map((item) => (
                 <tr key={item.ItemID}>
-                  <td className="strong">{item.ItemName}</td>
+                  <td>
+                    <div className="strong">{item.ItemName}</div>
+                    <div className="cell-sub mono">
+                      #{String(item.ItemID).padStart(5, '0')}
+                    </div>
+                  </td>
+
                   <td>{item.Category}</td>
-                  <td className="mono">${item.Price.toFixed(2)}</td>
+
+                  <td className="mono">${Number(item.Price).toFixed(2)}</td>
 
                   {isGiftShop && (
-                    <td>
-                      <span className="strong">{item.Stock}</span>
+                    <td className="mono">
+                      {item.Stock}
                     </td>
                   )}
 
-                  <td className="muted">{item.StaffName}</td>
+                  <td>{item.StaffName}</td>
 
                   <td>
                     <div className="row-actions">
                       <button
+                        type="button"
                         className="btn secondary"
                         onClick={() => openEditModal(item)}
+                        aria-label={`Edit ${item.ItemName}`}
                       >
                         Edit
                       </button>
 
                       <button
+                        type="button"
                         className="btn danger"
                         onClick={() => handleDeleteItem(item.ItemID)}
+                        aria-label={`Delete ${item.ItemName}`}
                       >
                         Delete
                       </button>
@@ -562,19 +550,22 @@ function StorePage({ kind }) {
               )}
             </tbody>
           </table>
-        ) : (
+        </div>
+      ) : (
+        <div className="card table-wrap">
           <table className="data-table">
+            <caption className="sr-only">{title} sales</caption>
             <thead>
               <tr>
-                <th>Sale #</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Unit Price</th>
-                <th>Total</th>
-                <th>Sale Date</th>
-                <th>Payment</th>
-                <th>Staff</th>
-                <th>Actions</th>
+                <th scope="col">Sale</th>
+                <th scope="col">Item</th>
+                <th scope="col">Quantity</th>
+                <th scope="col">Total</th>
+                <th scope="col">Sale Date</th>
+                <th scope="col">Payment</th>
+                <th scope="col">Member</th>
+                <th scope="col">Staff</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
 
@@ -584,25 +575,38 @@ function StorePage({ kind }) {
                   <td className="mono">
                     #{String(sale.SaleID).padStart(5, '0')}
                   </td>
-                  <td className="strong">{sale.ItemName ?? '-'}</td>
-                  <td>{sale.Quantity}</td>
-                  <td className="mono">${sale.SalePrice.toFixed(2)}</td>
+
+                  <td>{sale.ItemName}</td>
+                  <td className="mono">{sale.Quantity}</td>
                   <td className="mono">${total(sale).toFixed(2)}</td>
                   <td className="mono">{sale.SaleDate}</td>
-                  <td className="muted">{sale.PaymentMethod}</td>
-                  <td className="muted">{sale.StaffName}</td>
+
+                  <td>{sale.PaymentMethod}</td>
+
+                  <td>
+                    {sale.MemberName || (
+                      <span className="cell-sub">Walk-in</span>
+                    )}
+                  </td>
+
+                  <td>{sale.StaffName}</td>
+
                   <td>
                     <div className="row-actions">
                       <button
+                        type="button"
                         className="btn secondary"
                         onClick={() => openEditSaleModal(sale)}
+                        aria-label={`Edit sale ${sale.SaleID}`}
                       >
                         Edit
                       </button>
 
                       <button
+                        type="button"
                         className="btn danger"
                         onClick={() => handleDeleteSale(sale.SaleID)}
+                        aria-label={`Delete sale ${sale.SaleID}`}
                       >
                         Delete
                       </button>
@@ -620,15 +624,19 @@ function StorePage({ kind }) {
               )}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       <Modal
         open={open}
         title={
           tab === 'items'
-            ? editingId === null ? 'Add Item' : 'Edit Item'
-            : editingId === null ? 'Record Sale' : 'Edit Sale'
+            ? editingId === null
+              ? 'Add Item'
+              : 'Edit Item'
+            : editingId === null
+              ? 'Record Sale'
+              : 'Edit Sale'
         }
         onClose={closeModal}
       >
@@ -636,8 +644,9 @@ function StorePage({ kind }) {
           {tab === 'items' ? (
             <>
               <div className="form-group">
-                <label>Item Name</label>
+                <label htmlFor="store-item-name">Item Name</label>
                 <input
+                  id="store-item-name"
                   name="ItemName"
                   value={formData.ItemName}
                   onChange={handleChange}
@@ -646,8 +655,9 @@ function StorePage({ kind }) {
               </div>
 
               <div className="form-group">
-                <label>Category</label>
+                <label htmlFor="store-item-category">Category</label>
                 <select
+                  id="store-item-category"
                   name="Category"
                   value={formData.Category}
                   onChange={handleChange}
@@ -663,8 +673,9 @@ function StorePage({ kind }) {
               </div>
 
               <div className="form-group">
-                <label>Price</label>
+                <label htmlFor="store-item-price">Price</label>
                 <input
+                  id="store-item-price"
                   name="Price"
                   type="number"
                   min="0.01"
@@ -677,8 +688,9 @@ function StorePage({ kind }) {
 
               {isGiftShop && (
                 <div className="form-group">
-                  <label>Stock</label>
+                  <label htmlFor="store-item-stock">Stock</label>
                   <input
+                    id="store-item-stock"
                     name="Stock"
                     type="number"
                     min="0"
@@ -693,8 +705,9 @@ function StorePage({ kind }) {
           ) : (
             <>
               <div className="form-group">
-                <label>Item</label>
+                <label htmlFor="store-sale-item">Item</label>
                 <select
+                  id="store-sale-item"
                   name="ItemID"
                   value={formData.ItemID}
                   onChange={handleChange}
@@ -710,8 +723,9 @@ function StorePage({ kind }) {
               </div>
 
               <div className="form-group">
-                <label>Quantity</label>
+                <label htmlFor="store-sale-quantity">Quantity</label>
                 <input
+                  id="store-sale-quantity"
                   name="Quantity"
                   type="number"
                   min="1"
@@ -723,8 +737,9 @@ function StorePage({ kind }) {
               </div>
 
               <div className="form-group">
-                <label>Sale Date</label>
+                <label htmlFor="store-sale-date">Sale Date</label>
                 <input
+                  id="store-sale-date"
                   name="SaleDate"
                   type="date"
                   max={today}
@@ -735,8 +750,9 @@ function StorePage({ kind }) {
               </div>
 
               <div className="form-group">
-                <label>Payment</label>
+                <label htmlFor="store-sale-payment">Payment</label>
                 <select
+                  id="store-sale-payment"
                   name="PaymentMethod"
                   value={formData.PaymentMethod}
                   onChange={handleChange}
@@ -749,6 +765,20 @@ function StorePage({ kind }) {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="store-sale-membership">Membership ID</label>
+                <input
+                  id="store-sale-membership"
+                  name="MembershipID"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.MembershipID}
+                  onChange={handleChange}
+                  placeholder="Optional"
+                />
               </div>
             </>
           )}
@@ -764,8 +794,12 @@ function StorePage({ kind }) {
 
             <button type="submit" className="btn primary">
               {tab === 'items'
-                ? editingId === null ? 'Add Item' : 'Save Changes'
-                : editingId === null ? 'Record Sale' : 'Save Changes'}
+                ? editingId === null
+                  ? 'Add Item'
+                  : 'Save Changes'
+                : editingId === null
+                  ? 'Record Sale'
+                  : 'Save Changes'}
             </button>
           </div>
         </form>

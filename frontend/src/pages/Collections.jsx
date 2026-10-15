@@ -200,7 +200,7 @@ function Collections() {
           <caption className="sr-only">Museum collections</caption>
           <thead>
             <tr>
-              <th scope="col">Collection #</th>
+              <th scope="col">Collection</th>
               <th scope="col">Name</th>
               <th scope="col">Description</th>
               {allowEdit && <th scope="col">Actions</th>}
