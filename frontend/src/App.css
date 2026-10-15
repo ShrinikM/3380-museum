@@ -220,10 +220,10 @@ textarea {
 .sidebar-label {
   padding: 14px 16px 6px;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 800;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #263b55;
+  color: #1c2f46;
 }
 
 .sidebar-link {
@@ -1166,3 +1166,4 @@ textarea:focus-visible {
     width: 100%;
   }
 }
+

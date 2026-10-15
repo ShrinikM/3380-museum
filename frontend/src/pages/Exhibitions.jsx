@@ -400,9 +400,7 @@ function Exhibitions() {
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 8 : 7} className="empty">
-                  {loadError
-                    ? 'Unable to display exhibitions.'
-                    : 'No exhibitions found.'}
+                  No exhibitions found.
                 </td>
               </tr>
             )}

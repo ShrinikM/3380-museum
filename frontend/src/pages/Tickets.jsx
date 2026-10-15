@@ -398,7 +398,7 @@ function Tickets() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 7 : 6} className="empty">
-                  {loadError ? 'Unable to display tickets.' : 'No tickets found.'}
+                  No tickets found.
                 </td>
               </tr>
             )}

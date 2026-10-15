@@ -441,9 +441,7 @@ function Memberships() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 9 : 8} className="empty">
-                  {loadError
-                    ? 'Unable to display memberships.'
-                    : 'No memberships found.'}
+                  No memberships found.
                 </td>
               </tr>
             )}
