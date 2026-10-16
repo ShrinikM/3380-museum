@@ -1,50 +1,9 @@
-
 import { useState, useEffect } from 'react'
-import { Badge, Panel, StatCard, Modal } from '../components/ui'
+import { Badge, Panel, Modal } from '../components/ui'
+import { callApi } from '../api'
+import { useRole } from '../context/role'
 
 const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
-
-const initialMemberships = [
-  {
-    id: 1,
-    firstName: 'Patricia',
-    lastName: 'Holloway',
-    email: 'patricia@example.com',
-    type: 'Senior',
-    startDate: '2026-08-15',
-    endDate: '2027-08-15',
-    price: 60,
-    discount: 15,
-    payment: 'Credit Card',
-    status: 'active',
-  },
-  {
-    id: 2,
-    firstName: 'James',
-    lastName: 'Wilson',
-    email: 'james@example.com',
-    type: 'Individual',
-    startDate: '2026-09-01',
-    endDate: '2027-09-01',
-    price: 75,
-    discount: 5,
-    payment: 'Credit Card',
-    status: 'active',
-  },
-  {
-    id: 3,
-    firstName: 'Maria',
-    lastName: 'Garcia',
-    email: 'maria@example.com',
-    type: 'Student',
-    startDate: '2026-10-01',
-    endDate: '2027-10-01',
-    price: 40,
-    discount: 10,
-    payment: 'Cash',
-    status: 'upcoming',
-  },
-]
 
 const membershipPrices = {
   Individual: 75,
@@ -73,30 +32,23 @@ const emptyForm = {
 }
 
 function Memberships() {
+  const { canEdit } = useRole()
+  const allowEdit = canEdit('/memberships')
+
   const [memberships, setMemberships] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
+
   const [search, setSearch] = useState('')
-  const [type, setType] = useState('all')
-  const [status, setStatus] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
-
   useEffect(() => {
-    const loadMemberships = async () => {
+    async function loadMemberships() {
       try {
-        setLoading(true)
-        setError('')
-
-        const response = await fetch('/api/memberships')
-
-        if (!response.ok) {
-          throw new Error('Failed to load memberships.')
-        }
-
-        const data = await response.json()
+        const data = await callApi('/api/memberships', 'GET')
+        const today = new Date().toISOString().split('T')[0]
 
         setMemberships(
           data.map((member) => ({
@@ -105,40 +57,71 @@ function Memberships() {
             lastName: member.LastName,
             email: member.Email,
             type: member.MembershipType,
-            startDate: member.StartDate,
-            endDate: member.EndDate,
+            startDate: member.StartDate
+              ? member.StartDate.split('T')[0]
+              : '',
+            endDate: member.EndDate
+              ? member.EndDate.split('T')[0]
+              : '',
             price: Number(member.Price),
             discount: Number(member.DiscountPercent),
             payment: member.PaymentMethod,
             status:
-              member.StartDate > new Date().toISOString().split('T')[0]
+              (member.StartDate || '').split('T')[0] > today
                 ? 'upcoming'
-                : member.EndDate < new Date().toISOString().split('T')[0]
+                : (member.EndDate || '').split('T')[0] < today
                   ? 'expired'
                   : 'active',
           }))
         )
+
+        setLoadError('')
       } catch (err) {
-        console.error('Error loading memberships:', err)
-        setError(err.message || 'Unable to load memberships.')
-      } finally {
-        setLoading(false)
+        setLoadError('Could not load memberships: ' + err.message)
       }
     }
 
     loadMemberships()
-  }, [])
+  }, [reloadCount])
 
+  const refetchMemberships = () => {
+    setReloadCount((count) => count + 1)
+  }
 
   const maxEndDate = formData.startDate
     ? new Date(
-      new Date(formData.startDate).setFullYear(
-        new Date(formData.startDate).getFullYear() + 1
+        new Date(formData.startDate).setFullYear(
+          new Date(formData.startDate).getFullYear() + 1
+        )
       )
-    )
-      .toISOString()
-      .split('T')[0]
+        .toISOString()
+        .split('T')[0]
     : undefined
+
+  const active = memberships.filter(
+    (member) => member.status === 'active'
+  )
+  const upcoming = memberships.filter(
+    (member) => member.status === 'upcoming'
+  )
+  const expired = memberships.filter(
+    (member) => member.status === 'expired'
+  )
+
+  const revenue = memberships.reduce(
+    (sum, member) => sum + member.price,
+    0
+  )
+
+  const filtered = memberships.filter((member) => {
+    const name = `${member.firstName} ${member.lastName}`.toLowerCase()
+    const searchText = search.toLowerCase()
+
+    return (
+      name.includes(searchText) ||
+      member.email.toLowerCase().includes(searchText)
+    )
+  })
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -156,14 +139,12 @@ function Memberships() {
     setFormData({ ...formData, [name]: value })
   }
 
-  const closeModal = () => {
+  const resetForm = () => {
     setFormData(emptyForm)
-    setEditingId(null)
-    setOpen(false)
   }
 
   const openAddModal = () => {
-    setFormData(emptyForm)
+    resetForm()
     setEditingId(null)
     setOpen(true)
   }
@@ -176,8 +157,8 @@ function Memberships() {
       type: member.type,
       startDate: member.startDate,
       endDate: member.endDate,
-      price: member.price,
-      discount: member.discount,
+      price: String(member.price),
+      discount: String(member.discount),
       payment: member.payment,
     })
 
@@ -185,246 +166,159 @@ function Memberships() {
     setOpen(true)
   }
 
-  
-const handleSubmit = async (e) => {
-  e.preventDefault()
-
-  const firstName = formData.firstName.trim()
-  const lastName = formData.lastName.trim()
-  const email = formData.email.trim()
-  const price = Number(formData.price)
-  const discount = Number(formData.discount)
-
-  const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
-
-  if (!textPattern.test(firstName)) {
-    alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
-    return
+  const closeModal = () => {
+    resetForm()
+    setEditingId(null)
+    setOpen(false)
   }
 
-  if (!textPattern.test(lastName)) {
-    alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
-    return
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault()
 
-  if (!membershipTypes.includes(formData.type)) {
-    alert('Please select a valid membership type.')
-    return
-  }
+    const firstName = formData.firstName.trim()
+    const lastName = formData.lastName.trim()
+    const email = formData.email.trim()
+    const price = Number(formData.price)
+    const discount = Number(formData.discount)
 
-  if (!Number.isFinite(price) || price <= 0) {
-    alert('Price must be greater than 0.')
-    return
-  }
+    const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
-  if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
-    alert('Discount must be between 0 and 100.')
-    return
-  }
+    if (!textPattern.test(firstName)) {
+      alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
+      return
+    }
 
-  if (!formData.startDate || !formData.endDate) {
-    alert('Please select both Start Date and End Date.')
-    return
-  }
+    if (!textPattern.test(lastName)) {
+      alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
+      return
+    }
 
-  if (formData.endDate < formData.startDate) {
-    alert('End Date cannot be before Start Date.')
-    return
-  }
+    if (!membershipTypes.includes(formData.type)) {
+      alert('Please select a valid membership type.')
+      return
+    }
 
-  const maxAllowedEndDate = new Date(`${formData.startDate}T00:00:00Z`)
-  maxAllowedEndDate.setUTCFullYear(maxAllowedEndDate.getUTCFullYear() + 1)
+    if (!Number.isFinite(price) || price <= 0) {
+      alert('Price must be greater than 0.')
+      return
+    }
 
-  if (new Date(`${formData.endDate}T00:00:00Z`) > maxAllowedEndDate) {
-    alert('Membership cannot be longer than 1 year.')
-    return
-  }
+    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
+      alert('Discount must be between 0 and 100.')
+      return
+    }
 
-  if (!formData.payment) {
-    alert('Please select a payment method.')
-    return
-  }
+    if (!formData.startDate || !formData.endDate) {
+      alert('Please select both Start Date and End Date.')
+      return
+    }
 
-  const membershipData = {
-    FirstName: firstName,
-    LastName: lastName,
-    Email: email,
-    MembershipType: formData.type,
-    StartDate: formData.startDate,
-    EndDate: formData.endDate,
-    Price: price,
-    PaymentMethod: formData.payment,
-    DiscountPercent: discount,
-  }
+    if (formData.endDate < formData.startDate) {
+      alert('End Date cannot be before Start Date.')
+      return
+    }
 
-  try {
-    const response = await fetch(
-      editingId !== null
-        ? `/api/memberships/${editingId}`
-        : '/api/memberships',
-      {
-        method: editingId !== null ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(membershipData),
+    const maxAllowedEndDate = new Date(`${formData.startDate}T00:00:00Z`)
+    maxAllowedEndDate.setUTCFullYear(
+      maxAllowedEndDate.getUTCFullYear() + 1
+    )
+
+    if (new Date(`${formData.endDate}T00:00:00Z`) > maxAllowedEndDate) {
+      alert('Membership cannot be longer than 1 year.')
+      return
+    }
+
+    if (!formData.payment) {
+      alert('Please select a payment method.')
+      return
+    }
+
+    const membershipData = {
+      FirstName: firstName,
+      LastName: lastName,
+      Email: email,
+      MembershipType: formData.type,
+      StartDate: formData.startDate,
+      EndDate: formData.endDate,
+      Price: price,
+      PaymentMethod: formData.payment,
+      DiscountPercent: discount,
+    }
+
+    try {
+      if (editingId === null) {
+        await callApi('/api/memberships', 'POST', membershipData)
+      } else {
+        await callApi(
+          '/api/memberships/' + editingId,
+          'PUT',
+          membershipData
+        )
       }
-    )
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to save membership.')
+    } catch (err) {
+      alert(err.message)
+      return
     }
-
-    const membershipsResponse = await fetch('/api/memberships')
-
-    if (!membershipsResponse.ok) {
-      throw new Error('Membership saved, but the list could not be refreshed.')
-    }
-
-    const membershipsData = await membershipsResponse.json()
-    const today = new Date().toISOString().split('T')[0]
-
-    setMemberships(
-      membershipsData.map((member) => ({
-        id: Number(member.MembershipID),
-        firstName: member.FirstName,
-        lastName: member.LastName,
-        email: member.Email,
-        type: member.MembershipType,
-        startDate: member.StartDate,
-        endDate: member.EndDate,
-        price: Number(member.Price),
-        discount: Number(member.DiscountPercent),
-        payment: member.PaymentMethod,
-        status:
-          member.StartDate > today
-            ? 'upcoming'
-            : member.EndDate < today
-              ? 'expired'
-              : 'active',
-      }))
-    )
 
     closeModal()
-  } catch (err) {
-    console.error('Error saving membership:', err)
-    alert(err.message || 'Unable to save membership.')
+    refetchMemberships()
   }
-}
 
-
-  
-const handleDelete = async (id) => {
-  const confirmed = window.confirm(
-    'Are you sure you want to delete this membership?'
-  )
-
-  if (!confirmed) return
-
-  try {
-    const response = await fetch(`/api/memberships/${id}`, {
-      method: 'DELETE',
-    })
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to delete membership.')
-    }
-
-    const membershipsResponse = await fetch('/api/memberships')
-
-    if (!membershipsResponse.ok) {
-      throw new Error('Membership deleted, but the list could not be refreshed.')
-    }
-
-    const membershipsData = await membershipsResponse.json()
-    const today = new Date().toISOString().split('T')[0]
-
-    setMemberships(
-      membershipsData.map((member) => ({
-        id: Number(member.MembershipID),
-        firstName: member.FirstName,
-        lastName: member.LastName,
-        email: member.Email,
-        type: member.MembershipType,
-        startDate: member.StartDate,
-        endDate: member.EndDate,
-        price: Number(member.Price),
-        discount: Number(member.DiscountPercent),
-        payment: member.PaymentMethod,
-        status:
-          member.StartDate > today
-            ? 'upcoming'
-            : member.EndDate < today
-              ? 'expired'
-              : 'active',
-      }))
+  const handleDelete = async (id) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this membership?'
     )
-  } catch (err) {
-    console.error('Error deleting membership:', err)
-    alert(err.message || 'Unable to delete membership.')
+
+    if (!confirmed) return
+
+    try {
+      await callApi('/api/memberships/' + id, 'DELETE')
+    } catch (err) {
+      alert(err.message)
+      return
+    }
+
+    refetchMemberships()
   }
-}
-
-
-  const active = memberships.filter((member) => member.status === 'active')
-  const upcoming = memberships.filter((member) => member.status === 'upcoming')
-  const expired = memberships.filter((member) => member.status === 'expired')
-
-  const revenue = memberships.reduce((sum, member) => sum + member.price, 0)
-
-  const filtered = memberships.filter((member) => {
-    const name = `${member.firstName} ${member.lastName}`.toLowerCase()
-    const searchText = search.toLowerCase()
-
-    const matchesSearch =
-      name.includes(searchText) ||
-      member.email.toLowerCase().includes(searchText)
-
-    const matchesType = type === 'all' || member.type === type
-    const matchesStatus = status === 'all' || member.status === status
-
-    return matchesSearch && matchesType && matchesStatus
-  })
 
   return (
     <div className="page">
-
-      {loading && <p>Loading memberships...</p>}
-
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-
       <div className="page-header">
         <div>
           <h1 className="page-title">Memberships</h1>
         </div>
 
-        <button
-          type="button"
-          className="btn primary"
-          onClick={openAddModal}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-        >
-          Add Membership
-        </button>
+        {allowEdit && (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={openAddModal}
+          >
+            Add Membership
+          </button>
+        )}
       </div>
 
       <div className="grid-4 section-gap-sm">
-        <StatCard label="Active Members" value={active.length} />
-        <StatCard label="Upcoming" value={upcoming.length} />
-        <StatCard label="Expired" value={expired.length} />
-        <StatCard
-          label="Membership Revenue"
-          value={`$${revenue.toFixed(2)}`}
-        />
+        <Panel className="summary-card">
+          <div className="summary-value">{active.length}</div>
+          <div className="summary-label">Active Members</div>
+        </Panel>
+
+        <Panel className="summary-card">
+          <div className="summary-value">{upcoming.length}</div>
+          <div className="summary-label">Upcoming</div>
+        </Panel>
+
+        <Panel className="summary-card">
+          <div className="summary-value">{expired.length}</div>
+          <div className="summary-label">Expired</div>
+        </Panel>
+
+        <Panel className="summary-card">
+          <div className="summary-value">${revenue.toFixed(2)}</div>
+          <div className="summary-label">Membership Revenue</div>
+        </Panel>
       </div>
 
       <div className="grid-4 section-gap-sm tight">
@@ -439,15 +333,12 @@ const handleDelete = async (id) => {
                 </div>
               </div>
 
-              <Badge
-                variant={membershipType.toLowerCase()}
-                label={membershipType}
-              />
-            </div>
-
-            <div className="price-count">
-              {active.filter((member) => member.type === membershipType).length}{' '}
-              active
+              <div className="price-count">
+                {active.filter(
+                  (member) => member.type === membershipType
+                ).length}{' '}
+                active
+              </div>
             </div>
           </Panel>
         ))}
@@ -455,49 +346,24 @@ const handleDelete = async (id) => {
 
       <div className="toolbar">
         <label htmlFor="membership-search" className="sr-only">
-          Search members by name or email
+          Search memberships
         </label>
+
         <input
           id="membership-search"
           name="membershipSearch"
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search members or email..."
+          placeholder="Search memberships..."
         />
-
-        <label htmlFor="membership-type-filter" className="sr-only">
-          Filter by membership type
-        </label>
-        <select
-          id="membership-type-filter"
-          name="membershipType"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        >
-          <option value="all">All Types</option>
-          {membershipTypes.map((membershipType) => (
-            <option key={membershipType} value={membershipType}>
-              {membershipType}
-            </option>
-          ))}
-        </select>
-
-        <label htmlFor="membership-status-filter" className="sr-only">
-          Filter by membership status
-        </label>
-        <select
-          id="membership-status-filter"
-          name="membershipStatus"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="upcoming">Upcoming</option>
-          <option value="expired">Expired</option>
-        </select>
       </div>
+
+      {loadError && (
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
+      )}
 
       <div className="card table-wrap">
         <table className="data-table">
@@ -512,7 +378,7 @@ const handleDelete = async (id) => {
               <th scope="col">Discount</th>
               <th scope="col">Payment</th>
               <th scope="col">Status</th>
-              <th scope="col">Actions</th>
+              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -538,6 +404,7 @@ const handleDelete = async (id) => {
                 <td className="mono">${member.price.toFixed(2)}</td>
                 <td className="mono">{member.discount}%</td>
                 <td className="muted nowrap">{member.payment}</td>
+
                 <td>
                   <Badge
                     variant={member.status}
@@ -545,33 +412,35 @@ const handleDelete = async (id) => {
                   />
                 </td>
 
-                <td>
-                  <div className="row-actions">
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      onClick={() => openEditModal(member)}
-                      aria-label={`Edit membership for ${member.firstName} ${member.lastName}`}
-                    >
-                      Edit
-                    </button>
+                {allowEdit && (
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => openEditModal(member)}
+                        aria-label={`Edit membership for ${member.firstName} ${member.lastName}`}
+                      >
+                        Edit
+                      </button>
 
-                    <button
-                      type="button"
-                      className="btn danger"
-                      onClick={() => handleDelete(member.id)}
-                      aria-label={`Delete membership for ${member.firstName} ${member.lastName}`}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        onClick={() => handleDelete(member.id)}
+                        aria-label={`Delete membership for ${member.firstName} ${member.lastName}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="empty">
+                <td colSpan={allowEdit ? 9 : 8} className="empty">
                   No memberships found.
                 </td>
               </tr>

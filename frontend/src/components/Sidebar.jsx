@@ -12,17 +12,21 @@ const SECTIONS = [
       { to: '/artists', text: 'Artists' },
       { to: '/artworks', text: 'Artworks' },
       { to: '/collections', text: 'Collections' },
-      { to: '/exhibitions', text: 'Exhibitions' },
     ],
   },
   {
     label: 'Operations',
     items: [
+      { to: '/exhibitions', text: 'Exhibitions' },
       { to: '/tickets', text: 'Tickets' },
       { to: '/memberships', text: 'Memberships' },
       { to: '/gift-shop', text: 'Gift Shop' },
       { to: '/cafe', text: 'Café' },
     ],
+  },
+  {
+    label: 'Analytics',
+    items: [{ to: '/analytics', text: 'Reports & Analytics' }],
   },
   {
     label: 'Administration',

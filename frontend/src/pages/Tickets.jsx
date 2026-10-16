@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Badge, StatCard, Modal } from '../components/ui'
+import { Badge, Panel, Modal } from '../components/ui'
+import { callApi } from '../api'
+import { useRole } from '../context/role'
 
 const ticketTypes = ['Adult', 'Senior', 'Student', 'Child', 'Member']
-
 
 const ticketPrices = {
   Adult: 25,
@@ -21,52 +22,32 @@ const emptyForm = {
 }
 
 function Tickets() {
+  const { canEdit } = useRole()
+  const allowEdit = canEdit('/tickets')
   const today = new Date().toISOString().split('T')[0]
+
+  const [tickets, setTickets] = useState([])
+  const [exhibitions, setExhibitions] = useState([])
+  const [memberships, setMemberships] = useState([])
+  const [loadError, setLoadError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
 
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
   const [exhibition, setExhibition] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [exhibitions, setExhibitions] = useState([])
-  const [memberships, setMemberships] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  const [tickets, setTickets] = useState([])
-
   const [formData, setFormData] = useState(emptyForm)
 
-
   useEffect(() => {
-    const loadData = async () => {
+    async function loadData() {
       try {
-        setLoading(true)
-        setError('')
-
-        const [
-          ticketsResponse,
-          exhibitionsResponse,
-          membershipsResponse,
-        ] = await Promise.all([
-          fetch('/api/tickets'),
-          fetch('/api/exhibitions'),
-          fetch('/api/memberships'),
-        ])
-
-        if (
-          !ticketsResponse.ok ||
-          !exhibitionsResponse.ok ||
-          !membershipsResponse.ok
-        ) {
-          throw new Error(
-            'Failed to load tickets, exhibitions, or memberships.'
-          )
-        }
-
-        const ticketsData = await ticketsResponse.json()
-        const exhibitionsData = await exhibitionsResponse.json()
-        const membershipsData = await membershipsResponse.json()
+        const [ticketsData, exhibitionsData, membershipsData] =
+          await Promise.all([
+            callApi('/api/tickets', 'GET'),
+            callApi('/api/exhibitions', 'GET'),
+            callApi('/api/memberships', 'GET'),
+          ])
 
         setTickets(
           ticketsData.map((ticket) => ({
@@ -77,18 +58,18 @@ function Tickets() {
 
         setExhibitions(exhibitionsData)
         setMemberships(membershipsData)
+        setLoadError('')
       } catch (err) {
-        console.error('Error loading Tickets page:', err)
-        setError(err.message || 'Unable to load data from the server.')
-      } finally {
-        setLoading(false)
+        setLoadError('Could not load tickets: ' + err.message)
       }
     }
 
     loadData()
-  }, [])
+  }, [reloadCount])
 
-
+  const refetchTickets = () => {
+    setReloadCount((count) => count + 1)
+  }
 
   const revenue = tickets.reduce((sum, ticket) => sum + ticket.Price, 0)
 
@@ -100,15 +81,14 @@ function Tickets() {
     const searchText = search.toLowerCase()
 
     const matchesSearch =
-      ticket.TicketID.toString().includes(searchText) ||
-      ticket.ExhibitionName.toLowerCase().includes(searchText) ||
-      ticket.TicketType.toLowerCase().includes(searchText)
+      String(ticket.TicketID).includes(searchText) ||
+      (ticket.ExhibitionName || '').toLowerCase().includes(searchText) ||
+      (ticket.TicketType || '').toLowerCase().includes(searchText)
 
     const matchesType = type === 'all' || ticket.TicketType === type
 
     const matchesExhibition =
-      exhibition === 'all' ||
-      ticket.ExhibitionID.toString() === exhibition
+      exhibition === 'all' || String(ticket.ExhibitionID) === exhibition
 
     return matchesSearch && matchesType && matchesExhibition
   })
@@ -135,7 +115,7 @@ function Tickets() {
     const membershipID = e.target.value
 
     const membership = memberships.find(
-      (member) => member.MembershipID === Number(membershipID)
+      (member) => Number(member.MembershipID) === Number(membershipID)
     )
 
     const basePrice = ticketPrices[formData.TicketType] || 0
@@ -166,10 +146,8 @@ function Tickets() {
       ExhibitionID: String(ticket.ExhibitionID),
       TicketType: ticket.TicketType,
       Price: String(ticket.Price),
-      SaleDate: ticket.SaleDate,
-      MembershipID: ticket.MembershipID
-        ? String(ticket.MembershipID)
-        : '',
+      SaleDate: ticket.SaleDate ? ticket.SaleDate.split('T')[0] : '',
+      MembershipID: ticket.MembershipID ? String(ticket.MembershipID) : '',
     })
 
     setOpen(true)
@@ -180,7 +158,6 @@ function Tickets() {
     setEditingId(null)
     setOpen(false)
   }
-
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -245,49 +222,19 @@ function Tickets() {
     }
 
     try {
-      const response = await fetch(
-        editingId !== null
-          ? `/api/tickets/${editingId}`
-          : '/api/tickets',
-        {
-          method: editingId !== null ? 'PUT' : 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(ticketData),
-        }
-      )
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to save ticket.')
+      if (editingId === null) {
+        await callApi('/api/tickets', 'POST', ticketData)
+      } else {
+        await callApi('/api/tickets/' + editingId, 'PUT', ticketData)
       }
-
-
-      const ticketsResponse = await fetch('/api/tickets')
-
-      if (!ticketsResponse.ok) {
-        throw new Error('Ticket saved, but the ticket list could not be refreshed.')
-      }
-
-      const ticketsData = await ticketsResponse.json()
-
-      setTickets(
-        ticketsData.map((ticket) => ({
-          ...ticket,
-          Price: Number(ticket.Price),
-        }))
-      )
-
-      closeModal()
     } catch (err) {
-      console.error('Error saving ticket:', err)
-      alert(err.message || 'Unable to save ticket.')
+      alert(err.message)
+      return
     }
+
+    closeModal()
+    refetchTickets()
   }
-
-
 
   const handleDelete = async (ticketID) => {
     const confirmed = window.confirm(
@@ -297,90 +244,57 @@ function Tickets() {
     if (!confirmed) return
 
     try {
-      const response = await fetch(`/api/tickets/${ticketID}`, {
-        method: 'DELETE',
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to delete ticket.')
-      }
-
-      const ticketsResponse = await fetch('/api/tickets')
-
-      if (!ticketsResponse.ok) {
-        throw new Error('Ticket deleted, but the list could not be refreshed.')
-      }
-
-      const ticketsData = await ticketsResponse.json()
-
-      setTickets(
-        ticketsData.map((ticket) => ({
-          ...ticket,
-          Price: Number(ticket.Price),
-        }))
-      )
+      await callApi('/api/tickets/' + ticketID, 'DELETE')
     } catch (err) {
-      console.error('Error deleting ticket:', err)
-      alert(err.message || 'Unable to delete ticket.')
+      alert(err.message)
+      return
     }
+
+    refetchTickets()
   }
 
   return (
     <div className="page">
-      {loading && <p>Loading tickets...</p>}
-
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Tickets</h1>
         </div>
 
-        <button
-          type="button"
-          className="btn primary"
-          onClick={openAddModal}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-        >
-          Add Ticket
-        </button>
+        {allowEdit && (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={openAddModal}
+          >
+            Add Ticket
+          </button>
+        )}
       </div>
 
       <div className="grid-4 section-gap-sm">
-        <StatCard
-          label="Tickets Sold"
-          value={tickets.length.toLocaleString()}
-          delta="↑ 2"
-          deltaLabel="last 30 days"
-        />
+        <Panel className="summary-card">
+          <div className="summary-value">
+            {tickets.length.toLocaleString()}
+          </div>
+          <div className="summary-label">Tickets Sold</div>
+        </Panel>
 
-        <StatCard
-          label="Ticket Revenue"
-          value={`$${revenue.toFixed(2)}`}
-        />
+        <Panel className="summary-card">
+          <div className="summary-value">${revenue.toFixed(2)}</div>
+          <div className="summary-label">Ticket Revenue</div>
+        </Panel>
 
-        <StatCard
-          label="Member Tickets"
-          value={memberTickets}
-          delta={`${tickets.length
-              ? Math.round((memberTickets / tickets.length) * 100)
-              : 0
-            }%`}
-          deltaLabel="of all tickets"
-        />
+        <Panel className="summary-card">
+          <div className="summary-value">{memberTickets}</div>
+          <div className="summary-label">Member Tickets</div>
+        </Panel>
 
-        <StatCard
-          label="Avg. Ticket Price"
-          value={`$${(
-            tickets.length ? revenue / tickets.length : 0
-          ).toFixed(2)}`}
-        />
+        <Panel className="summary-card">
+          <div className="summary-value">
+            ${(tickets.length ? revenue / tickets.length : 0).toFixed(2)}
+          </div>
+          <div className="summary-label">Avg. Ticket Price</div>
+        </Panel>
       </div>
 
       <div className="toolbar">
@@ -395,57 +309,26 @@ function Tickets() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tickets..."
         />
-
-        <label htmlFor="ticket-type-filter" className="sr-only">
-          Filter tickets by type
-        </label>
-        <select
-          id="ticket-type-filter"
-          name="ticketType"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        >
-          <option value="all">All Types</option>
-          {ticketTypes.map((ticketType) => (
-            <option key={ticketType} value={ticketType}>
-              {ticketType}
-            </option>
-          ))}
-        </select>
-
-        <label htmlFor="ticket-exhibition-filter" className="sr-only">
-          Filter tickets by exhibition
-        </label>
-        <select
-          id="ticket-exhibition-filter"
-          name="ticketExhibition"
-          value={exhibition}
-          onChange={(e) => setExhibition(e.target.value)}
-        >
-          <option value="all">All Exhibitions</option>
-          {exhibitions.map((item) => (
-            <option
-              key={item.ExhibitionID}
-              value={item.ExhibitionID}
-            >
-              {item.Name}
-            </option>
-          ))}
-        </select>
       </div>
+
+      {loadError && (
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
+      )}
 
       <div className="card table-wrap">
         <table className="data-table">
           <caption className="sr-only">Museum ticket sales</caption>
           <thead>
             <tr>
-              <th scope="col">Ticket #</th>
+              <th scope="col">Ticket</th>
               <th scope="col">Exhibition</th>
               <th scope="col">Type</th>
               <th scope="col">Price</th>
               <th scope="col">Sale Date</th>
               <th scope="col">Membership</th>
-              <th scope="col">Actions</th>
+              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -472,7 +355,10 @@ function Tickets() {
                   </td>
 
                   <td className="mono">${ticket.Price.toFixed(2)}</td>
-                  <td className="mono">{ticket.SaleDate}</td>
+
+                  <td className="mono">
+                    {ticket.SaleDate ? ticket.SaleDate.split('T')[0] : '-'}
+                  </td>
 
                   <td>
                     {member ? (
@@ -482,34 +368,36 @@ function Tickets() {
                     )}
                   </td>
 
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(ticket)}
-                        aria-label={`Edit ticket ${ticket.TicketID}`}
-                      >
-                        Edit
-                      </button>
+                  {allowEdit && (
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => openEditModal(ticket)}
+                          aria-label={`Edit ticket ${ticket.TicketID}`}
+                        >
+                          Edit
+                        </button>
 
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(ticket.TicketID)}
-                        aria-label={`Delete ticket ${ticket.TicketID}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+                        <button
+                          type="button"
+                          className="btn danger"
+                          onClick={() => handleDelete(ticket.TicketID)}
+                          aria-label={`Delete ticket ${ticket.TicketID}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               )
             })}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={allowEdit ? 7 : 6} className="empty">
                   No tickets found.
                 </td>
               </tr>
@@ -535,10 +423,7 @@ function Tickets() {
             >
               <option value="">Select Exhibition</option>
               {exhibitions.map((item) => (
-                <option
-                  key={item.ExhibitionID}
-                  value={item.ExhibitionID}
-                >
+                <option key={item.ExhibitionID} value={item.ExhibitionID}>
                   {item.Name}
                 </option>
               ))}
@@ -602,10 +487,7 @@ function Tickets() {
             >
               <option value="">No Membership</option>
               {memberships.map((member) => (
-                <option
-                  key={member.MembershipID}
-                  value={member.MembershipID}
-                >
+                <option key={member.MembershipID} value={member.MembershipID}>
                   {member.Name}
                 </option>
               ))}

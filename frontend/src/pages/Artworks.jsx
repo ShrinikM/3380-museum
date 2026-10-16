@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { Badge, Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
@@ -16,7 +15,6 @@ function Artworks() {
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
-  const [type, setType] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
 
@@ -133,6 +131,7 @@ function Artworks() {
     }
 
     resetForm()
+    setEditingId(null)
     setOpen(false)
     refetchArtworks()
   }
@@ -144,35 +143,24 @@ function Artworks() {
 
     if (!confirmed) return
 
-    const artwork = artworks.find(
-      (item) => item.ArtworkID === id
-    )
-
-    const artworkTitle = artwork
-      ? artwork.Title
-      : `Artwork #${id}`
-
     try {
       await callApi('/api/artworks/' + id, 'DELETE')
     } catch (err) {
       alert(err.message)
       return
     }
+
     refetchArtworks()
   }
 
   const filtered = artworks.filter((artwork) => {
     const searchText = search.toLowerCase()
 
-    const matchesSearch =
+    return (
       (artwork.Title || '').toLowerCase().includes(searchText) ||
       (artwork.ArtistName || '').toLowerCase().includes(searchText) ||
       (artwork.CollectionName || '').toLowerCase().includes(searchText)
-
-    const matchesType =
-      type === 'all' || artwork.Type === type
-
-    return matchesSearch && matchesType
+    )
   })
 
   const artistsRepresented = new Set(
@@ -234,23 +222,6 @@ function Artworks() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search artworks..."
         />
-
-        <label htmlFor="artwork-type-filter" className="sr-only">
-          Filter by artwork type
-        </label>
-        <select
-          id="artwork-type-filter"
-          name="artworkType"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        >
-          <option value="all">All Types</option>
-          {ARTWORK_TYPES.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
       </div>
 
       {loadError && (
@@ -262,6 +233,7 @@ function Artworks() {
       <div className="card table-wrap">
         <table className="data-table">
           <caption className="sr-only">Museum artworks</caption>
+
           <thead>
             <tr>
               <th scope="col">Artwork</th>
@@ -345,7 +317,11 @@ function Artworks() {
       <Modal
         open={open}
         title={editingId === null ? 'Add Artwork' : 'Edit Artwork'}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          resetForm()
+          setEditingId(null)
+          setOpen(false)
+        }}
       >
         <form onSubmit={handleSubmit} className="form-grid">
           <div className="form-group">
@@ -456,6 +432,7 @@ function Artworks() {
               className="btn secondary"
               onClick={() => {
                 resetForm()
+                setEditingId(null)
                 setOpen(false)
               }}
             >

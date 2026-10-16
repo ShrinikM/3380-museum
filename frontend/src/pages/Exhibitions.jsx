@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { Badge, Panel, Modal } from '../components/ui'
 import { useRole } from '../context/role'
@@ -10,7 +9,6 @@ function Exhibitions() {
 
   const [exhibitions, setExhibitions] = useState([])
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [loadError, setLoadError] = useState('')
@@ -57,9 +55,7 @@ function Exhibitions() {
         }
       } catch (err) {
         if (!cancelled) {
-          setLoadError(
-            'Could not load exhibitions: ' + err.message
-          )
+          setLoadError('Could not load exhibitions: ' + err.message)
         }
       } finally {
         if (!cancelled) {
@@ -205,11 +201,7 @@ function Exhibitions() {
       if (editingId === null) {
         await callApi('/api/exhibitions', 'POST', payload)
       } else {
-        await callApi(
-          `/api/exhibitions/${editingId}`,
-          'PUT',
-          payload
-        )
+        await callApi(`/api/exhibitions/${editingId}`, 'PUT', payload)
       }
 
       closeModal()
@@ -239,14 +231,10 @@ function Exhibitions() {
   const filtered = exhibitions.filter((exhibition) => {
     const searchText = search.toLowerCase()
 
-    const matchesSearch =
+    return (
       (exhibition.Name || '').toLowerCase().includes(searchText) ||
       (exhibition.Description || '').toLowerCase().includes(searchText)
-
-    const matchesStatus =
-      status === 'all' || exhibition.Status === status
-
-    return matchesSearch && matchesStatus
+    )
   })
 
   return (
@@ -303,21 +291,6 @@ function Exhibitions() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search exhibitions..."
         />
-
-        <label htmlFor="exhibition-status" className="sr-only">
-          Filter exhibitions by status
-        </label>
-        <select
-          id="exhibition-status"
-          name="exhibitionStatus"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="upcoming">Upcoming</option>
-          <option value="completed">Completed</option>
-        </select>
       </div>
 
       {loadError && (
@@ -346,10 +319,7 @@ function Exhibitions() {
           <tbody>
             {loading && (
               <tr>
-                <td
-                  colSpan={allowEdit ? 8 : 7}
-                  className="empty"
-                >
+                <td colSpan={allowEdit ? 8 : 7} className="empty">
                   Loading exhibitions...
                 </td>
               </tr>
@@ -366,8 +336,17 @@ function Exhibitions() {
                     </div>
                   </td>
 
-                  <td className="mono">{exhibition.StartDate}</td>
-                  <td className="mono">{exhibition.EndDate}</td>
+                  <td className="mono">
+                    {exhibition.StartDate
+                      ? exhibition.StartDate.split('T')[0]
+                      : '-'}
+                  </td>
+
+                  <td className="mono">
+                    {exhibition.EndDate
+                      ? exhibition.EndDate.split('T')[0]
+                      : '-'}
+                  </td>
 
                   <td>
                     {exhibition.Tickets} / {exhibition.Capacity}
@@ -418,12 +397,9 @@ function Exhibitions() {
                 </tr>
               ))}
 
-            {filtered.length === 0 && (
+            {!loading && filtered.length === 0 && (
               <tr>
-                <td
-                  colSpan={allowEdit ? 8 : 7}
-                  className="empty"
-                >
+                <td colSpan={allowEdit ? 8 : 7} className="empty">
                   No exhibitions found.
                 </td>
               </tr>

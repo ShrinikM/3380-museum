@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { Badge, Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
@@ -13,7 +12,6 @@ function Artists() {
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
-  const [nationality, setNationality] = useState('all')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
 
@@ -130,10 +128,7 @@ function Artists() {
       return
     }
 
-    if (
-      formData.CreatedBy &&
-      Number(formData.CreatedBy) < 1
-    ) {
+    if (formData.CreatedBy && Number(formData.CreatedBy) < 1) {
       alert('Created By must be a positive Staff ID.')
       return
     }
@@ -145,9 +140,6 @@ function Artists() {
       DeathYear: formData.DeathYear || null,
       Nationality: formData.Nationality.trim(),
     }
-
-    const artistName =
-      `${artistData.FirstName} ${artistData.LastName}`
 
     try {
       if (editingId === null) {
@@ -169,6 +161,7 @@ function Artists() {
     }
 
     resetForm()
+    setEditingId(null)
     setOpen(false)
     refetchArtists()
   }
@@ -180,20 +173,13 @@ function Artists() {
 
     if (!confirmed) return
 
-    const artist = artists.find(
-      (item) => item.ArtistID === id
-    )
-
-    const artistName = artist
-      ? `${artist.FirstName} ${artist.LastName}`
-      : `Artist #${id}`
-
     try {
       await callApi('/api/artists/' + id, 'DELETE')
     } catch (err) {
       alert(err.message)
       return
     }
+
     refetchArtists()
   }
 
@@ -210,15 +196,10 @@ function Artists() {
       `${artist.FirstName} ${artist.LastName}`.toLowerCase()
     const searchText = search.toLowerCase()
 
-    const matchesSearch =
+    return (
       name.includes(searchText) ||
-      artist.Nationality?.toLowerCase().includes(searchText)
-
-    const matchesNationality =
-      nationality === 'all' ||
-      artist.Nationality === nationality
-
-    return matchesSearch && matchesNationality
+      (artist.Nationality || '').toLowerCase().includes(searchText)
+    )
   })
 
   const livingArtists = artists.filter(
@@ -276,23 +257,6 @@ function Artists() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search artists..."
         />
-
-        <label htmlFor="artist-nationality" className="sr-only">
-          Filter by nationality
-        </label>
-        <select
-          id="artist-nationality"
-          name="nationality"
-          value={nationality}
-          onChange={(e) => setNationality(e.target.value)}
-        >
-          <option value="all">All Nationalities</option>
-          {nationalities.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
       </div>
 
       {loadError && (
@@ -304,6 +268,7 @@ function Artists() {
       <div className="card table-wrap">
         <table className="data-table">
           <caption className="sr-only">Museum artists</caption>
+
           <thead>
             <tr>
               <th scope="col">Artist</th>
@@ -393,7 +358,11 @@ function Artists() {
       <Modal
         open={open}
         title={editingId === null ? 'Add Artist' : 'Edit Artist'}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          resetForm()
+          setEditingId(null)
+          setOpen(false)
+        }}
       >
         <form onSubmit={handleSubmit} className="form-grid">
           <div className="form-group">
@@ -481,6 +450,7 @@ function Artists() {
               className="btn secondary"
               onClick={() => {
                 resetForm()
+                setEditingId(null)
                 setOpen(false)
               }}
             >

@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
+import { Panel, Modal } from '../components/ui'
+import { useRole } from '../context/role'
 
 const INITIAL_STAFF = [
   { id: 'STF-101', name: 'Dr. Evelyn Reed', role: 'Chief Curator', department: 'Curatorial', email: 'e.reed@mfah.org', status: 'Active' },
@@ -8,153 +10,280 @@ const INITIAL_STAFF = [
   { id: 'STF-105', name: 'Amara Okafor', role: 'Education Coordinator', department: 'Public Programs', email: 'a.okafor@mfah.org', status: 'Active' },
 ]
 
-export default function Staff() {
+const emptyForm = {
+  name: '',
+  role: '',
+  department: 'Curatorial',
+  email: '',
+  status: 'Active',
+}
+
+const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
+
+function Staff() {
+  const { canEdit } = useRole()
+  const allowEdit = canEdit('/staff')
+
   const [staffMembers, setStaffMembers] = useState(INITIAL_STAFF)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    role: '',
-    department: 'Curatorial',
-    email: '',
-    status: 'Active'
+  const [formData, setFormData] = useState(emptyForm)
+
+  const activeCount = staffMembers.filter(
+    (item) => item.status === 'Active'
+  ).length
+
+  const departmentCount = new Set(
+    staffMembers.map((item) => item.department)
+  ).size
+
+  const filteredStaff = staffMembers.filter((item) => {
+    const text =
+      `${item.id} ${item.name} ${item.role} ${item.department} ${item.email} ${item.status}`.toLowerCase()
+
+    return text.includes(searchTerm.toLowerCase())
   })
 
-  const filteredStaff = staffMembers.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.email.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+  }
+
+  const resetForm = () => {
+    setFormData({ ...emptyForm })
+  }
 
   const handleOpenAdd = () => {
     setEditingId(null)
-    setFormData({ name: '', role: '', department: 'Curatorial', email: '', status: 'Active' })
+    resetForm()
     setIsModalOpen(true)
   }
 
   const handleOpenEdit = (item) => {
     setEditingId(item.id)
     setFormData({
-      name: item.name,
-      role: item.role,
-      department: item.department,
-      email: item.email,
-      status: item.status
+      name: item.name || '',
+      role: item.role || '',
+      department: item.department || 'Curatorial',
+      email: item.email || '',
+      status: item.status || 'Active',
     })
     setIsModalOpen(true)
   }
 
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setEditingId(null)
+    resetForm()
+  }
+
   const handleDelete = (id) => {
-    setStaffMembers(staffMembers.filter(item => item.id !== id))
+    if (window.confirm('Are you sure you want to delete this staff member?')) {
+      setStaffMembers((currentStaff) =>
+        currentStaff.filter((item) => item.id !== id)
+      )
+    }
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formData.name || !formData.role || !formData.email) return
 
-    if (editingId) {
-      setStaffMembers(staffMembers.map(item =>
-        item.id === editingId
-          ? { ...item, name: formData.name, role: formData.role, department: formData.department, email: formData.email, status: formData.status }
-          : item
-      ))
-    } else {
-      const newStaff = {
-        id: `STF-${Math.floor(100 + Math.random() * 900)}`,
-        name: formData.name,
-        role: formData.role,
-        department: formData.department,
-        email: formData.email,
-        status: formData.status,
-      }
-      setStaffMembers([newStaff, ...staffMembers])
+    const name = formData.name.trim()
+    const role = formData.role.trim()
+    const email = formData.email.trim()
+
+    if (!name || !role || !formData.department || !email || !formData.status) {
+      alert('Please complete all required fields.')
+      return
     }
 
-    setIsModalOpen(false)
-    setEditingId(null)
-    setFormData({ name: '', role: '', department: 'Curatorial', email: '', status: 'Active' })
+    if (!textPattern.test(name)) {
+      alert(
+        'Full Name can only contain letters, spaces, hyphens, or apostrophes.'
+      )
+      return
+    }
+
+    if (!textPattern.test(role)) {
+      alert(
+        'Job Role can only contain letters, spaces, hyphens, or apostrophes.'
+      )
+      return
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert('Please enter a valid email address.')
+      return
+    }
+
+    const validDepartments = [
+      'Curatorial',
+      'Collections Management',
+      'Conservation',
+      'Operations',
+      'Public Programs',
+      'Administration',
+    ]
+
+    if (!validDepartments.includes(formData.department)) {
+      alert('Please select a valid department.')
+      return
+    }
+
+    if (!['Active', 'On Leave'].includes(formData.status)) {
+      alert('Please select a valid staff status.')
+      return
+    }
+
+    const emailExists = staffMembers.some(
+      (item) =>
+        item.email.toLowerCase() === email.toLowerCase() &&
+        item.id !== editingId
+    )
+
+    if (emailExists) {
+      alert('This email address is already assigned to another staff member.')
+      return
+    }
+
+    const staffData = {
+      name,
+      role,
+      department: formData.department,
+      email,
+      status: formData.status,
+    }
+
+    if (editingId !== null) {
+      setStaffMembers((currentStaff) =>
+        currentStaff.map((item) =>
+          item.id === editingId ? { ...item, ...staffData } : item
+        )
+      )
+    } else {
+      const nextNumber =
+        Math.max(
+          100,
+          ...staffMembers.map((item) =>
+            Number(item.id.replace('STF-', ''))
+          )
+        ) + 1
+
+      setStaffMembers((currentStaff) => [
+        { id: `STF-${nextNumber}`, ...staffData },
+        ...currentStaff,
+      ])
+    }
+
+    closeModal()
   }
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div className="page-header">
         <div>
           <h1 className="page-title">Staff Directory</h1>
         </div>
-        <button className="btn primary" onClick={handleOpenAdd}>
-          Add Staff Member
-        </button>
+
+        {allowEdit && (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={handleOpenAdd}
+          >
+            Add Staff Member
+          </button>
+        )}
       </div>
 
-      <div className="card" style={{ marginBottom: '20px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="grid-3 section-gap-sm">
+        <Panel className="summary-card">
+          <div className="summary-value">{staffMembers.length}</div>
+          <div className="summary-label">Total Staff</div>
+        </Panel>
+
+        <Panel className="summary-card">
+          <div className="summary-value">{activeCount}</div>
+          <div className="summary-label">Active Staff</div>
+        </Panel>
+
+        <Panel className="summary-card">
+          <div className="summary-value">{departmentCount}</div>
+          <div className="summary-label">Departments</div>
+        </Panel>
+      </div>
+
+      <div className="toolbar">
+        <label htmlFor="staff-search" className="sr-only">
+          Search staff
+        </label>
         <input
-          type="text"
-          placeholder="Search staff name, role, department..."
+          id="staff-search"
+          name="staffSearch"
+          type="search"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            borderRadius: '4px',
-            border: '1px solid var(--border, #ccc)',
-            width: '280px',
-            fontSize: '14px'
-          }}
+          placeholder="Search staff..."
         />
-        <span style={{ fontSize: '14px', color: '#666' }}>
-          {filteredStaff.length} personnel listed
-        </span>
       </div>
 
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+      <div className="card table-wrap">
+        <table className="data-table">
+          <caption className="sr-only">Museum staff directory</caption>
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--border, #eee)', color: '#666' }}>
-              <th style={{ padding: '12px 16px' }}>STAFF ID</th>
-              <th style={{ padding: '12px 16px' }}>NAME</th>
-              <th style={{ padding: '12px 16px' }}>ROLE</th>
-              <th style={{ padding: '12px 16px' }}>DEPARTMENT</th>
-              <th style={{ padding: '12px 16px' }}>EMAIL</th>
-              <th style={{ padding: '12px 16px' }}>STATUS</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right' }}>ACTIONS</th>
+            <tr>
+              <th scope="col">Staff ID</th>
+              <th scope="col">Name</th>
+              <th scope="col">Role</th>
+              <th scope="col">Department</th>
+              <th scope="col">Email</th>
+              <th scope="col">Status</th>
+              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
+
           <tbody>
-            {filteredStaff.length > 0 ? (
-              filteredStaff.map((item) => (
-                <tr key={item.id} style={{ borderBottom: '1px solid var(--border, #f4f4f4)' }}>
-                  <td style={{ padding: '12px 16px', color: '#888' }}>{item.id}</td>
-                  <td style={{ padding: '12px 16px', fontWeight: '500' }}>{item.name}</td>
-                  <td style={{ padding: '12px 16px' }}>{item.role}</td>
-                  <td style={{ padding: '12px 16px' }}>{item.department}</td>
-                  <td style={{ padding: '12px 16px', color: '#555' }}>{item.email}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      backgroundColor: item.status === 'Active' ? '#e6f4ea' : '#fef3c7',
-                      color: item.status === 'Active' ? '#137333' : '#b45309'
-                    }}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                      <button className="btn secondary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => handleOpenEdit(item)}>
+            {filteredStaff.map((item) => (
+              <tr key={item.id}>
+                <td className="mono">{item.id}</td>
+                <td className="strong">{item.name}</td>
+                <td>{item.role}</td>
+                <td>{item.department}</td>
+                <td className="muted">{item.email}</td>
+                <td>{item.status}</td>
+
+                {allowEdit && (
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => handleOpenEdit(item)}
+                        aria-label={`Edit ${item.name}`}
+                      >
                         Edit
                       </button>
-                      <button className="btn danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => handleDelete(item.id)}>
+
+                      <button
+                        type="button"
+                        className="btn danger"
+                        onClick={() => handleDelete(item.id)}
+                        aria-label={`Delete ${item.name}`}
+                      >
                         Delete
                       </button>
                     </div>
                   </td>
-                </tr>
-              ))
-            ) : (
+                )}
+              </tr>
+            ))}
+
+            {filteredStaff.length === 0 && (
               <tr>
-                <td colSpan="7" style={{ padding: '32px', textAlign: 'center', color: '#888' }}>
+                <td colSpan={allowEdit ? 7 : 6} className="empty">
                   No staff members found.
                 </td>
               </tr>
@@ -163,92 +292,104 @@ export default function Staff() {
         </table>
       </div>
 
-      {isModalOpen && (
-        <div className="modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="modal-content card" style={{ width: '420px', padding: '24px', background: '#fff' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>
-              {editingId ? 'Edit Staff Member' : 'Add Staff Member'}
-            </h2>
-            <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Jane Doe"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Job Role / Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Assistant Curator"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Department</label>
-                <select
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                >
-                  <option value="Curatorial">Curatorial</option>
-                  <option value="Collections Management">Collections Management</option>
-                  <option value="Conservation">Conservation</option>
-                  <option value="Operations">Operations</option>
-                  <option value="Public Programs">Public Programs</option>
-                  <option value="Administration">Administration</option>
-                </select>
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g., j.doe@mfah.org"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                >
-                  <option value="Active">Active</option>
-                  <option value="On Leave">On Leave</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button type="button" className="btn secondary" onClick={() => setIsModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn primary">
-                  {editingId ? 'Save Changes' : 'Save Staff'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={isModalOpen}
+        title={editingId === null ? 'Add Staff Member' : 'Edit Staff Member'}
+        onClose={closeModal}
+      >
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="staff-name">Full Name</label>
+            <input
+              id="staff-name"
+              name="name"
+              type="text"
+              autoComplete="name"
+              value={formData.name}
+              onChange={handleChange}
+              pattern="[A-Za-zÀ-ÖØ-öø-ÿ' -]+"
+              title="Use letters, spaces, hyphens, or apostrophes only."
+              required
+            />
           </div>
-        </div>
-      )}
+
+          <div className="form-group">
+            <label htmlFor="staff-role">Job Role / Title</label>
+            <input
+              id="staff-role"
+              name="role"
+              type="text"
+              value={formData.role}
+              onChange={handleChange}
+              pattern="[A-Za-zÀ-ÖØ-öø-ÿ' -]+"
+              title="Use letters, spaces, hyphens, or apostrophes only."
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-department">Department</label>
+            <select
+              id="staff-department"
+              name="department"
+              value={formData.department}
+              onChange={handleChange}
+              required
+            >
+              <option value="Curatorial">Curatorial</option>
+              <option value="Collections Management">Collections Management</option>
+              <option value="Conservation">Conservation</option>
+              <option value="Operations">Operations</option>
+              <option value="Public Programs">Public Programs</option>
+              <option value="Administration">Administration</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-email">Email Address</label>
+            <input
+              id="staff-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={formData.email}
+              onChange={handleChange}
+              maxLength={254}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-status">Status</label>
+            <select
+              id="staff-status"
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              required
+            >
+              <option value="Active">Active</option>
+              <option value="On Leave">On Leave</option>
+            </select>
+          </div>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={closeModal}
+            >
+              Cancel
+            </button>
+
+            <button type="submit" className="btn primary">
+              {editingId === null ? 'Add Staff Member' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }
+
+export default Staff
