@@ -4,8 +4,9 @@ const collectionRoutes = require("./routers/collection");
 const exhibitionRoutes = require("./routers/exhibition");
 const ticketRoutes = require("./routers/ticket");
 const membershipRoutes = require("./routers/membership");
+const storeRoutes = require("./routers/store");
 
-const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes);
+const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes);
 
 const databaseErrorCodes = [
   "ECONNREFUSED",
