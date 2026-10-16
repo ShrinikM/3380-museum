@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 

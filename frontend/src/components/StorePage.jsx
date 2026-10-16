@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Badge, Panel, Modal } from './ui'
+import { useEffect, useState } from 'react'
+import { Panel, Modal } from './ui'
 
 const giftShopItems = [
   { ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Category: 'Books', StaffID: 1, StaffName: 'Maya Patel', Price: 45, Stock: 32 },
@@ -79,16 +79,65 @@ function StorePage({ kind }) {
   const today = new Date().toISOString().split('T')[0]
   const isGiftShop = kind === 'giftshop'
   const title = isGiftShop ? 'Gift Shop' : 'Café'
-  const initialItems = isGiftShop ? giftShopItems : cafeItems
   const categories = isGiftShop ? giftShopCategories : cafeCategories
-  const initialSales = isGiftShop ? giftShopSales : cafeSales
 
-  const [items, setItems] = useState(() =>
-    initialItems.map((item) => ({ ...item }))
-  )
-  const [sales, setSales] = useState(() =>
-    initialSales.map((sale) => ({ ...sale }))
-  )
+  const [items, setItems] = useState([])
+  const [sales, setSales] = useState([])
+  const [loadError, setLoadError] = useState('')
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadStoreData() {
+      try {
+        setLoadError('')
+
+        const [itemsResponse, salesResponse] = await Promise.all([
+          fetch(`/api/store/${kind}/items`),
+          fetch(`/api/store/${kind}/sales`),
+        ])
+
+        if (!itemsResponse.ok || !salesResponse.ok) {
+          throw new Error('Could not load store data from the server.')
+        }
+
+        const [itemsData, salesData] = await Promise.all([
+          itemsResponse.json(),
+          salesResponse.json(),
+        ])
+
+        if (cancelled) return
+
+        setItems(
+          itemsData.map((item) => ({
+            ...item,
+            Price: Number(item.Price),
+            ...(item.Stock !== undefined
+              ? { Stock: Number(item.Stock) }
+              : {}),
+          }))
+        )
+
+        setSales(
+          salesData.map((sale) => ({
+            ...sale,
+            SalePrice: Number(sale.SalePrice),
+            Quantity: Number(sale.Quantity),
+          }))
+        )
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error.message)
+        }
+      }
+    }
+
+    loadStoreData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [kind])
+
 
   const [tab, setTab] = useState('items')
   const [search, setSearch] = useState('')
@@ -147,14 +196,17 @@ function StorePage({ kind }) {
     setOpen(true)
   }
 
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     if (tab === 'items') {
       const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9' -]+$/
 
       if (!textPattern.test(formData.ItemName.trim())) {
-        alert('Item Name can only contain letters, numbers, spaces, hyphens, or apostrophes.')
+        alert(
+          'Item Name can only contain letters, numbers, spaces, hyphens, or apostrophes.'
+        )
         return
       }
 
@@ -163,7 +215,10 @@ function StorePage({ kind }) {
         return
       }
 
-      if (!Number.isFinite(Number(formData.Price)) || Number(formData.Price) <= 0) {
+      if (
+        !Number.isFinite(Number(formData.Price)) ||
+        Number(formData.Price) <= 0
+      ) {
         alert('Price must be greater than 0.')
         return
       }
@@ -184,31 +239,56 @@ function StorePage({ kind }) {
         ItemName: formData.ItemName.trim(),
         Category: formData.Category,
         Price: Number(formData.Price),
+        StaffID: isGiftShop ? 1 : 2,
+        ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
       }
 
-      if (editingId === null) {
-        const newItem = {
-          ItemID: Math.max(...items.map((item) => item.ItemID), 0) + 1,
-          ...itemData,
-          StaffID: isGiftShop ? 1 : 2,
-          StaffName: isGiftShop ? 'Maya Patel' : 'Carlos Vargas',
-          ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
+      try {
+        const url =
+          editingId === null
+            ? `/api/store/${kind}/items`
+            : `/api/store/${kind}/items/${editingId}`
+
+        const response = await fetch(url, {
+          method: editingId === null ? 'POST' : 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(itemData),
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Could not save the item.')
         }
 
-        setItems((currentItems) => [...currentItems, newItem])
-      } else {
-        setItems((currentItems) =>
-          currentItems.map((item) =>
-            item.ItemID === editingId
-              ? {
-                  ...item,
-                  ...itemData,
-                  ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
-                }
-              : item
+        const itemsResponse = await fetch(`/api/store/${kind}/items`)
+
+        if (!itemsResponse.ok) {
+          throw new Error(
+            'Item saved, but the item list could not be refreshed.'
           )
+        }
+
+        const itemsData = await itemsResponse.json()
+
+        setItems(
+          itemsData.map((item) => ({
+            ...item,
+            Price: Number(item.Price),
+            ...(item.Stock !== undefined
+              ? { Stock: Number(item.Stock) }
+              : {}),
+          }))
         )
+
+        closeModal()
+      } catch (error) {
+        alert(error.message)
       }
+
+      return
     } else {
       if (!formData.ItemID) {
         alert('Please select an Item.')
@@ -248,7 +328,8 @@ function StorePage({ kind }) {
       }
 
       const item = items.find(
-        (currentItem) => currentItem.ItemID === Number(formData.ItemID)
+        (currentItem) =>
+          Number(currentItem.ItemID) === Number(formData.ItemID)
       )
 
       if (!item) {
@@ -258,14 +339,22 @@ function StorePage({ kind }) {
 
       const originalSale =
         editingId !== null
-          ? sales.find((sale) => sale.SaleID === editingId)
+          ? sales.find(
+            (sale) => Number(sale.SaleID) === Number(editingId)
+          )
           : null
+
+      if (editingId !== null && !originalSale) {
+        alert('Could not find the sale you are editing. Refresh and try again.')
+        return
+      }
 
       if (isGiftShop) {
         const availableStock =
-          originalSale && originalSale.ItemID === item.ItemID
-            ? item.Stock + originalSale.Quantity
-            : item.Stock
+          originalSale &&
+            Number(originalSale.ItemID) === Number(item.ItemID)
+            ? Number(item.Stock) + Number(originalSale.Quantity)
+            : Number(item.Stock)
 
         if (Number(formData.Quantity) > availableStock) {
           alert('There is not enough stock available.')
@@ -274,108 +363,202 @@ function StorePage({ kind }) {
       }
 
       const saleDataToSave = {
-        SaleID:
-          editingId !== null
-            ? editingId
-            : Math.max(...sales.map((sale) => sale.SaleID), 0) + 1,
-        ItemID: item.ItemID,
-        ItemName: item.ItemName,
+        ItemID: Number(formData.ItemID),
         Quantity: Number(formData.Quantity),
-        SalePrice: item.Price,
         SaleDate: formData.SaleDate,
         PaymentMethod: formData.PaymentMethod,
         StaffID: isGiftShop ? 1 : 2,
-        StaffName: isGiftShop ? 'Maya Patel' : 'Carlos Vargas',
         MembershipID: formData.MembershipID
           ? Number(formData.MembershipID)
           : null,
-        MemberName: originalSale?.MemberName ?? null,
       }
 
-      if (isGiftShop) {
-        setItems((currentItems) => {
-          let updatedItems = currentItems.map((currentItem) => {
-            if (originalSale && currentItem.ItemID === originalSale.ItemID) {
-              return {
-                ...currentItem,
-                Stock: currentItem.Stock + originalSale.Quantity,
-              }
-            }
+      try {
+        const url =
+          editingId === null
+            ? `/api/store/${kind}/sales`
+            : `/api/store/${kind}/sales/${editingId}`
 
-            return currentItem
-          })
-
-          updatedItems = updatedItems.map((currentItem) => {
-            if (currentItem.ItemID === item.ItemID) {
-              return {
-                ...currentItem,
-                Stock: currentItem.Stock - Number(formData.Quantity),
-              }
-            }
-
-            return currentItem
-          })
-
-          return updatedItems
+        const response = await fetch(url, {
+          method: editingId === null ? 'POST' : 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(saleDataToSave),
         })
-      }
 
-      if (editingId !== null) {
-        setSales((currentSales) =>
-          currentSales.map((sale) =>
-            sale.SaleID === editingId ? saleDataToSave : sale
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Could not save the sale.')
+        }
+
+        const [salesResponse, itemsResponse] = await Promise.all([
+          fetch(`/api/store/${kind}/sales`),
+          fetch(`/api/store/${kind}/items`),
+        ])
+
+        if (!salesResponse.ok || !itemsResponse.ok) {
+          throw new Error(
+            'Sale saved, but the lists could not be refreshed.'
           )
-        )
-      } else {
-        setSales((currentSales) => [...currentSales, saleDataToSave])
-      }
-    }
+        }
 
-    closeModal()
+        const [salesData, itemsData] = await Promise.all([
+          salesResponse.json(),
+          itemsResponse.json(),
+        ])
+
+        setSales(
+          salesData.map((sale) => ({
+            ...sale,
+            SalePrice: Number(sale.SalePrice),
+            Quantity: Number(sale.Quantity),
+          }))
+        )
+
+        setItems(
+          itemsData.map((item) => ({
+            ...item,
+            Price: Number(item.Price),
+            ...(item.Stock !== undefined
+              ? { Stock: Number(item.Stock) }
+              : {}),
+          }))
+        )
+
+        closeModal()
+      } catch (error) {
+        alert(error.message)
+      }
+
+      return
+    }
   }
 
-  const handleDeleteSale = (saleID) => {
+
+
+
+  const handleDeleteSale = async (saleID) => {
     const confirmed = window.confirm(
       'Are you sure you want to delete this sale?'
     )
 
     if (!confirmed) return
 
-    const sale = sales.find((currentSale) => currentSale.SaleID === saleID)
-
-    if (isGiftShop && sale) {
-      setItems((currentItems) =>
-        currentItems.map((item) =>
-          item.ItemID === sale.ItemID
-            ? { ...item, Stock: item.Stock + sale.Quantity }
-            : item
-        )
+    try {
+      const response = await fetch(
+        `/api/store/${kind}/sales/${saleID}`,
+        {
+          method: 'DELETE',
+        }
       )
-    }
 
-    setSales((currentSales) =>
-      currentSales.filter((currentSale) => currentSale.SaleID !== saleID)
-    )
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete sale.')
+      }
+
+      const [salesResponse, itemsResponse] = await Promise.all([
+        fetch(`/api/store/${kind}/sales`),
+        fetch(`/api/store/${kind}/items`),
+      ])
+
+      if (!salesResponse.ok || !itemsResponse.ok) {
+        throw new Error(
+          'Sale deleted, but the lists could not be refreshed.'
+        )
+      }
+
+      const [salesData, itemsData] = await Promise.all([
+        salesResponse.json(),
+        itemsResponse.json(),
+      ])
+
+      setSales(
+        salesData.map((sale) => ({
+          ...sale,
+          SalePrice: Number(sale.SalePrice),
+          Quantity: Number(sale.Quantity),
+        }))
+      )
+
+      setItems(
+        itemsData.map((item) => ({
+          ...item,
+          Price: Number(item.Price),
+          ...(item.Stock !== undefined
+            ? { Stock: Number(item.Stock) }
+            : {}),
+        }))
+      )
+    } catch (error) {
+      window.alert(error.message)
+    }
   }
 
-  const handleDeleteItem = (itemID) => {
+
+
+
+  const handleDeleteItem = async (itemID) => {
     const confirmed = window.confirm(
       'Are you sure you want to delete this item?'
     )
 
     if (!confirmed) return
 
-    const hasSales = sales.some((sale) => sale.ItemID === itemID)
+    const hasSales = sales.some(
+      (sale) => sale.ItemID === itemID
+    )
 
     if (hasSales) {
-      alert('This item has sales records. Delete those sales before deleting the item.')
+      alert(
+        'This item has sales records. Delete those sales before deleting the item.'
+      )
       return
     }
 
-    setItems((currentItems) =>
-      currentItems.filter((currentItem) => currentItem.ItemID !== itemID)
-    )
+    try {
+      const response = await fetch(
+        `/api/store/${kind}/items/${itemID}`,
+        {
+          method: 'DELETE',
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Could not delete the item.')
+      }
+
+      const itemsResponse = await fetch(
+        `/api/store/${kind}/items`
+      )
+
+      if (!itemsResponse.ok) {
+        throw new Error(
+          'Item deleted, but the item list could not be refreshed.'
+        )
+      }
+
+      const itemsData = await itemsResponse.json()
+
+      setItems(
+        itemsData.map((item) => ({
+          ...item,
+          Price: Number(item.Price),
+          ...(item.Stock !== undefined
+            ? { Stock: Number(item.Stock) }
+            : {}),
+        }))
+      )
+    } catch (error) {
+      alert(error.message)
+    }
   }
+
 
   const filteredItems = items.filter((item) => {
     const text = `${item.ItemName} ${item.Category}`.toLowerCase()
@@ -397,6 +580,9 @@ function StorePage({ kind }) {
         <div>
           <h1 className="page-title">{title}</h1>
         </div>
+        {loadError && (
+          <p role="alert">{loadError}</p>
+        )}
 
         <button
           type="button"
