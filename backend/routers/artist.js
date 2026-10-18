@@ -2,19 +2,24 @@ const pool = require("../db");
 
 const selectArtists = `
   SELECT
-    ArtistID,
-    FirstName,
-    LastName,
-    Nationality,
-    DATE_FORMAT(BirthYear, '%Y-%m-%d') AS BirthYear,
-    DATE_FORMAT(DeathYear, '%Y-%m-%d') AS DeathYear,
-    CreatedAt,
-    UpdatedAt,
-    CreatedBy,
+    artist.ArtistID,
+    artist.FirstName,
+    artist.LastName,
+    artist.Nationality,
+    DATE_FORMAT(artist.BirthYear, '%Y-%m-%d') AS BirthYear,
+    DATE_FORMAT(artist.DeathYear, '%Y-%m-%d') AS DeathYear,
+    artist.CreatedAt,
+    artist.UpdatedAt,
+    artist.CreatedBy,
+    artist.UpdatedBy,
+    CONCAT(creator.FirstName, ' ', creator.LastName) AS CreatedByName,
+    CONCAT(updater.FirstName, ' ', updater.LastName) AS UpdatedByName,
     (SELECT COUNT(*) FROM artwork
       WHERE artwork.ArtistID = artist.ArtistID AND artwork.IsDeleted = 0) AS ArtworkCount
   FROM artist
-  WHERE IsDeleted = 0`;
+  LEFT JOIN staff AS creator ON creator.StaffID = artist.CreatedBy
+  LEFT JOIN staff AS updater ON updater.StaffID = artist.UpdatedBy
+  WHERE artist.IsDeleted = 0`;
 
 function makeError(status, message) {
   const error = new Error(message);
@@ -76,16 +81,6 @@ function checkArtist(body) {
   return artist;
 }
 
-function checkCreatedBy(value) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  if (!Number.isInteger(value) || value < 1) {
-    throw makeError(400, "CreatedBy must be a whole number greater than 0");
-  }
-  return value;
-}
-
 function checkId(params) {
   const id = Number(params.id);
   if (!Number.isInteger(id) || id < 1) {
@@ -95,49 +90,41 @@ function checkId(params) {
 }
 
 async function findArtist(id) {
-  const [rows] = await pool.query(selectArtists + " AND ArtistID = ?", [id]);
+  const [rows] = await pool.query(selectArtists + " AND artist.ArtistID = ?", [id]);
   if (rows.length === 0) {
     return null;
   }
   return rows[0];
 }
 
-async function getArtists(params, body) {
-  const [rows] = await pool.query(selectArtists + " ORDER BY LastName");
+async function getArtists(params, body, staffId) {
+  const [rows] = await pool.query(selectArtists + " ORDER BY artist.LastName");
   return { status: 200, data: rows };
 }
 
-async function addArtist(params, body) {
+async function addArtist(params, body, staffId) {
   const artist = checkArtist(body);
-  const createdBy = checkCreatedBy(body.CreatedBy);
 
-  let result;
-  try {
-    [result] = await pool.query(
-      `INSERT INTO artist
-        (FirstName, LastName, BirthYear, DeathYear, Nationality, CreatedAt, UpdatedAt, CreatedBy)
-       VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
-      [
-        artist.FirstName,
-        artist.LastName,
-        artist.BirthYear,
-        artist.DeathYear,
-        artist.Nationality,
-        createdBy,
-      ]
-    );
-  } catch (error) {
-    if (error.code === "ER_NO_REFERENCED_ROW_2") {
-      throw makeError(400, "CreatedBy does not match any staff member");
-    }
-    throw error;
-  }
+  const [result] = await pool.query(
+    `INSERT INTO artist
+      (FirstName, LastName, BirthYear, DeathYear, Nationality, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
+     VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?, ?)`,
+    [
+      artist.FirstName,
+      artist.LastName,
+      artist.BirthYear,
+      artist.DeathYear,
+      artist.Nationality,
+      staffId,
+      staffId,
+    ]
+  );
 
   const newArtist = await findArtist(result.insertId);
   return { status: 201, data: newArtist };
 }
 
-async function updateArtist(params, body) {
+async function updateArtist(params, body, staffId) {
   const id = checkId(params);
   const artist = checkArtist(body);
 
@@ -148,16 +135,16 @@ async function updateArtist(params, body) {
 
   await pool.query(
     `UPDATE artist
-     SET FirstName = ?, LastName = ?, BirthYear = ?, DeathYear = ?, Nationality = ?, UpdatedAt = NOW()
+     SET FirstName = ?, LastName = ?, BirthYear = ?, DeathYear = ?, Nationality = ?, UpdatedAt = NOW(), UpdatedBy = ?
      WHERE ArtistID = ?`,
-    [artist.FirstName, artist.LastName, artist.BirthYear, artist.DeathYear, artist.Nationality, id]
+    [artist.FirstName, artist.LastName, artist.BirthYear, artist.DeathYear, artist.Nationality, staffId, id]
   );
 
   const updatedArtist = await findArtist(id);
   return { status: 200, data: updatedArtist };
 }
 
-async function deleteArtist(params, body) {
+async function deleteArtist(params, body, staffId) {
   const id = checkId(params);
 
   const existingArtist = await findArtist(id);
@@ -169,14 +156,17 @@ async function deleteArtist(params, body) {
     throw makeError(409, "This artist still has artworks, so they cannot be deleted");
   }
 
-  await pool.query("UPDATE artist SET IsDeleted = 1, UpdatedAt = NOW() WHERE ArtistID = ?", [id]);
+  await pool.query(
+    "UPDATE artist SET IsDeleted = 1, UpdatedAt = NOW(), UpdatedBy = ? WHERE ArtistID = ?",
+    [staffId, id]
+  );
 
   return { status: 200, data: { message: "Artist deleted" } };
 }
 
 module.exports = [
   { method: "GET", path: "/api/artists", handler: getArtists },
-  { method: "POST", path: "/api/artists", handler: addArtist },
-  { method: "PUT", path: "/api/artists/:id", handler: updateArtist },
-  { method: "DELETE", path: "/api/artists/:id", handler: deleteArtist },
+  { method: "POST", path: "/api/artists", handler: addArtist, needsActor: true },
+  { method: "PUT", path: "/api/artists/:id", handler: updateArtist, needsActor: true },
+  { method: "DELETE", path: "/api/artists/:id", handler: deleteArtist, needsActor: true },
 ];

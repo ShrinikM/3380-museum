@@ -5,8 +5,9 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 
 function Collections() {
-  const { canEdit } = useRole()
+  const { user, canEdit } = useRole()
   const allowEdit = canEdit('/collections')
+  const showAudit = user.role === 'Admin' || user.role === 'Supervisor'
 
   const [collections, setCollections] = useState([])
   const [loadError, setLoadError] = useState('')
@@ -203,6 +204,8 @@ function Collections() {
               <th scope="col">Collection</th>
               <th scope="col">Name</th>
               <th scope="col">Description</th>
+              {showAudit && <th scope="col">Created By</th>}
+              {showAudit && <th scope="col">Last Updated By</th>}
               {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
@@ -219,6 +222,9 @@ function Collections() {
                 </td>
 
                 <td>{item.Description || '-'}</td>
+
+                {showAudit && <td>{item.CreatedByName || '-'}</td>}
+                {showAudit && <td>{item.UpdatedByName || '-'}</td>}
 
                 {allowEdit && (
                   <td>
@@ -249,7 +255,7 @@ function Collections() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={allowEdit ? 4 : 3}
+                  colSpan={3 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
                   className="empty"
                 >
                   No collections found.

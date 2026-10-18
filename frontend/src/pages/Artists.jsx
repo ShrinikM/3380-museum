@@ -4,8 +4,9 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 
 function Artists() {
-  const { canEdit } = useRole()
+  const { user, canEdit } = useRole()
   const allowEdit = canEdit('/artists')
+  const showAudit = user.role === 'Admin' || user.role === 'Supervisor'
   const today = new Date().toISOString().split('T')[0]
 
   const [artists, setArtists] = useState([])
@@ -21,7 +22,6 @@ function Artists() {
     BirthYear: '',
     DeathYear: '',
     Nationality: '',
-    CreatedBy: '',
   })
 
   useEffect(() => {
@@ -56,7 +56,6 @@ function Artists() {
       BirthYear: '',
       DeathYear: '',
       Nationality: '',
-      CreatedBy: '',
     })
   }
 
@@ -77,7 +76,6 @@ function Artists() {
         ? artist.DeathYear.split('T')[0]
         : '',
       Nationality: artist.Nationality || '',
-      CreatedBy: '',
     })
 
     setEditingId(artist.ArtistID)
@@ -128,11 +126,6 @@ function Artists() {
       return
     }
 
-    if (formData.CreatedBy && Number(formData.CreatedBy) < 1) {
-      alert('Created By must be a positive Staff ID.')
-      return
-    }
-
     const artistData = {
       FirstName: formData.FirstName.trim(),
       LastName: formData.LastName.trim(),
@@ -143,10 +136,6 @@ function Artists() {
 
     try {
       if (editingId === null) {
-        artistData.CreatedBy = formData.CreatedBy
-          ? Number(formData.CreatedBy)
-          : null
-
         await callApi('/api/artists', 'POST', artistData)
       } else {
         await callApi(
@@ -276,7 +265,8 @@ function Artists() {
               <th scope="col">Death Date</th>
               <th scope="col">Nationality</th>
               <th scope="col">Artworks</th>
-              <th scope="col">Created By</th>
+              {showAudit && <th scope="col">Created By</th>}
+              {showAudit && <th scope="col">Last Updated By</th>}
               {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
@@ -313,7 +303,8 @@ function Artists() {
                 </td>
 
                 <td className="mono">{item.ArtworkCount}</td>
-                <td className="mono">{item.CreatedBy || '-'}</td>
+                {showAudit && <td>{item.CreatedByName || '-'}</td>}
+                {showAudit && <td>{item.UpdatedByName || '-'}</td>}
 
                 {allowEdit && (
                   <td>
@@ -344,7 +335,7 @@ function Artists() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={allowEdit ? 7 : 6}
+                  colSpan={5 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
                   className="empty"
                 >
                   No artists found.
@@ -426,23 +417,6 @@ function Artists() {
               required
             />
           </div>
-
-          {editingId === null && (
-            <div className="form-group">
-              <label htmlFor="artist-created-by">Created By</label>
-              <input
-                id="artist-created-by"
-                name="CreatedBy"
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                value={formData.CreatedBy}
-                onChange={handleChange}
-                placeholder="Staff ID"
-              />
-            </div>
-          )}
 
           <div className="form-actions">
             <button

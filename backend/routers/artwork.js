@@ -12,10 +12,15 @@ const selectArtworks = `
     collection.Name AS CollectionName,
     artwork.CreatedAt,
     artwork.UpdatedAt,
-    artwork.CreatedBy
+    artwork.CreatedBy,
+    artwork.UpdatedBy,
+    CONCAT(creator.FirstName, ' ', creator.LastName) AS CreatedByName,
+    CONCAT(updater.FirstName, ' ', updater.LastName) AS UpdatedByName
   FROM artwork
   JOIN artist ON artist.ArtistID = artwork.ArtistID
   JOIN collection ON collection.CollectionID = artwork.CollectionID
+  LEFT JOIN staff AS creator ON creator.StaffID = artwork.CreatedBy
+  LEFT JOIN staff AS updater ON updater.StaffID = artwork.UpdatedBy
   WHERE artwork.IsDeleted = 0`;
 
 function makeError(status, message) {
@@ -60,13 +65,6 @@ function checkWholeNumber(value, fieldName) {
     throw makeError(400, fieldName + " must be a whole number greater than 0");
   }
   return value;
-}
-
-function checkCreatedBy(value) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  return checkWholeNumber(value, "CreatedBy");
 }
 
 function checkId(params) {
@@ -122,37 +120,29 @@ async function getArtworks() {
   return { status: 200, data: rows };
 }
 
-async function addArtwork(params, body) {
+async function addArtwork(params, body, staffId) {
   const artwork = await checkArtwork(body);
-  const createdBy = checkCreatedBy(body.CreatedBy);
 
-  let result;
-  try {
-    [result] = await pool.query(
-      `INSERT INTO artwork
-        (Title, Type, DateCreated, ArtistID, CollectionID, CreatedAt, UpdatedAt, CreatedBy)
-       VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
-      [
-        artwork.Title,
-        artwork.Type,
-        artwork.DateCreated,
-        artwork.ArtistID,
-        artwork.CollectionID,
-        createdBy,
-      ]
-    );
-  } catch (error) {
-    if (error.code === "ER_NO_REFERENCED_ROW_2") {
-      throw makeError(400, "CreatedBy does not match any staff member");
-    }
-    throw error;
-  }
+  const [result] = await pool.query(
+    `INSERT INTO artwork
+      (Title, Type, DateCreated, ArtistID, CollectionID, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
+     VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?, ?)`,
+    [
+      artwork.Title,
+      artwork.Type,
+      artwork.DateCreated,
+      artwork.ArtistID,
+      artwork.CollectionID,
+      staffId,
+      staffId,
+    ]
+  );
 
   const newArtwork = await findArtwork(result.insertId);
   return { status: 201, data: newArtwork };
 }
 
-async function updateArtwork(params, body) {
+async function updateArtwork(params, body, staffId) {
   const id = checkId(params);
   const artwork = await checkArtwork(body);
 
@@ -163,16 +153,16 @@ async function updateArtwork(params, body) {
 
   await pool.query(
     `UPDATE artwork
-     SET Title = ?, Type = ?, DateCreated = ?, ArtistID = ?, CollectionID = ?, UpdatedAt = NOW()
+     SET Title = ?, Type = ?, DateCreated = ?, ArtistID = ?, CollectionID = ?, UpdatedAt = NOW(), UpdatedBy = ?
      WHERE ArtworkID = ?`,
-    [artwork.Title, artwork.Type, artwork.DateCreated, artwork.ArtistID, artwork.CollectionID, id]
+    [artwork.Title, artwork.Type, artwork.DateCreated, artwork.ArtistID, artwork.CollectionID, staffId, id]
   );
 
   const updatedArtwork = await findArtwork(id);
   return { status: 200, data: updatedArtwork };
 }
 
-async function deleteArtwork(params) {
+async function deleteArtwork(params, body, staffId) {
   const id = checkId(params);
 
   const existingArtwork = await findArtwork(id);
@@ -180,14 +170,17 @@ async function deleteArtwork(params) {
     throw makeError(404, "Artwork not found");
   }
 
-  await pool.query("UPDATE artwork SET IsDeleted = 1, UpdatedAt = NOW() WHERE ArtworkID = ?", [id]);
+  await pool.query(
+    "UPDATE artwork SET IsDeleted = 1, UpdatedAt = NOW(), UpdatedBy = ? WHERE ArtworkID = ?",
+    [staffId, id]
+  );
 
   return { status: 200, data: { message: "Artwork deleted" } };
 }
 
 module.exports = [
   { method: "GET", path: "/api/artworks", handler: getArtworks },
-  { method: "POST", path: "/api/artworks", handler: addArtwork },
-  { method: "PUT", path: "/api/artworks/:id", handler: updateArtwork },
-  { method: "DELETE", path: "/api/artworks/:id", handler: deleteArtwork },
+  { method: "POST", path: "/api/artworks", handler: addArtwork, needsActor: true },
+  { method: "PUT", path: "/api/artworks/:id", handler: updateArtwork, needsActor: true },
+  { method: "DELETE", path: "/api/artworks/:id", handler: deleteArtwork, needsActor: true },
 ];

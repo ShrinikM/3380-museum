@@ -5,8 +5,9 @@ import { useRole } from '../context/role'
 import { ARTWORK_TYPES } from '../data/constants'
 
 function Artworks() {
-  const { canEdit } = useRole()
+  const { user, canEdit } = useRole()
   const allowEdit = canEdit('/artworks')
+  const showAudit = user.role === 'Admin' || user.role === 'Supervisor'
   const today = new Date().toISOString().split('T')[0]
 
   const [artworks, setArtworks] = useState([])
@@ -24,7 +25,6 @@ function Artworks() {
     ArtistID: '',
     CollectionID: '',
     DateCreated: '',
-    CreatedBy: '',
   })
 
   useEffect(() => {
@@ -64,7 +64,6 @@ function Artworks() {
       ArtistID: '',
       CollectionID: '',
       DateCreated: '',
-      CreatedBy: '',
     })
   }
 
@@ -83,7 +82,6 @@ function Artworks() {
       DateCreated: artwork.DateCreated
         ? artwork.DateCreated.split('T')[0]
         : '',
-      CreatedBy: '',
     })
 
     setEditingId(artwork.ArtworkID)
@@ -98,11 +96,6 @@ function Artworks() {
       return
     }
 
-    if (formData.CreatedBy && Number(formData.CreatedBy) < 1) {
-      alert('Created By must be a positive Staff ID.')
-      return
-    }
-
     const artworkData = {
       Title: formData.Title.trim(),
       Type: formData.Type,
@@ -113,10 +106,6 @@ function Artworks() {
 
     try {
       if (editingId === null) {
-        artworkData.CreatedBy = formData.CreatedBy
-          ? Number(formData.CreatedBy)
-          : null
-
         await callApi('/api/artworks', 'POST', artworkData)
       } else {
         await callApi(
@@ -241,7 +230,8 @@ function Artworks() {
               <th scope="col">Collection</th>
               <th scope="col">Type</th>
               <th scope="col">Date Created</th>
-              <th scope="col">Created By</th>
+              {showAudit && <th scope="col">Created By</th>}
+              {showAudit && <th scope="col">Last Updated By</th>}
               {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
@@ -272,7 +262,8 @@ function Artworks() {
                     : '-'}
                 </td>
 
-                <td className="mono">{item.CreatedBy || '-'}</td>
+                {showAudit && <td>{item.CreatedByName || '-'}</td>}
+                {showAudit && <td>{item.UpdatedByName || '-'}</td>}
 
                 {allowEdit && (
                   <td>
@@ -303,7 +294,7 @@ function Artworks() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={allowEdit ? 7 : 6}
+                  colSpan={5 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
                   className="empty"
                 >
                   No artworks found.
@@ -408,23 +399,6 @@ function Artworks() {
               required
             />
           </div>
-
-          {editingId === null && (
-            <div className="form-group">
-              <label htmlFor="artwork-created-by">Created By</label>
-              <input
-                id="artwork-created-by"
-                name="CreatedBy"
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                value={formData.CreatedBy}
-                onChange={handleChange}
-                placeholder="Staff ID"
-              />
-            </div>
-          )}
 
           <div className="form-actions">
             <button

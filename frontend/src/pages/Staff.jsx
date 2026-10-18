@@ -1,21 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Panel, Modal } from '../components/ui'
+import { callApi } from '../api'
 import { useRole } from '../context/role'
 
-const INITIAL_STAFF = [
-  { id: 'STF-101', name: 'Dr. Evelyn Reed', role: 'Chief Curator', department: 'Curatorial', email: 'e.reed@mfah.org', status: 'Active' },
-  { id: 'STF-102', name: 'Marcus Vance', role: 'Head Registrar', department: 'Collections Management', email: 'm.vance@mfah.org', status: 'Active' },
-  { id: 'STF-103', name: 'Sofia Rodriguez', role: 'Visitor Services Manager', department: 'Operations', email: 's.rodriguez@mfah.org', status: 'Active' },
-  { id: 'STF-104', name: 'Liam Chen', role: 'Lead Restorer', department: 'Conservation', email: 'l.chen@mfah.org', status: 'On Leave' },
-  { id: 'STF-105', name: 'Amara Okafor', role: 'Education Coordinator', department: 'Public Programs', email: 'a.okafor@mfah.org', status: 'Active' },
+const ROLE_OPTIONS = ['Admin', 'Supervisor', 'Staff', 'Operator']
+
+const DEPARTMENT_OPTIONS = [
+  'Administration',
+  'Collections',
+  'Collections Management',
+  'Conservation',
+  'Curatorial',
+  'Operations',
+  'Public Programs',
+  'Visitor Services',
 ]
 
 const emptyForm = {
-  name: '',
-  role: '',
-  department: 'Curatorial',
-  email: '',
-  status: 'Active',
+  FirstName: '',
+  LastName: '',
+  Role: 'Staff',
+  Department: 'Curatorial',
+  Email: '',
+  PhoneNumber: '',
+  StartDate: '',
+  EndDate: '',
 }
 
 const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
@@ -23,24 +32,52 @@ const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 function Staff() {
   const { canEdit } = useRole()
   const allowEdit = canEdit('/staff')
+  const today = new Date().toISOString().split('T')[0]
 
-  const [staffMembers, setStaffMembers] = useState(INITIAL_STAFF)
+  const [staffMembers, setStaffMembers] = useState([])
+  const [loadError, setLoadError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
+  useEffect(() => {
+    async function loadStaff() {
+      try {
+        const data = await callApi('/api/staff', 'GET')
+        setStaffMembers(data)
+        setLoadError('')
+      } catch (err) {
+        setLoadError('Could not load staff: ' + err.message)
+      }
+    }
+
+    loadStaff()
+  }, [reloadCount])
+
+  const refetchStaff = () => {
+    setReloadCount((count) => count + 1)
+  }
+
+  const getStatus = (item) => {
+    if (item.EndDate && item.EndDate <= today) {
+      return 'Ended'
+    }
+    return 'Active'
+  }
+
   const activeCount = staffMembers.filter(
-    (item) => item.status === 'Active'
+    (item) => getStatus(item) === 'Active'
   ).length
 
   const departmentCount = new Set(
-    staffMembers.map((item) => item.department)
+    staffMembers.map((item) => item.Department)
   ).size
 
   const filteredStaff = staffMembers.filter((item) => {
     const text =
-      `${item.id} ${item.name} ${item.role} ${item.department} ${item.email} ${item.status}`.toLowerCase()
+      `${item.StaffID} ${item.FirstName} ${item.LastName} ${item.Role} ${item.Department} ${item.Email} ${item.PhoneNumber} ${getStatus(item)}`.toLowerCase()
 
     return text.includes(searchTerm.toLowerCase())
   })
@@ -63,13 +100,16 @@ function Staff() {
   }
 
   const handleOpenEdit = (item) => {
-    setEditingId(item.id)
+    setEditingId(item.StaffID)
     setFormData({
-      name: item.name || '',
-      role: item.role || '',
-      department: item.department || 'Curatorial',
-      email: item.email || '',
-      status: item.status || 'Active',
+      FirstName: item.FirstName || '',
+      LastName: item.LastName || '',
+      Role: item.Role || 'Staff',
+      Department: item.Department || 'Curatorial',
+      Email: item.Email || '',
+      PhoneNumber: item.PhoneNumber || '',
+      StartDate: item.StartDate || '',
+      EndDate: item.EndDate || '',
     })
     setIsModalOpen(true)
   }
@@ -80,36 +120,39 @@ function Staff() {
     resetForm()
   }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this staff member?')) {
-      setStaffMembers((currentStaff) =>
-        currentStaff.filter((item) => item.id !== id)
-      )
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this staff member?')) {
+      return
     }
+
+    try {
+      await callApi('/api/staff/' + id, 'DELETE')
+    } catch (err) {
+      alert(err.message)
+      return
+    }
+
+    refetchStaff()
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const name = formData.name.trim()
-    const role = formData.role.trim()
-    const email = formData.email.trim()
+    const firstName = formData.FirstName.trim()
+    const lastName = formData.LastName.trim()
+    const email = formData.Email.trim()
+    const phone = formData.PhoneNumber.trim()
 
-    if (!name || !role || !formData.department || !email || !formData.status) {
-      alert('Please complete all required fields.')
-      return
-    }
-
-    if (!textPattern.test(name)) {
+    if (!textPattern.test(firstName)) {
       alert(
-        'Full Name can only contain letters, spaces, hyphens, or apostrophes.'
+        'First Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
-    if (!textPattern.test(role)) {
+    if (!textPattern.test(lastName)) {
       alert(
-        'Job Role can only contain letters, spaces, hyphens, or apostrophes.'
+        'Last Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
@@ -119,66 +162,40 @@ function Staff() {
       return
     }
 
-    const validDepartments = [
-      'Curatorial',
-      'Collections Management',
-      'Conservation',
-      'Operations',
-      'Public Programs',
-      'Administration',
-    ]
-
-    if (!validDepartments.includes(formData.department)) {
-      alert('Please select a valid department.')
+    if (!/^[0-9+()\- ]{7,20}$/.test(phone)) {
+      alert('Please enter a valid phone number.')
       return
     }
 
-    if (!['Active', 'On Leave'].includes(formData.status)) {
-      alert('Please select a valid staff status.')
-      return
-    }
-
-    const emailExists = staffMembers.some(
-      (item) =>
-        item.email.toLowerCase() === email.toLowerCase() &&
-        item.id !== editingId
-    )
-
-    if (emailExists) {
-      alert('This email address is already assigned to another staff member.')
+    if (formData.EndDate && formData.EndDate < formData.StartDate) {
+      alert('End Date cannot be before Start Date.')
       return
     }
 
     const staffData = {
-      name,
-      role,
-      department: formData.department,
-      email,
-      status: formData.status,
+      FirstName: firstName,
+      LastName: lastName,
+      Role: formData.Role,
+      Department: formData.Department,
+      Email: email,
+      PhoneNumber: phone,
+      StartDate: formData.StartDate,
+      EndDate: formData.EndDate || null,
     }
 
-    if (editingId !== null) {
-      setStaffMembers((currentStaff) =>
-        currentStaff.map((item) =>
-          item.id === editingId ? { ...item, ...staffData } : item
-        )
-      )
-    } else {
-      const nextNumber =
-        Math.max(
-          100,
-          ...staffMembers.map((item) =>
-            Number(item.id.replace('STF-', ''))
-          )
-        ) + 1
-
-      setStaffMembers((currentStaff) => [
-        { id: `STF-${nextNumber}`, ...staffData },
-        ...currentStaff,
-      ])
+    try {
+      if (editingId === null) {
+        await callApi('/api/staff', 'POST', staffData)
+      } else {
+        await callApi('/api/staff/' + editingId, 'PUT', staffData)
+      }
+    } catch (err) {
+      alert(err.message)
+      return
     }
 
     closeModal()
+    refetchStaff()
   }
 
   return (
@@ -230,6 +247,12 @@ function Staff() {
         />
       </div>
 
+      {loadError && (
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
+      )}
+
       <div className="card table-wrap">
         <table className="data-table">
           <caption className="sr-only">Museum staff directory</caption>
@@ -240,6 +263,8 @@ function Staff() {
               <th scope="col">Role</th>
               <th scope="col">Department</th>
               <th scope="col">Email</th>
+              <th scope="col">Phone</th>
+              <th scope="col">Start Date</th>
               <th scope="col">Status</th>
               {allowEdit && <th scope="col">Actions</th>}
             </tr>
@@ -247,13 +272,19 @@ function Staff() {
 
           <tbody>
             {filteredStaff.map((item) => (
-              <tr key={item.id}>
-                <td className="mono">{item.id}</td>
-                <td className="strong">{item.name}</td>
-                <td>{item.role}</td>
-                <td>{item.department}</td>
-                <td className="muted">{item.email}</td>
-                <td>{item.status}</td>
+              <tr key={item.StaffID}>
+                <td className="mono">
+                  #{String(item.StaffID).padStart(5, '0')}
+                </td>
+                <td className="strong">
+                  {item.FirstName} {item.LastName}
+                </td>
+                <td>{item.Role}</td>
+                <td>{item.Department}</td>
+                <td className="muted">{item.Email}</td>
+                <td className="mono">{item.PhoneNumber}</td>
+                <td className="mono">{item.StartDate || '-'}</td>
+                <td>{getStatus(item)}</td>
 
                 {allowEdit && (
                   <td>
@@ -262,7 +293,7 @@ function Staff() {
                         type="button"
                         className="btn secondary"
                         onClick={() => handleOpenEdit(item)}
-                        aria-label={`Edit ${item.name}`}
+                        aria-label={`Edit ${item.FirstName} ${item.LastName}`}
                       >
                         Edit
                       </button>
@@ -270,8 +301,8 @@ function Staff() {
                       <button
                         type="button"
                         className="btn danger"
-                        onClick={() => handleDelete(item.id)}
-                        aria-label={`Delete ${item.name}`}
+                        onClick={() => handleDelete(item.StaffID)}
+                        aria-label={`Delete ${item.FirstName} ${item.LastName}`}
                       >
                         Delete
                       </button>
@@ -283,7 +314,7 @@ function Staff() {
 
             {filteredStaff.length === 0 && (
               <tr>
-                <td colSpan={allowEdit ? 7 : 6} className="empty">
+                <td colSpan={allowEdit ? 9 : 8} className="empty">
                   No staff members found.
                 </td>
               </tr>
@@ -299,13 +330,13 @@ function Staff() {
       >
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="staff-name">Full Name</label>
+            <label htmlFor="staff-first-name">First Name</label>
             <input
-              id="staff-name"
-              name="name"
+              id="staff-first-name"
+              name="FirstName"
               type="text"
-              autoComplete="name"
-              value={formData.name}
+              autoComplete="given-name"
+              value={formData.FirstName}
               onChange={handleChange}
               pattern="[A-Za-zÀ-ÖØ-öø-ÿ' -]+"
               title="Use letters, spaces, hyphens, or apostrophes only."
@@ -314,34 +345,51 @@ function Staff() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="staff-role">Job Role / Title</label>
+            <label htmlFor="staff-last-name">Last Name</label>
             <input
-              id="staff-role"
-              name="role"
+              id="staff-last-name"
+              name="LastName"
               type="text"
-              value={formData.role}
+              autoComplete="family-name"
+              value={formData.LastName}
               onChange={handleChange}
               pattern="[A-Za-zÀ-ÖØ-öø-ÿ' -]+"
               title="Use letters, spaces, hyphens, or apostrophes only."
               required
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-role">Role</label>
+            <select
+              id="staff-role"
+              name="Role"
+              value={formData.Role}
+              onChange={handleChange}
+              required
+            >
+              {ROLE_OPTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group">
             <label htmlFor="staff-department">Department</label>
             <select
               id="staff-department"
-              name="department"
-              value={formData.department}
+              name="Department"
+              value={formData.Department}
               onChange={handleChange}
               required
             >
-              <option value="Curatorial">Curatorial</option>
-              <option value="Collections Management">Collections Management</option>
-              <option value="Conservation">Conservation</option>
-              <option value="Operations">Operations</option>
-              <option value="Public Programs">Public Programs</option>
-              <option value="Administration">Administration</option>
+              {DEPARTMENT_OPTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -349,10 +397,10 @@ function Staff() {
             <label htmlFor="staff-email">Email Address</label>
             <input
               id="staff-email"
-              name="email"
+              name="Email"
               type="email"
               autoComplete="email"
-              value={formData.email}
+              value={formData.Email}
               onChange={handleChange}
               maxLength={254}
               required
@@ -360,17 +408,42 @@ function Staff() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="staff-status">Status</label>
-            <select
-              id="staff-status"
-              name="status"
-              value={formData.status}
+            <label htmlFor="staff-phone">Phone Number</label>
+            <input
+              id="staff-phone"
+              name="PhoneNumber"
+              type="tel"
+              autoComplete="tel"
+              value={formData.PhoneNumber}
+              onChange={handleChange}
+              pattern="[0-9+()\- ]{7,20}"
+              title="Use 7 to 20 digits, spaces, dashes, plus signs, or parentheses."
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-start-date">Start Date</label>
+            <input
+              id="staff-start-date"
+              name="StartDate"
+              type="date"
+              value={formData.StartDate}
               onChange={handleChange}
               required
-            >
-              <option value="Active">Active</option>
-              <option value="On Leave">On Leave</option>
-            </select>
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-end-date">End Date</label>
+            <input
+              id="staff-end-date"
+              name="EndDate"
+              type="date"
+              min={formData.StartDate || undefined}
+              value={formData.EndDate}
+              onChange={handleChange}
+            />
           </div>
 
           <div className="form-actions">

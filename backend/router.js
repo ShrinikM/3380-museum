@@ -1,3 +1,4 @@
+const pool = require("./db");
 const artistRoutes = require("./routers/artist");
 const artworkRoutes = require("./routers/artwork");
 const collectionRoutes = require("./routers/collection");
@@ -5,8 +6,9 @@ const exhibitionRoutes = require("./routers/exhibition");
 const ticketRoutes = require("./routers/ticket");
 const membershipRoutes = require("./routers/membership");
 const storeRoutes = require("./routers/store");
+const staffRoutes = require("./routers/staff");
 
-const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes);
+const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes);
 
 const databaseErrorCodes = [
   "ECONNREFUSED",
@@ -62,6 +64,32 @@ function readBody(req) {
   });
 }
 
+const knownStaff = new Map();
+
+async function getActor(req) {
+  const username = req.headers["x-username"];
+
+  if (typeof username !== "string" || username.trim() === "") {
+    throw makeError(401, "You must be logged in to make changes");
+  }
+
+  if (knownStaff.has(username)) {
+    return knownStaff.get(username);
+  }
+
+  const [rows] = await pool.query(
+    "SELECT StaffID FROM staffcredentials WHERE Username = ?",
+    [username]
+  );
+
+  if (rows.length === 0) {
+    throw makeError(401, "Unknown user");
+  }
+
+  knownStaff.set(username, rows[0].StaffID);
+  return rows[0].StaffID;
+}
+
 function matchPath(routePath, requestPath) {
   const routeParts = routePath.split("/");
   const requestParts = requestPath.split("/");
@@ -112,7 +140,12 @@ async function handleRequest(req, res) {
       }
     }
 
-    const result = await found.route.handler(found.params, body);
+    let staffId = null;
+    if (found.route.needsActor) {
+      staffId = await getActor(req);
+    }
+
+    const result = await found.route.handler(found.params, body, staffId);
     sendJson(res, result.status, result.data);
   } catch (error) {
     sendError(res, error);
