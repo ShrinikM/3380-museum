@@ -26,7 +26,9 @@ const SECTIONS = [
   },
   {
     label: 'Analytics',
-    items: [{ to: '/analytics', text: 'Reports & Analytics' }],
+    items: [
+      { to: '/reports', text: 'Reports' },
+    ],
   },
   {
     label: 'Administration',

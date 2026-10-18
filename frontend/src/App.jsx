@@ -13,6 +13,7 @@ import Login from './pages/Login'
 import Collections from './pages/Collections'
 import Donations from './pages/Donations'
 import Staff from './pages/Staff'
+import Reports from './pages/Reports'
 import{ useRole } from './context/role'
 import './App.css'
 
@@ -81,6 +82,8 @@ function App(){
 
             <Route path="/donations" element={protect('/donations', <Donations />)} />
             <Route path="/staff" element={protect('/staff', <Staff />)} />
+
+            <Route path="/reports" element={<Reports />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

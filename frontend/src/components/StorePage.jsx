@@ -97,7 +97,7 @@ function StorePage({ kind }) {
         ])
 
         if (!itemsResponse.ok || !salesResponse.ok) {
-          throw new Error('Could not load store data from the server.')
+          throw new Error('Could not reach the server')
         }
 
         const [itemsData, salesData] = await Promise.all([
@@ -580,9 +580,6 @@ function StorePage({ kind }) {
         <div>
           <h1 className="page-title">{title}</h1>
         </div>
-        {loadError && (
-          <p role="alert">{loadError}</p>
-        )}
 
         <button
           type="button"
@@ -665,6 +662,12 @@ function StorePage({ kind }) {
           placeholder={tab === 'items' ? 'Search items...' : 'Search sales...'}
         />
       </div>
+
+      {loadError && (
+        <p className="load-error" role="alert">
+          Could not load {isGiftShop ? 'gift shop' : 'café'}: {loadError}
+        </p>
+      )}
 
       {tab === 'items' ? (
         <div className="card table-wrap">

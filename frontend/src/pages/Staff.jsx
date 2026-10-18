@@ -202,7 +202,7 @@ function Staff() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Staff Directory</h1>
+          <h1 className="page-title">Staff</h1>
         </div>
 
         {allowEdit && (

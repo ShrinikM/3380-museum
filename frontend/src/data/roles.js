@@ -3,19 +3,19 @@ export const ROLES = {
     pages: [
       '/artists', '/artworks', '/collections', '/exhibitions',
       '/tickets', '/memberships', '/gift-shop', '/cafe',
-      '/donations', '/staff',
+      '/donations', '/staff', '/reports',
     ],
     edit: [
       '/artists', '/artworks', '/collections', '/exhibitions',
       '/tickets', '/memberships', '/gift-shop', '/cafe',
-      '/donations', '/staff',
+      '/donations', '/staff', '/reports',
     ],
   },
   Supervisor: {
     pages: [
       '/artists', '/artworks', '/collections', '/exhibitions',
       '/tickets', '/memberships', '/gift-shop', '/cafe',
-      '/donations', '/staff',
+      '/donations', '/staff', '/reports',
     ],
     edit: [
       '/artists', '/artworks', '/collections', '/exhibitions',
