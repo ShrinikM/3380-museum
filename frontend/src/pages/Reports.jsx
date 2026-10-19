@@ -1,23 +1,111 @@
 import { useState } from 'react'
+import { callApi } from '../api'
+import { useRole } from '../context/role'
+
+const MAX_HISTORY = 10
 
 const reportTypes = [
-  { id: 'collection', name: 'Collection Inventory' },
-  { id: 'exhibitions', name: 'Exhibition Report' },
-  { id: 'memberships', name: 'Membership Report' },
-  { id: 'sales', name: 'Store Sales Report' },
+  {
+    id: 'collection',
+    name: 'Collection Inventory',
+    columns: [
+      { key: 'ArtworkID', label: 'Artwork ID' },
+      { key: 'Title', label: 'Title' },
+      { key: 'Type', label: 'Type' },
+      { key: 'DateCreated', label: 'Date Created' },
+      { key: 'ArtistName', label: 'Artist' },
+      { key: 'CollectionName', label: 'Collection' },
+      { key: 'DateAdded', label: 'Date Added' },
+    ],
+  },
+  {
+    id: 'exhibitions',
+    name: 'Exhibition Report',
+    columns: [
+      { key: 'ExhibitionID', label: 'Exhibition ID' },
+      { key: 'Name', label: 'Name' },
+      { key: 'StartDate', label: 'Start Date' },
+      { key: 'EndDate', label: 'End Date' },
+      { key: 'Description', label: 'Description' },
+      { key: 'Capacity', label: 'Capacity' },
+    ],
+  },
+  {
+    id: 'memberships',
+    name: 'Membership Report',
+    columns: [
+      { key: 'MembershipID', label: 'Membership ID' },
+      { key: 'MemberName', label: 'Member' },
+      { key: 'Email', label: 'Email' },
+      { key: 'MembershipType', label: 'Type' },
+      { key: 'StartDate', label: 'Start Date' },
+      { key: 'EndDate', label: 'End Date' },
+      { key: 'Price', label: 'Price' },
+      { key: 'DiscountPercent', label: 'Discount %' },
+      { key: 'PaymentMethod', label: 'Payment Method' },
+    ],
+  },
+  {
+    id: 'sales',
+    name: 'Store Sales Report',
+    columns: [
+      { key: 'Shop', label: 'Shop' },
+      { key: 'SaleID', label: 'Sale ID' },
+      { key: 'ItemName', label: 'Item' },
+      { key: 'Quantity', label: 'Quantity' },
+      { key: 'SalePrice', label: 'Unit Price' },
+      { key: 'Total', label: 'Total' },
+      { key: 'SaleDate', label: 'Sale Date' },
+      { key: 'PaymentMethod', label: 'Payment Method' },
+    ],
+  },
 ]
 
+function getSavedHistory(storageKey) {
+  const saved = localStorage.getItem(storageKey)
+
+  if (saved === null) {
+    return []
+  }
+
+  try {
+    return JSON.parse(saved)
+  } catch {
+    return []
+  }
+}
+
 function Reports() {
+  const { user } = useRole()
   const today = new Date().toLocaleDateString('en-CA')
+  const storageKey = 'reportHistory-' + user.username
 
   const [reportType, setReportType] = useState('collection')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [format, setFormat] = useState('CSV')
-  const [requests, setRequests] = useState([])
+  const [history, setHistory] = useState(() => getSavedHistory(storageKey))
+  const [viewingId, setViewingId] = useState(null)
   const [message, setMessage] = useState('')
 
-  const handleSubmit = (e) => {
+  const viewing = history.find((item) => item.id === viewingId) || null
+  const viewingReport = viewing
+    ? reportTypes.find((item) => item.id === viewing.reportType)
+    : null
+
+  const rows = viewing ? viewing.rows : []
+
+  const saveHistory = (newHistory) => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newHistory))
+    } catch {
+      setMessage('Report loaded, but it is too large to save in this browser.')
+      return false
+    }
+
+    return true
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setMessage('')
 
@@ -38,48 +126,61 @@ function Reports() {
 
     const report = reportTypes.find((item) => item.id === reportType)
 
-    const newRequest = {
-      id: Date.now(),
-      name: report.name,
-      startDate: startDate || 'All dates',
-      endDate: endDate || 'All dates',
-      format,
-      requestedAt: new Date().toLocaleString(),
-      status: 'Requested',
-    }
-
-    setRequests((current) => [newRequest, ...current])
-    setMessage(`${report.name} request added successfully.`)
-  }
-
-  const exportRequests = () => {
-    if (requests.length === 0) {
-      setMessage('There are no report requests to export.')
+    let data
+    try {
+      data = await callApi(
+        '/api/reports/' +
+          reportType +
+          '?start=' +
+          startDate +
+          '&end=' +
+          endDate,
+        'GET'
+      )
+    } catch (err) {
+      setMessage('Could not load report: ' + err.message)
       return
     }
 
-    const headers = [
-      'Report',
-      'Start Date',
-      'End Date',
-      'Format',
-      'Requested At',
-      'Status',
-    ]
+    const newReport = {
+      id: Date.now(),
+      reportType: reportType,
+      name: report.name,
+      startDate: startDate || 'All dates',
+      endDate: endDate || 'All dates',
+      runAt: new Date().toLocaleString(),
+      rows: data,
+    }
 
-    const rows = requests.map((request) => [
-      request.name,
-      request.startDate,
-      request.endDate,
-      request.format,
-      request.requestedAt,
-      request.status,
-    ])
+    const newHistory = [newReport, ...history].slice(0, MAX_HISTORY)
+    const saved = saveHistory(newHistory)
 
-    const csv = [headers, ...rows]
+    setHistory(newHistory)
+    setViewingId(newReport.id)
+
+    if (saved) {
+      setMessage(`${report.name} created: ${data.length} rows.`)
+    }
+  }
+
+  const exportReport = (item) => {
+    const report = reportTypes.find((type) => type.id === item.reportType)
+
+    if (item.rows.length === 0) {
+      setMessage('This report has no data to export.')
+      return
+    }
+
+    const headers = report.columns.map((column) => column.label)
+
+    const csvRows = item.rows.map((row) =>
+      report.columns.map((column) => row[column.key])
+    )
+
+    const csv = [headers, ...csvRows]
       .map((row) =>
         row
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
           .join(',')
       )
       .join('\n')
@@ -92,51 +193,44 @@ function Reports() {
     const link = document.createElement('a')
 
     link.href = url
-    link.download = 'report-requests.csv'
+    link.download = item.reportType + '-report.csv'
     link.click()
 
     URL.revokeObjectURL(url)
+  }
+
+  const deleteReport = (id) => {
+    if (!window.confirm('Are you sure you want to delete this report?')) {
+      return
+    }
+
+    const newHistory = history.filter((item) => item.id !== id)
+    saveHistory(newHistory)
+    setHistory(newHistory)
+
+    if (viewingId === id) {
+      setViewingId(null)
+    }
+  }
+
+  const clearHistory = () => {
+    if (!window.confirm('Are you sure you want to delete all saved reports?')) {
+      return
+    }
+
+    localStorage.removeItem(storageKey)
+    setHistory([])
+    setViewingId(null)
   }
 
   return (
     <div className="page reports-page">
       <div className="page-header">
         <h1 className="page-title">Reports</h1>
-
-        <button
-          type="button"
-          className="btn primary"
-          onClick={exportRequests}
-        >
-          Export Requests
-        </button>
-      </div>
-
-      <div className="reports-summary">
-        <div className="summary-card">
-          <div className="summary-value">{reportTypes.length}</div>
-          <div className="summary-label">Available Reports</div>
-        </div>
-
-        <div className="summary-card">
-          <div className="summary-value">{requests.length}</div>
-          <div className="summary-label">Total Requests</div>
-        </div>
-
-        <div className="summary-card">
-          <div className="summary-value">
-            {
-              requests.filter(
-                (request) => request.status === 'Requested'
-              ).length
-            }
-          </div>
-          <div className="summary-label">Pending Requests</div>
-        </div>
       </div>
 
       <div className="card report-request-panel">
-        <h2 className="module-title">Request a Report</h2>
+        <h2 className="module-title">Run a Report</h2>
 
         <form className="report-form" onSubmit={handleSubmit}>
           <div className="form-group">
@@ -153,20 +247,6 @@ function Reports() {
                   {report.name}
                 </option>
               ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="report-format">Format</label>
-
-            <select
-              id="report-format"
-              className="input"
-              value={format}
-              onChange={(e) => setFormat(e.target.value)}
-            >
-              <option value="CSV">CSV</option>
-              <option value="PDF">PDF</option>
             </select>
           </div>
 
@@ -210,7 +290,7 @@ function Reports() {
             </button>
 
             <button type="submit" className="btn primary">
-              Request Report
+              Run Report
             </button>
           </div>
         </form>
@@ -222,45 +302,120 @@ function Reports() {
         )}
       </div>
 
-      <h2 className="section-label">Recent Report Requests</h2>
+      {history.length > 0 && (
+        <>
+          <div className="report-section-header">
+            <h2 className="section-label">Reports</h2>
 
-      <div className="card table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Report</th>
-              <th>Start Date</th>
-              <th>End Date</th>
-              <th>Format</th>
-              <th>Requested At</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={clearHistory}
+            >
+              Clear All
+            </button>
+          </div>
 
-          <tbody>
-            {requests.map((request) => (
-              <tr key={request.id}>
-                <td>{request.name}</td>
-                <td>{request.startDate}</td>
-                <td>{request.endDate}</td>
-                <td>{request.format}</td>
-                <td>{request.requestedAt}</td>
-                <td>
-                  <span>{request.status}</span>
-                </td>
-              </tr>
-            ))}
+          <div className="card table-wrap report-section">
+            <table className="data-table">
+              <caption className="sr-only">Saved reports</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Report</th>
+                  <th scope="col">Start Date</th>
+                  <th scope="col">End Date</th>
+                  <th scope="col">Rows</th>
+                  <th scope="col">Created At</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
 
-            {requests.length === 0 && (
-              <tr>
-                <td colSpan={6} className="empty">
-                  No report requests found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              <tbody>
+                {history.map((item) => (
+                  <tr key={item.id}>
+                    <td className="strong">{item.name}</td>
+                    <td className="mono">{item.startDate}</td>
+                    <td className="mono">{item.endDate}</td>
+                    <td className="mono">{item.rows.length}</td>
+                    <td>{item.runAt}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => setViewingId(item.id)}
+                          aria-label={`View ${item.name}`}
+                        >
+                          View
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => exportReport(item)}
+                          aria-label={`Export ${item.name} as CSV`}
+                        >
+                          Export CSV
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn danger"
+                          onClick={() => deleteReport(item.id)}
+                          aria-label={`Delete ${item.name}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {viewing && (
+        <>
+          <h2 className="section-label">{viewing.name}</h2>
+
+          <div className="card table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {viewingReport.columns.map((column) => (
+                    <th key={column.key} scope="col">
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={index}>
+                    {viewingReport.columns.map((column) => (
+                      <td key={column.key}>{row[column.key] ?? '-'}</td>
+                    ))}
+                  </tr>
+                ))}
+
+                {rows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={viewingReport.columns.length}
+                      className="empty"
+                    >
+                      No data found for this report.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   )
 }

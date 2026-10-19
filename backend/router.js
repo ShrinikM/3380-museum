@@ -7,8 +7,9 @@ const ticketRoutes = require("./routers/ticket");
 const membershipRoutes = require("./routers/membership");
 const storeRoutes = require("./routers/store");
 const staffRoutes = require("./routers/staff");
+const reportRoutes = require("./routers/report");
 
-const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes);
+const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes, reportRoutes);
 
 const databaseErrorCodes = [
   "ECONNREFUSED",
@@ -130,6 +131,13 @@ async function handleRequest(req, res) {
 
     if (found === null) {
       throw makeError(404, "Route not found");
+    }
+
+    const query = new URLSearchParams(req.url.split("?")[1] || "");
+    for (const [key, value] of query) {
+      if (found.params[key] === undefined) {
+        found.params[key] = value;
+      }
     }
 
     let body = {};
