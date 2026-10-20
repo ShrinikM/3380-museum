@@ -41,6 +41,7 @@ function Memberships() {
   const [reloadCount, setReloadCount] = useState(0)
 
   const [search, setSearch] = useState('')
+  const [selectedType, setSelectedType] = useState('All') // 👈 Added membership type filter state
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
@@ -114,14 +115,18 @@ function Memberships() {
     0
   )
 
+  // 🔍 Updated filter logic to support both search text and type dropdown filtering
   const filtered = memberships.filter((member) => {
     const name = `${member.firstName} ${member.lastName}`.toLowerCase()
     const searchText = search.toLowerCase()
 
-    return (
-      name.includes(searchText) ||
-      member.email.toLowerCase().includes(searchText)
-    )
+    const matchesSearch =
+      name.includes(searchText) || member.email.toLowerCase().includes(searchText)
+
+    const matchesType =
+      selectedType === 'All' || member.type === selectedType
+
+    return matchesSearch && matchesType
   })
 
   const handleChange = (e) => {
@@ -359,20 +364,42 @@ function Memberships() {
         ))}
       </div>
 
-      <div className="toolbar">
-        <label htmlFor="membership-search" className="sr-only">
-          Search memberships
-        </label>
+      {/* Toolbar containing search input and membership type filter dropdown */}
+      <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <label htmlFor="membership-search" className="sr-only">
+            Search memberships
+          </label>
+          <input
+            id="membership-search"
+            name="membershipSearch"
+            type="search"
+            className="search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search memberships..."
+            style={{ width: '100%' }}
+          />
+        </div>
 
-        <input
-          id="membership-search"
-          name="membershipSearch"
-          type="search"
-          className="search-input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search memberships..."
-        />
+        <div>
+          <label htmlFor="membership-type-filter" className="sr-only">
+            Filter by Membership Type
+          </label>
+          <select
+            id="membership-type-filter"
+            className="input"
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+          >
+            <option value="All">All Types</option>
+            {membershipTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loadError && (
@@ -455,7 +482,7 @@ function Memberships() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 9 : 8} className="empty">
-                  No memberships found.
+                  No memberships found matching this filter.
                 </td>
               </tr>
             )}

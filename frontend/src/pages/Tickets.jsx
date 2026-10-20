@@ -312,19 +312,60 @@ function Tickets() {
         </Panel>
       </div>
 
-      <div className="toolbar">
-        <label htmlFor="ticket-search" className="sr-only">
-          Search tickets by number, exhibition, or type
-        </label>
-        <input
-          id="ticket-search"
-          name="ticketSearch"
-          type="search"
-          className="search-input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search tickets..."
-        />
+      <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <label htmlFor="ticket-search" className="sr-only">
+            Search tickets by number, exhibition, or type
+          </label>
+          <input
+            id="ticket-search"
+            name="ticketSearch"
+            type="search"
+            className="search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tickets..."
+            style={{ width: '100%' }}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="ticket-type-filter" className="sr-only">
+            Filter by Ticket Type
+          </label>
+          <select
+            id="ticket-type-filter"
+            className="input"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+          >
+            <option value="all">All Types</option>
+            {ticketTypes.map((ticketType) => (
+              <option key={ticketType} value={ticketType}>
+                {ticketType}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="ticket-exhibition-filter" className="sr-only">
+            Filter by Exhibition
+          </label>
+          <select
+            id="ticket-exhibition-filter"
+            className="input"
+            value={exhibition}
+            onChange={(e) => setExhibition(e.target.value)}
+          >
+            <option value="all">All Exhibitions</option>
+            {exhibitions.map((item) => (
+              <option key={item.ExhibitionID} value={String(item.ExhibitionID)}>
+                {item.Name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loadError && (
@@ -412,7 +453,7 @@ function Tickets() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 7 : 6} className="empty">
-                  No tickets found.
+                  No tickets found matching this filter.
                 </td>
               </tr>
             )}

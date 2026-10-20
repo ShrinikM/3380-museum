@@ -10,6 +10,7 @@ function Exhibitions() {
 
   const [exhibitions, setExhibitions] = useState([])
   const [search, setSearch] = useState('')
+  const [selectedStatus, setSelectedStatus] = useState('All') 
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [loadError, setLoadError] = useState('')
@@ -218,10 +219,14 @@ function Exhibitions() {
   const filtered = exhibitions.filter((exhibition) => {
     const searchText = search.toLowerCase()
 
-    return (
+    const matchesSearch =
       (exhibition.Name || '').toLowerCase().includes(searchText) ||
       (exhibition.Description || '').toLowerCase().includes(searchText)
-    )
+
+    const matchesStatus =
+      selectedStatus === 'All' || exhibition.Status === selectedStatus
+
+    return matchesSearch && matchesStatus
   })
 
   const {
@@ -298,19 +303,39 @@ function Exhibitions() {
         </Panel>
       </div>
 
-      <div className="toolbar">
-        <label htmlFor="exhibition-search" className="sr-only">
-          Search exhibitions
-        </label>
-        <input
-          id="exhibition-search"
-          name="exhibitionSearch"
-          type="search"
-          className="search-input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search exhibitions..."
-        />
+      <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <label htmlFor="exhibition-search" className="sr-only">
+            Search exhibitions
+          </label>
+          <input
+            id="exhibition-search"
+            name="exhibitionSearch"
+            type="search"
+            className="search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search exhibitions..."
+            style={{ width: '100%' }}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="exhibition-status-filter" className="sr-only">
+            Filter by status
+          </label>
+          <select
+            id="exhibition-status-filter"
+            className="input"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+          >
+            <option value="All">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
       </div>
 
       {loadError && (
@@ -416,7 +441,7 @@ function Exhibitions() {
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={allowEdit ? 8 : 7} className="empty">
-                  No exhibitions found.
+                  No exhibitions found matching this filter.
                 </td>
               </tr>
             )}
