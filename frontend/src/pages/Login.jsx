@@ -20,7 +20,7 @@ function Login() {
   return (
     <div className="login-page">
       <div className="card login-card">
-        <h1 className="page-title">MFA Houston</h1>
+        <h1 className="page-title">CoogMuseum</h1>
         <form onSubmit={handleSubmit} className="login-form">
 
           <div className="form-group">

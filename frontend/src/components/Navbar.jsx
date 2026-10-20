@@ -6,7 +6,7 @@ function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar-brand">
-        <span className="brand-name">MFA Houston</span>
+        <span className="brand-name">CoogMuseum</span>
       </div>
 
       <div className="navbar-right">

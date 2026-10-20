@@ -94,7 +94,7 @@ function Dashboard() {
   return (
     <div className="page">
       <div className="dashboard-header">
-        <h1>Museum of Fine Arts, Houston</h1>
+        <h1>CoogMuseum</h1>
       </div>
 
       {loadError && (

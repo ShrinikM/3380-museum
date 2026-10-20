@@ -203,16 +203,12 @@ function Reports() {
     }
 
     const newHistory = [newReport, ...history].slice(0, MAX_HISTORY)
-    const saved = saveHistory(newHistory)
+    saveHistory(newHistory)
 
     setHistory(newHistory)
 
     if (reportFormat !== 'table') {
       setViewingId(newReport.id)
-    }
-
-    if (saved) {
-      setMessage(`${report.name} created: ${data.length} rows.`)
     }
   }
 
