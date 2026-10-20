@@ -4,7 +4,9 @@ import { useRole } from '../context/role'
 const SECTIONS = [
   {
     label: 'Overview',
-    items: [{ to: '/', text: 'Dashboard' }],
+    items: [
+      { to: '/', text: 'Dashboard' },
+    ],
   },
   {
     label: 'Collection',
@@ -50,9 +52,7 @@ function Sidebar() {
             canView(item.to)
           )
 
-          if (visibleItems.length === 0) {
-            return null
-          }
+          if (visibleItems.length === 0) return null
 
           return (
             <div className="sidebar-section" key={section.label}>

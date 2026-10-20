@@ -1,4 +1,4 @@
-import{ Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Sidebar from './components/Sidebar'
 import Dashboard from './pages/Dashboard'
@@ -14,21 +14,11 @@ import Collections from './pages/Collections'
 import Donations from './pages/Donations'
 import Staff from './pages/Staff'
 import Reports from './pages/Reports'
-import{ useRole } from './context/role'
+import { useRole } from './context/role'
 import './App.css'
 
-
-function ComingSoon({ title }){
-  return(
-    <div className="page">
-      <h1 className="page-title">{title}</h1>
-      <p className="page-subtitle">This page is being built.</p>
-    </div>
-  )
-}
-
-function NoAccess(){
-  return(
+function NoAccess() {
+  return (
     <div className="page">
       <h1 className="page-title">No access</h1>
       <p className="page-subtitle">Your role cannot view this page.</p>
@@ -36,8 +26,8 @@ function NoAccess(){
   )
 }
 
-function NotFound(){
-  return(
+function NotFound() {
+  return (
     <div className="page">
       <h1 className="page-title">Page not found</h1>
       <p className="page-subtitle">Use the sidebar to choose a section.</p>
@@ -45,21 +35,18 @@ function NotFound(){
   )
 }
 
-function App(){
+function App() {
   const { user, canView } = useRole()
 
-  if(user === null){
+  if (user === null) {
     return <Login />
   }
 
   const protect = (path, page) => {
-    if(canView(path)){
-      return page
-    }
-    return <NoAccess />
+    return canView(path) ? page : <NoAccess />
   }
 
-  return(
+  return (
     <>
       <Navbar />
 
@@ -68,7 +55,15 @@ function App(){
 
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route
+              path="/"
+              element={protect('/', <Dashboard />)}
+            />
+
+            <Route
+              path="/dashboard"
+              element={<Navigate to="/" replace />}
+            />
 
             <Route path="/artists" element={protect('/artists', <Artists />)} />
             <Route path="/artworks" element={protect('/artworks', <Artworks />)} />
@@ -82,8 +77,7 @@ function App(){
 
             <Route path="/donations" element={protect('/donations', <Donations />)} />
             <Route path="/staff" element={protect('/staff', <Staff />)} />
-
-            <Route path="/reports" element={<Reports />} />
+            <Route path="/reports" element={protect('/reports', <Reports />)} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

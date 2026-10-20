@@ -35,17 +35,19 @@ function RoleProvider({ children }) {
     setUser(null)
   }
 
+
   const canView = (path) => {
-    if(user === null){
+    if (user === null) {
       return false
     }
 
-    if(path === '/'){
+    if (path === '/') {
       return true
     }
 
-    return ROLES[user.role].pages.includes(path)
+    return ROLES[user.role]?.pages.includes(path) ?? false
   }
+
 
   const canEdit = (path) => {
     if(user === null){
