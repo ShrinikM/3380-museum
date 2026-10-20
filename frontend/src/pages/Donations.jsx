@@ -1,87 +1,66 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Panel, Modal, SelectionActions } from '../components/ui'
+import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 
-const initialDonations = [
-  {
-    id: 'DON-901',
-    donor: 'Eleanor Vance',
-    amount: 250000,
-    fund: 'Acquisition Fund',
-    date: '2026-10-02',
-    paymentMethod: 'Wire Transfer',
-  },
-  {
-    id: 'DON-902',
-    donor: 'The Houston Arts Foundation',
-    amount: 1000000,
-    fund: 'Capital Campaign',
-    date: '2026-09-28',
-    paymentMethod: 'Check',
-  },
-  {
-    id: 'DON-903',
-    donor: 'Dr. Marcus Holloway',
-    amount: 50000,
-    fund: 'Education & Outreach',
-    date: '2026-09-15',
-    paymentMethod: 'Credit Card',
-  },
-  {
-    id: 'DON-904',
-    donor: 'Anonymous',
-    amount: 15000,
-    fund: 'General Operating',
-    date: '2026-09-10',
-    paymentMethod: 'Stock Transfer',
-  },
-  {
-    id: 'DON-905',
-    donor: 'Sarah & David Chen',
-    amount: 75000,
-    fund: 'Exhibition Sponsorship',
-    date: '2026-08-22',
-    paymentMethod: 'Credit Card',
-  },
-]
-
-const funds = [
-  'General Operating',
-  'Acquisition Fund',
-  'Capital Campaign',
-  'Education & Outreach',
-  'Exhibition Sponsorship',
-]
-
 const paymentMethods = [
-  'Wire Transfer',
-  'Check',
+  'Cash',
   'Credit Card',
-  'Stock Transfer',
+  'Debit Card',
+  'Check',
+  'Bank Transfer',
 ]
 
 const emptyForm = {
-  donor: '',
-  amount: '',
-  fund: '',
-  paymentMethod: '',
+  FirstName: '',
+  LastName: '',
+  AmountDonated: '',
+  PaymentMethod: '',
+  DonationDate: '',
 }
 
-const donorPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9'&., -]+$/
+const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
 function Donations() {
   const { canEdit } = useRole()
   const allowEdit = canEdit('/donations')
+  const today = new Date().toISOString().split('T')[0]
 
-  const [donations, setDonations] = useState(initialDonations)
+  const [donations, setDonations] = useState([])
+  const [loadError, setLoadError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
+  useEffect(() => {
+    async function loadDonations() {
+      try {
+        const data = await callApi('/api/donations', 'GET')
+
+        setDonations(
+          data.map((donation) => ({
+            ...donation,
+            AmountDonated: Number(donation.AmountDonated),
+          }))
+        )
+        setLoadError('')
+      } catch (err) {
+        setLoadError('Could not load donations: ' + err.message)
+      }
+    }
+
+    loadDonations()
+  }, [reloadCount])
+
+  const refetchDonations = () => {
+    setReloadCount((count) => count + 1)
+  }
+
   const totalAmount = donations.reduce(
-    (sum, donation) => sum + Number(donation.amount),
+    (sum, donation) => sum + donation.AmountDonated,
     0
   )
 
@@ -90,7 +69,7 @@ function Donations() {
 
   const filteredDonations = donations.filter((donation) => {
     const text =
-      `${donation.id} ${donation.donor} ${donation.fund} ${donation.paymentMethod}`.toLowerCase()
+      `${donation.DonationID} ${donation.FirstName} ${donation.LastName} ${donation.PaymentMethod}`.toLowerCase()
 
     return text.includes(search.toLowerCase())
   })
@@ -114,34 +93,39 @@ function Donations() {
 
   const openAddModal = () => {
     resetForm()
+    setFormData({ ...emptyForm, DonationDate: today })
     setOpen(true)
   }
 
   const openEditModal = (donation) => {
-    setEditingId(donation.id)
+    setEditingId(donation.DonationID)
     setFormData({
-      donor: donation.donor,
-      amount: String(donation.amount),
-      fund: donation.fund,
-      paymentMethod: donation.paymentMethod,
+      FirstName: donation.FirstName,
+      LastName: donation.LastName,
+      AmountDonated: String(donation.AmountDonated),
+      PaymentMethod: donation.PaymentMethod,
+      DonationDate: donation.DonationDate || '',
     })
     setOpen(true)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const donor = formData.donor.trim()
-    const amount = Number(formData.amount)
+    const firstName = formData.FirstName.trim()
+    const lastName = formData.LastName.trim()
+    const amount = Number(formData.AmountDonated)
 
-    if (!donor || !formData.amount || !formData.fund || !formData.paymentMethod) {
-      alert('Please complete all required fields.')
+    if (!namePattern.test(firstName)) {
+      alert(
+        'First Name can only contain letters, spaces, hyphens, or apostrophes.'
+      )
       return
     }
 
-    if (!donorPattern.test(donor)) {
+    if (!namePattern.test(lastName)) {
       alert(
-        'Donor name can contain letters, numbers, spaces, hyphens, apostrophes, periods, and ampersands only.'
+        'Last Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
@@ -151,59 +135,48 @@ function Donations() {
       return
     }
 
-    if (Math.round(amount * 100) !== amount * 100) {
+    if (amount > 999999.99) {
+      alert('Amount cannot be more than $999,999.99.')
+      return
+    }
+
+    if (Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) {
       alert('Amount can have no more than two decimal places.')
       return
     }
 
-    if (!funds.includes(formData.fund)) {
-      alert('Please select a valid fund.')
-      return
-    }
-
-    if (!paymentMethods.includes(formData.paymentMethod)) {
+    if (!paymentMethods.includes(formData.PaymentMethod)) {
       alert('Please select a valid payment method.')
       return
     }
 
-    const donationData = {
-      donor,
-      amount,
-      fund: formData.fund,
-      paymentMethod: formData.paymentMethod,
+    if (!formData.DonationDate || formData.DonationDate > today) {
+      alert('Please select a valid Donation Date that is not in the future.')
+      return
     }
 
-    if (editingId !== null) {
-      setDonations((currentDonations) =>
-        currentDonations.map((donation) =>
-          donation.id === editingId
-            ? { ...donation, ...donationData }
-            : donation
-        )
-      )
-    } else {
-      const nextNumber =
-        Math.max(
-          900,
-          ...donations.map((donation) =>
-            Number(donation.id.replace('DON-', ''))
-          )
-        ) + 1
+    const donationData = {
+      FirstName: firstName,
+      LastName: lastName,
+      AmountDonated: amount,
+      PaymentMethod: formData.PaymentMethod,
+      DonationDate: formData.DonationDate,
+    }
 
-      const newDonation = {
-        id: `DON-${nextNumber}`,
-        ...donationData,
-        date: new Date().toISOString().split('T')[0],
+    try {
+      if (editingId === null) {
+        await callApi('/api/donations', 'POST', donationData)
+      } else {
+        await callApi('/api/donations/' + editingId, 'PUT', donationData)
       }
-
-      setDonations((currentDonations) => [
-        newDonation,
-        ...currentDonations,
-      ])
+    } catch (err) {
+      alert(err.message)
+      return
     }
 
     closeModal()
     clear()
+    refetchDonations()
   }
 
   const {
@@ -212,22 +185,21 @@ function Donations() {
     toggle,
     clear,
     deleteSelected,
-  } = useSelection(filteredDonations, (donation) => donation.id)
+  } = useSelection(filteredDonations, (donation) => donation.DonationID)
 
   const handleEditSelected = () => {
     openEditModal(selectedDonations[0])
   }
 
   const handleDeleteSelected = async () => {
-    await deleteSelected(
+    const deleted = await deleteSelected(
       'donation',
-      (donation) => donation.id,
-      async (donation) => {
-        setDonations((currentDonations) =>
-          currentDonations.filter((item) => item.id !== donation.id)
-        )
-      }
+      (donation) => `Donation ${donation.DonationID}`,
+      (donation) =>
+        callApi('/api/donations/' + donation.DonationID, 'DELETE')
     )
+
+    if (deleted) refetchDonations()
   }
 
   return (
@@ -264,7 +236,10 @@ function Donations() {
 
         <Panel className="summary-card">
           <div className="summary-value">
-            ${totalAmount.toLocaleString('en-US')}
+            ${totalAmount.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </div>
           <div className="summary-label">Total Amount</div>
         </Panel>
@@ -272,6 +247,7 @@ function Donations() {
         <Panel className="summary-card">
           <div className="summary-value">
             ${averageDonation.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
           </div>
@@ -287,11 +263,18 @@ function Donations() {
           id="donation-search"
           name="donationSearch"
           type="search"
+          className="search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search donations..."
         />
       </div>
+
+      {loadError && (
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
+      )}
 
       <div className="card table-wrap">
         <table
@@ -310,7 +293,6 @@ function Donations() {
               <th scope="col">Donation ID</th>
               <th scope="col">Donor</th>
               <th scope="col">Amount</th>
-              <th scope="col">Fund</th>
               <th scope="col">Date</th>
               <th scope="col">Payment Method</th>
             </tr>
@@ -319,34 +301,42 @@ function Donations() {
           <tbody>
             {filteredDonations.map((donation) => (
               <tr
-                key={donation.id}
-                className={isSelected(donation.id) ? 'selected-row' : ''}
+                key={donation.DonationID}
+                className={
+                  isSelected(donation.DonationID) ? 'selected-row' : ''
+                }
               >
                 {allowEdit && (
                   <td className="select-col">
                     <input
                       type="checkbox"
-                      checked={isSelected(donation.id)}
-                      onChange={() => toggle(donation.id)}
-                      aria-label={`Select donation ${donation.id}`}
+                      checked={isSelected(donation.DonationID)}
+                      onChange={() => toggle(donation.DonationID)}
+                      aria-label={`Select donation ${donation.DonationID}`}
                     />
                   </td>
                 )}
 
-                <td className="mono">{donation.id}</td>
-                <td className="strong">{donation.donor}</td>
                 <td className="mono">
-                  ${Number(donation.amount).toLocaleString('en-US')}
+                  #{String(donation.DonationID).padStart(5, '0')}
                 </td>
-                <td>{donation.fund}</td>
-                <td className="mono">{donation.date}</td>
-                <td className="muted">{donation.paymentMethod}</td>
+                <td className="strong">
+                  {donation.FirstName} {donation.LastName}
+                </td>
+                <td className="mono">
+                  ${donation.AmountDonated.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </td>
+                <td className="mono">{donation.DonationDate}</td>
+                <td className="muted">{donation.PaymentMethod}</td>
               </tr>
             ))}
 
             {filteredDonations.length === 0 && (
               <tr>
-                <td colSpan={allowEdit ? 7 : 6} className="empty">
+                <td colSpan={allowEdit ? 6 : 5} className="empty">
                   No donations found.
                 </td>
               </tr>
@@ -362,17 +352,33 @@ function Donations() {
       >
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="donation-donor">Donor</label>
+            <label htmlFor="donation-first-name">First Name</label>
             <input
-              id="donation-donor"
-              name="donor"
+              id="donation-first-name"
+              name="FirstName"
               type="text"
-              autoComplete="name"
-              value={formData.donor}
+              autoComplete="given-name"
+              value={formData.FirstName}
               onChange={handleChange}
-              maxLength={150}
-              pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9'&amp;., -]+"
-              title="Use letters, numbers, spaces, hyphens, apostrophes, periods, and ampersands."
+              maxLength={100}
+              pattern="[A-Za-zÀ-ÖØ-öø-ÿ' -]+"
+              title="Use letters, spaces, hyphens, or apostrophes only."
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="donation-last-name">Last Name</label>
+            <input
+              id="donation-last-name"
+              name="LastName"
+              type="text"
+              autoComplete="family-name"
+              value={formData.LastName}
+              onChange={handleChange}
+              maxLength={100}
+              pattern="[A-Za-zÀ-ÖØ-öø-ÿ' -]+"
+              title="Use letters, spaces, hyphens, or apostrophes only."
               required
             />
           </div>
@@ -381,42 +387,37 @@ function Donations() {
             <label htmlFor="donation-amount">Amount ($)</label>
             <input
               id="donation-amount"
-              name="amount"
+              name="AmountDonated"
               type="number"
               min="0.01"
-              max="1000000000"
+              max="999999.99"
               step="0.01"
               inputMode="decimal"
-              value={formData.amount}
+              value={formData.AmountDonated}
               onChange={handleChange}
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="donation-fund">Fund</label>
-            <select
-              id="donation-fund"
-              name="fund"
-              value={formData.fund}
+            <label htmlFor="donation-date">Donation Date</label>
+            <input
+              id="donation-date"
+              name="DonationDate"
+              type="date"
+              max={today}
+              value={formData.DonationDate}
               onChange={handleChange}
               required
-            >
-              <option value="">Select Fund</option>
-              {funds.map((fund) => (
-                <option key={fund} value={fund}>
-                  {fund}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="form-group">
             <label htmlFor="donation-payment-method">Payment Method</label>
             <select
               id="donation-payment-method"
-              name="paymentMethod"
-              value={formData.paymentMethod}
+              name="PaymentMethod"
+              value={formData.PaymentMethod}
               onChange={handleChange}
               required
             >

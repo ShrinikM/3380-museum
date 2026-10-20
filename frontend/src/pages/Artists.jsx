@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
+import { Badge, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
@@ -156,14 +156,6 @@ function Artists() {
     refetchArtists()
   }
 
-  const nationalities = [
-    ...new Set(
-      artists
-        .map((artist) => artist.Nationality)
-        .filter(Boolean)
-    ),
-  ]
-
   const filtered = artists.filter((artist) => {
     const name =
       `${artist.FirstName} ${artist.LastName}`.toLowerCase()
@@ -197,10 +189,6 @@ function Artists() {
     if (deleted) refetchArtists()
   }
 
-  const livingArtists = artists.filter(
-    (artist) => !artist.DeathYear
-  )
-
   return (
     <div className="page">
       <div className="page-header">
@@ -227,27 +215,6 @@ function Artists() {
         )}
       </div>
 
-      <div className="grid-3 section-gap-sm">
-        <Panel className="summary-card">
-          <div className="summary-value">{artists.length}</div>
-          <div className="summary-label">Total Artists</div>
-        </Panel>
-
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {livingArtists.length}
-          </div>
-          <div className="summary-label">Living Artists</div>
-        </Panel>
-
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {nationalities.length}
-          </div>
-          <div className="summary-label">Nationalities</div>
-        </Panel>
-      </div>
-
       <div className="toolbar">
         <label htmlFor="artist-search" className="sr-only">
           Search artists
@@ -255,6 +222,7 @@ function Artists() {
         <input
           id="artist-search"
           type="search"
+          className="search-input"
           name="artistSearch"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -310,13 +278,8 @@ function Artists() {
                   </td>
                 )}
 
-                <td>
-                  <div className="strong">
-                    {item.FirstName} {item.LastName}
-                  </div>
-                  <div className="cell-sub mono">
-                    #{String(item.ArtistID).padStart(5, '0')}
-                  </div>
+                <td className="strong">
+                  {item.FirstName} {item.LastName}
                 </td>
 
                 <td className="mono">

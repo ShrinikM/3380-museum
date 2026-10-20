@@ -368,6 +368,7 @@ function Memberships() {
           id="membership-search"
           name="membershipSearch"
           type="search"
+          className="search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search memberships..."

@@ -177,9 +177,135 @@ async function getSalesReport(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
+function getRange(column, dates) {
+  const conditions = [];
+  const values = [];
+  addRange(column, dates, conditions, values);
+
+  return { where: joinConditions(conditions), values: values };
+}
+
+async function getRevenueReport(params, body, staffId) {
+  const dates = readDates(params);
+  const tickets = getRange("SaleDate", dates);
+  const giftShop = getRange("SaleDate", dates);
+  const cafe = getRange("SaleDate", dates);
+  const memberships = getRange("StartDate", dates);
+  const donations = getRange("DonationDate", dates);
+
+  const [rows] = await pool.query(
+    `SELECT 'Tickets' AS Source, COALESCE(SUM(Price), 0) AS Revenue
+     FROM ticket
+     WHERE IsDeleted = 0` + tickets.where + `
+     UNION ALL
+     SELECT 'Gift Shop' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
+     FROM giftshopsale
+     WHERE IsDeleted = 0` + giftShop.where + `
+     UNION ALL
+     SELECT 'Cafe' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
+     FROM cafesale
+     WHERE IsDeleted = 0` + cafe.where + `
+     UNION ALL
+     SELECT 'Memberships' AS Source, COALESCE(SUM(Price), 0) AS Revenue
+     FROM membership
+     WHERE IsDeleted = 0` + memberships.where + `
+     UNION ALL
+     SELECT 'Donations' AS Source, COALESCE(SUM(AmountDonated), 0) AS Revenue
+     FROM donations
+     WHERE IsDeleted = 0` + donations.where,
+    tickets.values.concat(
+      giftShop.values,
+      cafe.values,
+      memberships.values,
+      donations.values
+    )
+  );
+
+  let total = 0;
+  for (const row of rows) {
+    row.Revenue = Number(row.Revenue);
+    total = total + row.Revenue;
+  }
+
+  for (const row of rows) {
+    if (total > 0) {
+      row.PercentOfTotal = Math.round((row.Revenue / total) * 1000) / 10;
+    } else {
+      row.PercentOfTotal = 0;
+    }
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getTicketSalesReport(params, body, staffId) {
+  const dates = readDates(params);
+  const tickets = getRange("ticket.SaleDate", dates);
+
+  const [rows] = await pool.query(
+    `SELECT
+       exhibition.ExhibitionID,
+       exhibition.Name,
+       COUNT(ticket.TicketID) AS TicketsSold,
+       COALESCE(SUM(ticket.Price), 0) AS Revenue,
+       exhibition.Capacity
+     FROM exhibition
+     LEFT JOIN ticket
+       ON ticket.ExhibitionID = exhibition.ExhibitionID
+       AND ticket.IsDeleted = 0` + tickets.where + `
+     WHERE exhibition.IsDeleted = 0
+     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
+     ORDER BY TicketsSold DESC, exhibition.Name`,
+    tickets.values
+  );
+
+  for (const row of rows) {
+    row.TicketsSold = Number(row.TicketsSold);
+    row.Revenue = Number(row.Revenue);
+    row.Capacity = Number(row.Capacity);
+
+    if (row.Capacity > 0) {
+      row.PercentFull = Math.round((row.TicketsSold / row.Capacity) * 1000) / 10;
+    } else {
+      row.PercentFull = 0;
+    }
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getMembershipTypesReport(params, body, staffId) {
+  const dates = readDates(params);
+  const memberships = getRange("StartDate", dates);
+
+  const [rows] = await pool.query(
+    `SELECT
+       MembershipType,
+       COUNT(*) AS Members,
+       COALESCE(SUM(Price), 0) AS Revenue,
+       ROUND(AVG(DiscountPercent), 1) AS AverageDiscount
+     FROM membership
+     WHERE IsDeleted = 0` + memberships.where + `
+     GROUP BY MembershipType
+     ORDER BY FIELD(MembershipType, 'Individual', 'Family', 'Student', 'Senior')`,
+    memberships.values
+  );
+
+  for (const row of rows) {
+    row.Members = Number(row.Members);
+    row.Revenue = Number(row.Revenue);
+    row.AverageDiscount = Number(row.AverageDiscount);
+  }
+
+  return { status: 200, data: rows };
+}
+
 module.exports = [
   { method: "GET", path: "/api/reports/collection", handler: getCollectionReport },
   { method: "GET", path: "/api/reports/exhibitions", handler: getExhibitionReport },
   { method: "GET", path: "/api/reports/memberships", handler: getMembershipReport },
   { method: "GET", path: "/api/reports/sales", handler: getSalesReport },
+  { method: "GET", path: "/api/reports/revenue", handler: getRevenueReport },
+  { method: "GET", path: "/api/reports/ticket-sales", handler: getTicketSalesReport },
+  { method: "GET", path: "/api/reports/membership-types", handler: getMembershipTypesReport },
 ];

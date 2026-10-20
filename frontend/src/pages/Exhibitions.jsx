@@ -306,6 +306,7 @@ function Exhibitions() {
           id="exhibition-search"
           name="exhibitionSearch"
           type="search"
+          className="search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search exhibitions..."

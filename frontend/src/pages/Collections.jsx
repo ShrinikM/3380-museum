@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react'
-import { Panel, Modal, SelectionActions } from '../components/ui'
+import { Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
@@ -169,29 +169,6 @@ function Collections() {
         )}
       </div>
 
-      <div className="grid-3 section-gap-sm">
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {collections.length}
-          </div>
-          <div className="summary-label">Total Collections</div>
-        </Panel>
-
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {collections.filter((item) => item.Description).length}
-          </div>
-          <div className="summary-label">With Description</div>
-        </Panel>
-
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {collections.filter((item) => !item.Description).length}
-          </div>
-          <div className="summary-label">Without Description</div>
-        </Panel>
-      </div>
-
       <div className="toolbar">
         <label htmlFor="collection-search" className="sr-only">
           Search collections
@@ -199,6 +176,7 @@ function Collections() {
         <input
           id="collection-search"
           type="search"
+          className="search-input"
           name="collectionSearch"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

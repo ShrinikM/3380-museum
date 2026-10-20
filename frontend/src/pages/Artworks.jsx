@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
+import { Badge, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
@@ -159,14 +159,6 @@ function Artworks() {
     if (deleted) refetchArtworks()
   }
 
-  const artistsRepresented = new Set(
-    artworks.map((artwork) => artwork.ArtistID)
-  )
-
-  const collectionsUsed = new Set(
-    artworks.map((artwork) => artwork.CollectionID)
-  )
-
   return (
     <div className="page">
       <div className="page-header">
@@ -193,27 +185,6 @@ function Artworks() {
         )}
       </div>
 
-      <div className="grid-3 section-gap-sm">
-        <Panel className="summary-card">
-          <div className="summary-value">{artworks.length}</div>
-          <div className="summary-label">Total Artworks</div>
-        </Panel>
-
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {artistsRepresented.size}
-          </div>
-          <div className="summary-label">Artists Represented</div>
-        </Panel>
-
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {collectionsUsed.size}
-          </div>
-          <div className="summary-label">Collections</div>
-        </Panel>
-      </div>
-
       <div className="toolbar">
         <label htmlFor="artwork-search" className="sr-only">
           Search artworks
@@ -221,6 +192,7 @@ function Artworks() {
         <input
           id="artwork-search"
           type="search"
+          className="search-input"
           name="artworkSearch"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -276,12 +248,7 @@ function Artworks() {
                   </td>
                 )}
 
-                <td>
-                  <div className="strong">{item.Title}</div>
-                  <div className="cell-sub mono">
-                    #{String(item.ArtworkID).padStart(5, '0')}
-                  </div>
-                </td>
+                <td className="strong">{item.Title}</td>
 
                 <td>{item.ArtistName}</td>
                 <td>{item.CollectionName}</td>

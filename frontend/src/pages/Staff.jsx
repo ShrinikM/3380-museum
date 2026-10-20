@@ -258,6 +258,7 @@ function Staff() {
           id="staff-search"
           name="staffSearch"
           type="search"
+          className="search-input"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search staff..."

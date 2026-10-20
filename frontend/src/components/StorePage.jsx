@@ -665,6 +665,7 @@ function StorePage({ kind }) {
           id="store-search"
           name="storeSearch"
           type="search"
+          className="search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={tab === 'items' ? 'Search items...' : 'Search sales...'}
@@ -716,12 +717,7 @@ function StorePage({ kind }) {
                     />
                   </td>
 
-                  <td>
-                    <div className="strong">{item.ItemName}</div>
-                    <div className="cell-sub mono">
-                      #{String(item.ItemID).padStart(5, '0')}
-                    </div>
-                  </td>
+                  <td className="strong">{item.ItemName}</td>
 
                   <td>{item.Category}</td>
 

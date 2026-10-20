@@ -1,58 +1,94 @@
 
+import { useState, useEffect } from 'react'
 import Card from '../components/Card'
 import { StatCard } from '../components/ui'
+import { callApi } from '../api'
 import { useRole } from '../context/role'
 
-const modules = [
-  {
-    link: '/artists',
-    title: 'Artists',
-    count: '2,841',
-  },
-  {
-    link: '/artworks',
-    title: 'Artworks',
-    count: '67,432',
-  },
-  {
-    link: '/collections',
-    title: 'Collections',
-    count: '184',
-  },
-  {
-    link: '/exhibitions',
-    title: 'Exhibitions',
-    count: '8 active',
-  },
-  {
-    link: '/tickets',
-    title: 'Tickets',
-    count: '12,847',
-  },
-  {
-    link: '/memberships',
-    title: 'Memberships',
-    count: '4,291',
-  },
-  {
-    link: '/gift-shop',
-    title: 'Gift Shop & Café',
-    count: '1,204 items',
-  },
-  {
-    link: '/donations',
-    title: 'Donations',
-    count: '$4.2M YTD',
-  },
-  {
-    link: '/staff',
-    title: 'Staff',
-    count: '312',
-  },
-]
+const compactMoney = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
 
 function Dashboard() {
   const { canView } = useRole()
+
+  const [stats, setStats] = useState(null)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const data = await callApi('/api/dashboard', 'GET')
+        setStats(data)
+        setLoadError('')
+      } catch (err) {
+        setLoadError('Could not load dashboard: ' + err.message)
+      }
+    }
+
+    loadStats()
+  }, [])
+
+  const show = (key, format) => {
+    if (stats === null) return '-'
+    return format ? format(stats[key]) : stats[key].toLocaleString()
+  }
+
+  const modules = [
+    {
+      link: '/artists',
+      title: 'Artists',
+      count: show('Artists'),
+    },
+    {
+      link: '/artworks',
+      title: 'Artworks',
+      count: show('Artworks'),
+    },
+    {
+      link: '/collections',
+      title: 'Collections',
+      count: show('Collections'),
+    },
+    {
+      link: '/exhibitions',
+      title: 'Exhibitions',
+      count: show('ActiveExhibitions', (n) => n.toLocaleString() + ' active'),
+    },
+    {
+      link: '/tickets',
+      title: 'Tickets',
+      count: show('Tickets'),
+    },
+    {
+      link: '/memberships',
+      title: 'Memberships',
+      count: show('Memberships'),
+    },
+    {
+      link: '/gift-shop',
+      title: 'Gift Shop & Café',
+      count:
+        stats === null
+          ? '-'
+          : (stats.GiftShopItems + stats.CafeItems).toLocaleString() +
+            ' items',
+    },
+    {
+      link: '/donations',
+      title: 'Donations',
+      count: show('DonationsYearToDate', (n) => compactMoney.format(n) + ' YTD'),
+    },
+    {
+      link: '/staff',
+      title: 'Staff',
+      count: show('Staff'),
+    },
+  ]
+
   const visibleModules = modules.filter((module) => canView(module.link))
 
   return (
@@ -61,30 +97,36 @@ function Dashboard() {
         <h1>Museum of Fine Arts, Houston</h1>
       </div>
 
+      {loadError && (
+        <p className="empty" role="alert">
+          {loadError}
+        </p>
+      )}
+
       <div className="grid-4 section-gap">
         <StatCard
           label="Total Artworks"
-          value="67,432"
-          delta="↑ 142"
-          deltaLabel="this quarter"
+          value={show('Artworks')}
+          delta={stats && '↑ ' + stats.ArtworksThisQuarter.toLocaleString()}
+          deltaLabel="added this quarter"
         />
         <StatCard
           label="Active Exhibitions"
-          value="8"
-          delta="↑ 2"
-          deltaLabel="since last month"
+          value={show('ActiveExhibitions')}
+          delta={stats && '↑ ' + stats.ExhibitionsOpenedThisMonth.toLocaleString()}
+          deltaLabel="opened this month"
         />
         <StatCard
           label="Tickets Sold"
-          value="12,847"
-          delta="↑ 1,204"
+          value={show('Tickets')}
+          delta={stats && '↑ ' + stats.TicketsThisMonth.toLocaleString()}
           deltaLabel="this month"
         />
         <StatCard
           label="Active Memberships"
-          value="4,291"
-          delta="↑ 87"
-          deltaLabel="this month"
+          value={show('ActiveMemberships')}
+          delta={stats && '↑ ' + stats.MembershipsThisMonth.toLocaleString()}
+          deltaLabel="started this month"
         />
       </div>
 
