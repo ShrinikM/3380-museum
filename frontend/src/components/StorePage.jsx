@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Panel, Modal } from './ui'
+import { Panel, Modal, SelectionActions } from './ui'
+import { useSelection } from '../hooks/useSelection'
 
 const giftShopItems = [
   { ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Category: 'Books', StaffID: 1, StaffName: 'Maya Patel', Price: 45, Stock: 32 },
@@ -284,6 +285,7 @@ function StorePage({ kind }) {
         )
 
         closeModal()
+        itemSelection.clear()
       } catch (error) {
         alert(error.message)
       }
@@ -428,6 +430,7 @@ function StorePage({ kind }) {
         )
 
         closeModal()
+        saleSelection.clear()
       } catch (error) {
         alert(error.message)
       }
@@ -439,123 +442,80 @@ function StorePage({ kind }) {
 
 
 
-  const handleDeleteSale = async (saleID) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this sale?'
+  const deleteSale = async (sale) => {
+    const response = await fetch(
+      `/api/store/${kind}/sales/${sale.SaleID}`,
+      {
+        method: 'DELETE',
+      }
     )
 
-    if (!confirmed) return
+    const result = await response.json()
 
-    try {
-      const response = await fetch(
-        `/api/store/${kind}/sales/${saleID}`,
-        {
-          method: 'DELETE',
-        }
-      )
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to delete sale.')
-      }
-
-      const [salesResponse, itemsResponse] = await Promise.all([
-        fetch(`/api/store/${kind}/sales`),
-        fetch(`/api/store/${kind}/items`),
-      ])
-
-      if (!salesResponse.ok || !itemsResponse.ok) {
-        throw new Error(
-          'Sale deleted, but the lists could not be refreshed.'
-        )
-      }
-
-      const [salesData, itemsData] = await Promise.all([
-        salesResponse.json(),
-        itemsResponse.json(),
-      ])
-
-      setSales(
-        salesData.map((sale) => ({
-          ...sale,
-          SalePrice: Number(sale.SalePrice),
-          Quantity: Number(sale.Quantity),
-        }))
-      )
-
-      setItems(
-        itemsData.map((item) => ({
-          ...item,
-          Price: Number(item.Price),
-          ...(item.Stock !== undefined
-            ? { Stock: Number(item.Stock) }
-            : {}),
-        }))
-      )
-    } catch (error) {
-      window.alert(error.message)
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to delete sale.')
     }
+  }
+
+  const refreshStoreData = async () => {
+    const [salesResponse, itemsResponse] = await Promise.all([
+      fetch(`/api/store/${kind}/sales`),
+      fetch(`/api/store/${kind}/items`),
+    ])
+
+    if (!salesResponse.ok || !itemsResponse.ok) {
+      throw new Error('Deleted, but the lists could not be refreshed.')
+    }
+
+    const [salesData, itemsData] = await Promise.all([
+      salesResponse.json(),
+      itemsResponse.json(),
+    ])
+
+    setSales(
+      salesData.map((sale) => ({
+        ...sale,
+        SalePrice: Number(sale.SalePrice),
+        Quantity: Number(sale.Quantity),
+      }))
+    )
+
+    setItems(
+      itemsData.map((item) => ({
+        ...item,
+        Price: Number(item.Price),
+        ...(item.Stock !== undefined
+          ? { Stock: Number(item.Stock) }
+          : {}),
+      }))
+    )
   }
 
 
 
 
-  const handleDeleteItem = async (itemID) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this item?'
-    )
-
-    if (!confirmed) return
-
+  const deleteItem = async (item) => {
     const hasSales = sales.some(
-      (sale) => sale.ItemID === itemID
+      (sale) => sale.ItemID === item.ItemID
     )
 
     if (hasSales) {
-      alert(
+      throw new Error(
         'This item has sales records. Delete those sales before deleting the item.'
       )
-      return
     }
 
-    try {
-      const response = await fetch(
-        `/api/store/${kind}/items/${itemID}`,
-        {
-          method: 'DELETE',
-        }
-      )
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Could not delete the item.')
+    const response = await fetch(
+      `/api/store/${kind}/items/${item.ItemID}`,
+      {
+        method: 'DELETE',
       }
+    )
 
-      const itemsResponse = await fetch(
-        `/api/store/${kind}/items`
-      )
+    const result = await response.json()
 
-      if (!itemsResponse.ok) {
-        throw new Error(
-          'Item deleted, but the item list could not be refreshed.'
-        )
-      }
-
-      const itemsData = await itemsResponse.json()
-
-      setItems(
-        itemsData.map((item) => ({
-          ...item,
-          Price: Number(item.Price),
-          ...(item.Stock !== undefined
-            ? { Stock: Number(item.Stock) }
-            : {}),
-        }))
-      )
-    } catch (error) {
-      alert(error.message)
+    if (!response.ok) {
+      throw new Error(result.error || 'Could not delete the item.')
     }
   }
 
@@ -574,6 +534,42 @@ function StorePage({ kind }) {
   const total = (sale) => Number(sale.SalePrice) * sale.Quantity
   const revenue = sales.reduce((sum, sale) => sum + total(sale), 0)
 
+  const itemSelection = useSelection(filteredItems, (item) => item.ItemID)
+  const saleSelection = useSelection(filteredSales, (sale) => sale.SaleID)
+
+  const selection = tab === 'items' ? itemSelection : saleSelection
+
+  const handleEditSelected = () => {
+    if (tab === 'items') {
+      openEditModal(itemSelection.selectedRows[0])
+    } else {
+      openEditSaleModal(saleSelection.selectedRows[0])
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted =
+      tab === 'items'
+        ? await itemSelection.deleteSelected(
+            'item',
+            (item) => item.ItemName,
+            deleteItem
+          )
+        : await saleSelection.deleteSelected(
+            'sale',
+            (sale) => `Sale ${sale.SaleID}`,
+            deleteSale
+          )
+
+    if (!deleted) return
+
+    try {
+      await refreshStoreData()
+    } catch (error) {
+      alert(error.message)
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -581,13 +577,21 @@ function StorePage({ kind }) {
           <h1 className="page-title">{title}</h1>
         </div>
 
-        <button
-          type="button"
-          className="btn primary"
-          onClick={openAddModal}
-        >
-          {tab === 'items' ? 'Add Item' : 'Record Sale'}
-        </button>
+        <div className="page-header-actions">
+          <SelectionActions
+            count={selection.selectedRows.length}
+            onEdit={handleEditSelected}
+            onDelete={handleDeleteSelected}
+          />
+
+          <button
+            type="button"
+            className="btn primary"
+            onClick={openAddModal}
+          >
+            {tab === 'items' ? 'Add Item' : 'Record Sale'}
+          </button>
+        </div>
       </div>
 
       <div className="grid-4 section-gap-sm">
@@ -631,6 +635,8 @@ function StorePage({ kind }) {
           onClick={() => {
             setTab('items')
             resetForm()
+            itemSelection.clear()
+            saleSelection.clear()
           }}
         >
           Items ({items.length})
@@ -642,6 +648,8 @@ function StorePage({ kind }) {
           onClick={() => {
             setTab('sales')
             resetForm()
+            itemSelection.clear()
+            saleSelection.clear()
           }}
         >
           Sales ({sales.length})
@@ -671,22 +679,43 @@ function StorePage({ kind }) {
 
       {tab === 'items' ? (
         <div className="card table-wrap">
-          <table className="data-table">
+          <table
+            className={
+              'data-table' +
+              (itemSelection.selectedRows.length > 0 ? ' selecting' : '')
+            }
+          >
             <caption className="sr-only">{title} items</caption>
             <thead>
               <tr>
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
                 <th scope="col">Item</th>
                 <th scope="col">Category</th>
                 <th scope="col">Price</th>
                 {isGiftShop && <th scope="col">Stock</th>}
                 <th scope="col">Staff</th>
-                <th scope="col">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {filteredItems.map((item) => (
-                <tr key={item.ItemID}>
+                <tr
+                  key={item.ItemID}
+                  className={
+                    itemSelection.isSelected(item.ItemID) ? 'selected-row' : ''
+                  }
+                >
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={itemSelection.isSelected(item.ItemID)}
+                      onChange={() => itemSelection.toggle(item.ItemID)}
+                      aria-label={`Select ${item.ItemName}`}
+                    />
+                  </td>
+
                   <td>
                     <div className="strong">{item.ItemName}</div>
                     <div className="cell-sub mono">
@@ -705,28 +734,6 @@ function StorePage({ kind }) {
                   )}
 
                   <td>{item.StaffName}</td>
-
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(item)}
-                        aria-label={`Edit ${item.ItemName}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDeleteItem(item.ItemID)}
-                        aria-label={`Delete ${item.ItemName}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
                 </tr>
               ))}
 
@@ -742,10 +749,18 @@ function StorePage({ kind }) {
         </div>
       ) : (
         <div className="card table-wrap">
-          <table className="data-table">
+          <table
+            className={
+              'data-table' +
+              (saleSelection.selectedRows.length > 0 ? ' selecting' : '')
+            }
+          >
             <caption className="sr-only">{title} sales</caption>
             <thead>
               <tr>
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
                 <th scope="col">Sale</th>
                 <th scope="col">Item</th>
                 <th scope="col">Quantity</th>
@@ -754,13 +769,26 @@ function StorePage({ kind }) {
                 <th scope="col">Payment</th>
                 <th scope="col">Member</th>
                 <th scope="col">Staff</th>
-                <th scope="col">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {filteredSales.map((sale) => (
-                <tr key={sale.SaleID}>
+                <tr
+                  key={sale.SaleID}
+                  className={
+                    saleSelection.isSelected(sale.SaleID) ? 'selected-row' : ''
+                  }
+                >
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={saleSelection.isSelected(sale.SaleID)}
+                      onChange={() => saleSelection.toggle(sale.SaleID)}
+                      aria-label={`Select sale ${sale.SaleID}`}
+                    />
+                  </td>
+
                   <td className="mono">
                     #{String(sale.SaleID).padStart(5, '0')}
                   </td>
@@ -779,28 +807,6 @@ function StorePage({ kind }) {
                   </td>
 
                   <td>{sale.StaffName}</td>
-
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditSaleModal(sale)}
-                        aria-label={`Edit sale ${sale.SaleID}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDeleteSale(sale.SaleID)}
-                        aria-label={`Delete sale ${sale.SaleID}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
                 </tr>
               ))}
 

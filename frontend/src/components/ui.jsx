@@ -106,6 +106,34 @@ export function FilterSelect({
   )
 }
 
+export function SelectionActions({ count, onEdit, onDelete, disabled = false }) {
+  if (count === 0) return null
+
+  return (
+    <>
+      {count === 1 && (
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={onEdit}
+          disabled={disabled}
+        >
+          Edit
+        </button>
+      )}
+
+      <button
+        type="button"
+        className="btn danger"
+        onClick={onDelete}
+        disabled={disabled}
+      >
+        Delete
+      </button>
+    </>
+  )
+}
+
 export function Table({ headers, children, caption = 'Data table' }) {
   return (
     <div className="table-wrap">

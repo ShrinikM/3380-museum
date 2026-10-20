@@ -795,6 +795,47 @@ textarea {
   background: rgba(240, 237, 232, 0.4);
 }
 
+.data-table tbody tr.selected-row {
+  background: rgba(18, 49, 90, 0.08);
+}
+
+.data-table th.select-col,
+.data-table td.select-col {
+  width: 32px;
+  min-width: 32px;
+  padding: 12px 0 12px 12px;
+}
+
+.select-col input[type='checkbox'] {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #12315a;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.data-table tbody tr:hover .select-col input[type='checkbox'],
+.data-table.selecting .select-col input[type='checkbox'],
+.select-col input[type='checkbox']:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .select-col input[type='checkbox'] {
+    opacity: 1;
+  }
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .cell-sub {
   max-width: 320px;
   margin-top: 2px;

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 import { ARTWORK_TYPES } from '../data/constants'
 
 function Artworks() {
@@ -122,23 +123,7 @@ function Artworks() {
     resetForm()
     setEditingId(null)
     setOpen(false)
-    refetchArtworks()
-  }
-
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this artwork?'
-    )
-
-    if (!confirmed) return
-
-    try {
-      await callApi('/api/artworks/' + id, 'DELETE')
-    } catch (err) {
-      alert(err.message)
-      return
-    }
-
+    clear()
     refetchArtworks()
   }
 
@@ -151,6 +136,28 @@ function Artworks() {
       (artwork.CollectionName || '').toLowerCase().includes(searchText)
     )
   })
+
+  const {
+    selectedRows: selectedArtworks,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filtered, (artwork) => artwork.ArtworkID)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedArtworks[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'artwork',
+      (artwork) => artwork.Title,
+      (artwork) => callApi('/api/artworks/' + artwork.ArtworkID, 'DELETE')
+    )
+
+    if (deleted) refetchArtworks()
+  }
 
   const artistsRepresented = new Set(
     artworks.map((artwork) => artwork.ArtistID)
@@ -168,13 +175,21 @@ function Artworks() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
-            Add Artwork
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedArtworks.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+            >
+              Add Artwork
+            </button>
+          </div>
         )}
       </div>
 
@@ -220,11 +235,20 @@ function Artworks() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedArtworks.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum artworks</caption>
 
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Artwork</th>
               <th scope="col">Artist</th>
               <th scope="col">Collection</th>
@@ -232,13 +256,26 @@ function Artworks() {
               <th scope="col">Date Created</th>
               {showAudit && <th scope="col">Created By</th>}
               {showAudit && <th scope="col">Last Updated By</th>}
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
           <tbody>
             {filtered.map((item) => (
-              <tr key={item.ArtworkID}>
+              <tr
+                key={item.ArtworkID}
+                className={isSelected(item.ArtworkID) ? 'selected-row' : ''}
+              >
+                {allowEdit && (
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(item.ArtworkID)}
+                      onChange={() => toggle(item.ArtworkID)}
+                      aria-label={`Select ${item.Title}`}
+                    />
+                  </td>
+                )}
+
                 <td>
                   <div className="strong">{item.Title}</div>
                   <div className="cell-sub mono">
@@ -264,30 +301,6 @@ function Artworks() {
 
                 {showAudit && <td>{item.CreatedByName || '-'}</td>}
                 {showAudit && <td>{item.UpdatedByName || '-'}</td>}
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(item)}
-                        aria-label={`Edit ${item.Title}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(item.ArtworkID)}
-                        aria-label={`Delete ${item.Title}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
 

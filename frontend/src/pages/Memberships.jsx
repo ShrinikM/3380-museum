@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 
 const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
 
@@ -261,24 +262,30 @@ function Memberships() {
     }
 
     closeModal()
+    clear()
     refetchMemberships()
   }
 
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this membership?'
+  const {
+    selectedRows: selectedMemberships,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filtered, (member) => member.id)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedMemberships[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'membership',
+      (member) => `${member.firstName} ${member.lastName}`,
+      (member) => callApi('/api/memberships/' + member.id, 'DELETE')
     )
 
-    if (!confirmed) return
-
-    try {
-      await callApi('/api/memberships/' + id, 'DELETE')
-    } catch (err) {
-      alert(err.message)
-      return
-    }
-
-    refetchMemberships()
+    if (deleted) refetchMemberships()
   }
 
   return (
@@ -289,13 +296,21 @@ function Memberships() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
-            Add Membership
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedMemberships.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+            >
+              Add Membership
+            </button>
+          </div>
         )}
       </div>
 
@@ -366,10 +381,19 @@ function Memberships() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedMemberships.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum memberships</caption>
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Member</th>
               <th scope="col">Type</th>
               <th scope="col">Start Date</th>
@@ -378,13 +402,26 @@ function Memberships() {
               <th scope="col">Discount</th>
               <th scope="col">Payment</th>
               <th scope="col">Status</th>
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
           <tbody>
             {filtered.map((member) => (
-              <tr key={member.id}>
+              <tr
+                key={member.id}
+                className={isSelected(member.id) ? 'selected-row' : ''}
+              >
+                {allowEdit && (
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(member.id)}
+                      onChange={() => toggle(member.id)}
+                      aria-label={`Select membership for ${member.firstName} ${member.lastName}`}
+                    />
+                  </td>
+                )}
+
                 <td>
                   <div className="strong">
                     {member.firstName} {member.lastName}
@@ -411,30 +448,6 @@ function Memberships() {
                     label={member.status}
                   />
                 </td>
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(member)}
-                        aria-label={`Edit membership for ${member.firstName} ${member.lastName}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(member.id)}
-                        aria-label={`Delete membership for ${member.firstName} ${member.lastName}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
 

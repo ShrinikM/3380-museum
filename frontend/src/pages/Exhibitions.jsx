@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { useRole } from '../context/role'
 import { callApi } from '../api'
+import { useSelection } from '../hooks/useSelection'
 
 function Exhibitions() {
   const { canEdit } = useRole()
@@ -205,26 +206,12 @@ function Exhibitions() {
       }
 
       closeModal()
+      clear()
       setReloadCount((count) => count + 1)
     } catch (err) {
       alert('Could not save exhibition: ' + err.message)
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this exhibition?'
-    )
-
-    if (!confirmed) return
-
-    try {
-      await callApi(`/api/exhibitions/${id}`, 'DELETE')
-      setReloadCount((count) => count + 1)
-    } catch (err) {
-      alert('Could not delete exhibition: ' + err.message)
     }
   }
 
@@ -237,6 +224,29 @@ function Exhibitions() {
     )
   })
 
+  const {
+    selectedRows: selectedExhibitions,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filtered, (exhibition) => exhibition.ExhibitionID)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedExhibitions[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'exhibition',
+      (exhibition) => exhibition.Name,
+      (exhibition) =>
+        callApi(`/api/exhibitions/${exhibition.ExhibitionID}`, 'DELETE')
+    )
+
+    if (deleted) setReloadCount((count) => count + 1)
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -245,14 +255,23 @@ function Exhibitions() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-            disabled={loading || saving}
-          >
-            Add Exhibition
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedExhibitions.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+              disabled={saving}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+              disabled={loading || saving}
+            >
+              Add Exhibition
+            </button>
+          </div>
         )}
       </div>
 
@@ -300,11 +319,20 @@ function Exhibitions() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedExhibitions.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum exhibitions</caption>
 
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Exhibition</th>
               <th scope="col">Start Date</th>
               <th scope="col">End Date</th>
@@ -312,7 +340,6 @@ function Exhibitions() {
               <th scope="col">Staff</th>
               <th scope="col">Artworks</th>
               <th scope="col">Status</th>
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -328,7 +355,23 @@ function Exhibitions() {
             {!loading &&
               !loadError &&
               filtered.map((exhibition) => (
-                <tr key={exhibition.ExhibitionID}>
+                <tr
+                  key={exhibition.ExhibitionID}
+                  className={
+                    isSelected(exhibition.ExhibitionID) ? 'selected-row' : ''
+                  }
+                >
+                  {allowEdit && (
+                    <td className="select-col">
+                      <input
+                        type="checkbox"
+                        checked={isSelected(exhibition.ExhibitionID)}
+                        onChange={() => toggle(exhibition.ExhibitionID)}
+                        aria-label={`Select ${exhibition.Name}`}
+                      />
+                    </td>
+                  )}
+
                   <td>
                     <div className="strong">{exhibition.Name}</div>
                     <div className="cell-sub">
@@ -366,34 +409,6 @@ function Exhibitions() {
                       label={exhibition.Status || 'Unknown'}
                     />
                   </td>
-
-                  {allowEdit && (
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="btn secondary"
-                          onClick={() => openEditModal(exhibition)}
-                          disabled={saving}
-                          aria-label={`Edit ${exhibition.Name}`}
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn danger"
-                          onClick={() =>
-                            handleDelete(exhibition.ExhibitionID)
-                          }
-                          disabled={saving}
-                          aria-label={`Delete ${exhibition.Name}`}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  )}
                 </tr>
               ))}
 

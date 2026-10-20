@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 
 function Artists() {
   const { user, canEdit } = useRole()
@@ -15,7 +16,6 @@ function Artists() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
-
   const [formData, setFormData] = useState({
     FirstName: '',
     LastName: '',
@@ -152,23 +152,7 @@ function Artists() {
     resetForm()
     setEditingId(null)
     setOpen(false)
-    refetchArtists()
-  }
-
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this artist?'
-    )
-
-    if (!confirmed) return
-
-    try {
-      await callApi('/api/artists/' + id, 'DELETE')
-    } catch (err) {
-      alert(err.message)
-      return
-    }
-
+    clear()
     refetchArtists()
   }
 
@@ -191,6 +175,28 @@ function Artists() {
     )
   })
 
+  const {
+    selectedRows: selectedArtists,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filtered, (artist) => artist.ArtistID)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedArtists[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'artist',
+      (artist) => `${artist.FirstName} ${artist.LastName}`,
+      (artist) => callApi('/api/artists/' + artist.ArtistID, 'DELETE')
+    )
+
+    if (deleted) refetchArtists()
+  }
+
   const livingArtists = artists.filter(
     (artist) => !artist.DeathYear
   )
@@ -203,13 +209,21 @@ function Artists() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
-            Add Artist
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedArtists.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+            >
+              Add Artist
+            </button>
+          </div>
         )}
       </div>
 
@@ -255,11 +269,20 @@ function Artists() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedArtists.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum artists</caption>
 
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Artist</th>
               <th scope="col">Birth Date</th>
               <th scope="col">Death Date</th>
@@ -267,13 +290,26 @@ function Artists() {
               <th scope="col">Artworks</th>
               {showAudit && <th scope="col">Created By</th>}
               {showAudit && <th scope="col">Last Updated By</th>}
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
           <tbody>
             {filtered.map((item) => (
-              <tr key={item.ArtistID}>
+              <tr
+                key={item.ArtistID}
+                className={isSelected(item.ArtistID) ? 'selected-row' : ''}
+              >
+                {allowEdit && (
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(item.ArtistID)}
+                      onChange={() => toggle(item.ArtistID)}
+                      aria-label={`Select ${item.FirstName} ${item.LastName}`}
+                    />
+                  </td>
+                )}
+
                 <td>
                   <div className="strong">
                     {item.FirstName} {item.LastName}
@@ -305,30 +341,6 @@ function Artists() {
                 <td className="mono">{item.ArtworkCount}</td>
                 {showAudit && <td>{item.CreatedByName || '-'}</td>}
                 {showAudit && <td>{item.UpdatedByName || '-'}</td>}
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(item)}
-                        aria-label={`Edit ${item.FirstName} ${item.LastName}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(item.ArtistID)}
-                        aria-label={`Delete ${item.FirstName} ${item.LastName}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
 

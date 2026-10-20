@@ -1,8 +1,9 @@
 
 import { useState, useEffect } from 'react'
-import { Panel, Modal } from '../components/ui'
+import { Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 
 function Collections() {
   const { user, canEdit } = useRole()
@@ -103,23 +104,7 @@ function Collections() {
 
     resetForm()
     setOpen(false)
-    refetchCollections()
-  }
-
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this collection?'
-    )
-
-    if (!confirmed) return
-
-    try {
-      await callApi('/api/collections/' + id, 'DELETE')
-    } catch (err) {
-      alert(err.message)
-      return
-    }
-
+    clear()
     refetchCollections()
   }
 
@@ -135,6 +120,29 @@ function Collections() {
     )
   })
 
+  const {
+    selectedRows: selectedCollections,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filtered, (collection) => collection.CollectionID)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedCollections[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'collection',
+      (collection) => collection.Name,
+      (collection) =>
+        callApi('/api/collections/' + collection.CollectionID, 'DELETE')
+    )
+
+    if (deleted) refetchCollections()
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -143,13 +151,21 @@ function Collections() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
-            Add Collection
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedCollections.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+            >
+              Add Collection
+            </button>
+          </div>
         )}
       </div>
 
@@ -197,22 +213,44 @@ function Collections() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedCollections.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum collections</caption>
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Collection</th>
               <th scope="col">Name</th>
               <th scope="col">Description</th>
               {showAudit && <th scope="col">Created By</th>}
               {showAudit && <th scope="col">Last Updated By</th>}
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
           <tbody>
             {filtered.map((item) => (
-              <tr key={item.CollectionID}>
+              <tr
+                key={item.CollectionID}
+                className={isSelected(item.CollectionID) ? 'selected-row' : ''}
+              >
+                {allowEdit && (
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(item.CollectionID)}
+                      onChange={() => toggle(item.CollectionID)}
+                      aria-label={`Select ${item.Name}`}
+                    />
+                  </td>
+                )}
+
                 <td className="mono">
                   #{String(item.CollectionID).padStart(5, '0')}
                 </td>
@@ -225,30 +263,6 @@ function Collections() {
 
                 {showAudit && <td>{item.CreatedByName || '-'}</td>}
                 {showAudit && <td>{item.UpdatedByName || '-'}</td>}
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(item)}
-                        aria-label={`Edit ${item.Name}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(item.CollectionID)}
-                        aria-label={`Delete ${item.Name}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
 

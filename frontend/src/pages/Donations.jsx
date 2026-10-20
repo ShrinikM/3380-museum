@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Panel, Modal } from '../components/ui'
+import { Panel, Modal, SelectionActions } from '../components/ui'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 
 const initialDonations = [
   {
@@ -202,14 +203,31 @@ function Donations() {
     }
 
     closeModal()
+    clear()
   }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this donation?')) {
-      setDonations((currentDonations) =>
-        currentDonations.filter((donation) => donation.id !== id)
-      )
-    }
+  const {
+    selectedRows: selectedDonations,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filteredDonations, (donation) => donation.id)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedDonations[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    await deleteSelected(
+      'donation',
+      (donation) => donation.id,
+      async (donation) => {
+        setDonations((currentDonations) =>
+          currentDonations.filter((item) => item.id !== donation.id)
+        )
+      }
+    )
   }
 
   return (
@@ -220,13 +238,21 @@ function Donations() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
-            Add Donation
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedDonations.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+            >
+              Add Donation
+            </button>
+          </div>
         )}
       </div>
 
@@ -268,23 +294,45 @@ function Donations() {
       </div>
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedDonations.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum donations</caption>
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Donation ID</th>
               <th scope="col">Donor</th>
               <th scope="col">Amount</th>
               <th scope="col">Fund</th>
               <th scope="col">Date</th>
               <th scope="col">Payment Method</th>
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
           <tbody>
             {filteredDonations.map((donation) => (
-              <tr key={donation.id}>
+              <tr
+                key={donation.id}
+                className={isSelected(donation.id) ? 'selected-row' : ''}
+              >
+                {allowEdit && (
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(donation.id)}
+                      onChange={() => toggle(donation.id)}
+                      aria-label={`Select donation ${donation.id}`}
+                    />
+                  </td>
+                )}
+
                 <td className="mono">{donation.id}</td>
                 <td className="strong">{donation.donor}</td>
                 <td className="mono">
@@ -293,30 +341,6 @@ function Donations() {
                 <td>{donation.fund}</td>
                 <td className="mono">{donation.date}</td>
                 <td className="muted">{donation.paymentMethod}</td>
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => openEditModal(donation)}
-                        aria-label={`Edit donation ${donation.id}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(donation.id)}
-                        aria-label={`Delete donation ${donation.id}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
 

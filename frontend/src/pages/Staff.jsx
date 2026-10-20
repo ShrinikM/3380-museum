@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Panel, Modal } from '../components/ui'
+import { Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 
 const ROLE_OPTIONS = ['Admin', 'Supervisor', 'Staff', 'Operator']
 
@@ -120,21 +121,6 @@ function Staff() {
     resetForm()
   }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this staff member?')) {
-      return
-    }
-
-    try {
-      await callApi('/api/staff/' + id, 'DELETE')
-    } catch (err) {
-      alert(err.message)
-      return
-    }
-
-    refetchStaff()
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -195,7 +181,30 @@ function Staff() {
     }
 
     closeModal()
+    clear()
     refetchStaff()
+  }
+
+  const {
+    selectedRows: selectedStaff,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filteredStaff, (item) => item.StaffID)
+
+  const handleEditSelected = () => {
+    handleOpenEdit(selectedStaff[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'staff member',
+      (item) => `${item.FirstName} ${item.LastName}`,
+      (item) => callApi('/api/staff/' + item.StaffID, 'DELETE')
+    )
+
+    if (deleted) refetchStaff()
   }
 
   return (
@@ -206,13 +215,21 @@ function Staff() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={handleOpenAdd}
-          >
-            Add Staff Member
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedStaff.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleOpenAdd}
+            >
+              Add Staff Member
+            </button>
+          </div>
         )}
       </div>
 
@@ -254,10 +271,19 @@ function Staff() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedStaff.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum staff directory</caption>
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Staff ID</th>
               <th scope="col">Name</th>
               <th scope="col">Role</th>
@@ -266,13 +292,26 @@ function Staff() {
               <th scope="col">Phone</th>
               <th scope="col">Start Date</th>
               <th scope="col">Status</th>
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
           <tbody>
             {filteredStaff.map((item) => (
-              <tr key={item.StaffID}>
+              <tr
+                key={item.StaffID}
+                className={isSelected(item.StaffID) ? 'selected-row' : ''}
+              >
+                {allowEdit && (
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(item.StaffID)}
+                      onChange={() => toggle(item.StaffID)}
+                      aria-label={`Select ${item.FirstName} ${item.LastName}`}
+                    />
+                  </td>
+                )}
+
                 <td className="mono">
                   #{String(item.StaffID).padStart(5, '0')}
                 </td>
@@ -285,30 +324,6 @@ function Staff() {
                 <td className="mono">{item.PhoneNumber}</td>
                 <td className="mono">{item.StartDate || '-'}</td>
                 <td>{getStatus(item)}</td>
-
-                {allowEdit && (
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => handleOpenEdit(item)}
-                        aria-label={`Edit ${item.FirstName} ${item.LastName}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn danger"
-                        onClick={() => handleDelete(item.StaffID)}
-                        aria-label={`Delete ${item.FirstName} ${item.LastName}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
 

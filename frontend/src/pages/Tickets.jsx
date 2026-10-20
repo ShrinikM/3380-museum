@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Badge, Panel, Modal } from '../components/ui'
+import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { useSelection } from '../hooks/useSelection'
 
 const ticketTypes = ['Adult', 'Senior', 'Student', 'Child', 'Member']
 
@@ -233,24 +234,30 @@ function Tickets() {
     }
 
     closeModal()
+    clear()
     refetchTickets()
   }
 
-  const handleDelete = async (ticketID) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this ticket?'
+  const {
+    selectedRows: selectedTickets,
+    isSelected,
+    toggle,
+    clear,
+    deleteSelected,
+  } = useSelection(filtered, (ticket) => ticket.TicketID)
+
+  const handleEditSelected = () => {
+    openEditModal(selectedTickets[0])
+  }
+
+  const handleDeleteSelected = async () => {
+    const deleted = await deleteSelected(
+      'ticket',
+      (ticket) => `Ticket ${ticket.TicketID}`,
+      (ticket) => callApi('/api/tickets/' + ticket.TicketID, 'DELETE')
     )
 
-    if (!confirmed) return
-
-    try {
-      await callApi('/api/tickets/' + ticketID, 'DELETE')
-    } catch (err) {
-      alert(err.message)
-      return
-    }
-
-    refetchTickets()
+    if (deleted) refetchTickets()
   }
 
   return (
@@ -261,13 +268,21 @@ function Tickets() {
         </div>
 
         {allowEdit && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
-            Add Ticket
-          </button>
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selectedTickets.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
+
+            <button
+              type="button"
+              className="btn primary"
+              onClick={openAddModal}
+            >
+              Add Ticket
+            </button>
+          </div>
         )}
       </div>
 
@@ -318,17 +333,25 @@ function Tickets() {
       )}
 
       <div className="card table-wrap">
-        <table className="data-table">
+        <table
+          className={
+            'data-table' + (selectedTickets.length > 0 ? ' selecting' : '')
+          }
+        >
           <caption className="sr-only">Museum ticket sales</caption>
           <thead>
             <tr>
+              {allowEdit && (
+                <th scope="col" className="select-col">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th scope="col">Ticket</th>
               <th scope="col">Exhibition</th>
               <th scope="col">Type</th>
               <th scope="col">Price</th>
               <th scope="col">Sale Date</th>
               <th scope="col">Membership</th>
-              {allowEdit && <th scope="col">Actions</th>}
             </tr>
           </thead>
 
@@ -340,7 +363,21 @@ function Tickets() {
               )
 
               return (
-                <tr key={ticket.TicketID}>
+                <tr
+                  key={ticket.TicketID}
+                  className={isSelected(ticket.TicketID) ? 'selected-row' : ''}
+                >
+                  {allowEdit && (
+                    <td className="select-col">
+                      <input
+                        type="checkbox"
+                        checked={isSelected(ticket.TicketID)}
+                        onChange={() => toggle(ticket.TicketID)}
+                        aria-label={`Select ticket ${ticket.TicketID}`}
+                      />
+                    </td>
+                  )}
+
                   <td className="mono">
                     #{String(ticket.TicketID).padStart(5, '0')}
                   </td>
@@ -367,30 +404,6 @@ function Tickets() {
                       <span className="muted">-</span>
                     )}
                   </td>
-
-                  {allowEdit && (
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="btn secondary"
-                          onClick={() => openEditModal(ticket)}
-                          aria-label={`Edit ticket ${ticket.TicketID}`}
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn danger"
-                          onClick={() => handleDelete(ticket.TicketID)}
-                          aria-label={`Delete ticket ${ticket.TicketID}`}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  )}
                 </tr>
               )
             })}

@@ -84,15 +84,7 @@ function Reports() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [history, setHistory] = useState(() => getSavedHistory(storageKey))
-  const [viewingId, setViewingId] = useState(null)
   const [message, setMessage] = useState('')
-
-  const viewing = history.find((item) => item.id === viewingId) || null
-  const viewingReport = viewing
-    ? reportTypes.find((item) => item.id === viewing.reportType)
-    : null
-
-  const rows = viewing ? viewing.rows : []
 
   const saveHistory = (newHistory) => {
     try {
@@ -156,7 +148,6 @@ function Reports() {
     const saved = saveHistory(newHistory)
 
     setHistory(newHistory)
-    setViewingId(newReport.id)
 
     if (saved) {
       setMessage(`${report.name} created: ${data.length} rows.`)
@@ -207,10 +198,6 @@ function Reports() {
     const newHistory = history.filter((item) => item.id !== id)
     saveHistory(newHistory)
     setHistory(newHistory)
-
-    if (viewingId === id) {
-      setViewingId(null)
-    }
   }
 
   const clearHistory = () => {
@@ -220,7 +207,6 @@ function Reports() {
 
     localStorage.removeItem(storageKey)
     setHistory([])
-    setViewingId(null)
   }
 
   return (
@@ -343,15 +329,6 @@ function Reports() {
                         <button
                           type="button"
                           className="btn secondary"
-                          onClick={() => setViewingId(item.id)}
-                          aria-label={`View ${item.name}`}
-                        >
-                          View
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn secondary"
                           onClick={() => exportReport(item)}
                           aria-label={`Export ${item.name} as CSV`}
                         >
@@ -376,46 +353,6 @@ function Reports() {
         </>
       )}
 
-      {viewing && (
-        <>
-          <h2 className="section-label">{viewing.name}</h2>
-
-          <div className="card table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {viewingReport.columns.map((column) => (
-                    <th key={column.key} scope="col">
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={index}>
-                    {viewingReport.columns.map((column) => (
-                      <td key={column.key}>{row[column.key] ?? '-'}</td>
-                    ))}
-                  </tr>
-                ))}
-
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={viewingReport.columns.length}
-                      className="empty"
-                    >
-                      No data found for this report.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
     </div>
   )
 }
