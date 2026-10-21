@@ -1,12 +1,10 @@
 import { NavLink } from 'react-router-dom'
 import { useRole } from '../context/role'
 
-
 const SECTIONS = [
   {
     label: 'Overview',
     items: [
-      { to: '/', text: 'Home' },
       { to: '/dashboard', text: 'Dashboard' },
     ],
   },
@@ -43,7 +41,6 @@ const SECTIONS = [
   },
 ]
 
-
 function Sidebar() {
   const { canView } = useRole()
 
@@ -65,7 +62,6 @@ function Sidebar() {
                 <NavLink
                   key={to}
                   to={to}
-                  end={to === '/'}
                   className={({ isActive }) =>
                     'sidebar-link' + (isActive ? ' active' : '')
                   }

@@ -390,7 +390,6 @@ async function getStaffDashboard() {
     collection: await getCollectionBreakdown(),
     collectionSizes: await getCollectionSizes(),
     exhibitionArtworks: await getExhibitionArtworks(),
-    activity: await getRecentActivity(["Artwork", "Artist", "Collection"]),
   };
 
   return { status: 200, data: data };
@@ -426,7 +425,6 @@ async function getOperatorDashboard(params) {
     revenueBySource: sources,
     topExhibitions: await getTopExhibitions(ranges.start, ranges.end),
     currentExhibitions: await getCurrentExhibitions(),
-    activity: await getRecentActivity(["Ticket", "Gift Shop", "Cafe", "Membership"]),
   };
 
   return { status: 200, data: data };

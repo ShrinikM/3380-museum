@@ -1,7 +1,6 @@
 export const ROLES = {
   Admin: {
     pages: [
-      '/',
       '/dashboard',
       '/artists',
       '/artworks',
@@ -32,7 +31,7 @@ export const ROLES = {
 
   Staff: {
     pages: [
-      '/',
+      '/dashboard',
       '/artists',
       '/artworks',
       '/collections',
@@ -47,7 +46,7 @@ export const ROLES = {
 
   Operator: {
     pages: [
-      '/',
+      '/dashboard',
       '/exhibitions',
       '/tickets',
       '/memberships',

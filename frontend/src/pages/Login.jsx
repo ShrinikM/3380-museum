@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useRole } from '../context/role'
 
 function Login() {
@@ -47,6 +48,10 @@ function Login() {
           <button type="submit" className="btn primary">
             Log in
           </button>
+
+          <Link to="/" className="btn secondary">
+            Back to Home
+          </Link>
 
         </form>
       </div>

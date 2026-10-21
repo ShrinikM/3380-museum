@@ -1,30 +1,26 @@
-
+import { useNavigate } from 'react-router-dom'
 import { useRole } from '../context/role'
-
 
 function Navbar({ onToggleSidebar, sidebarOpen }) {
   const { user, logout } = useRole()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   return (
     <header className="navbar">
       <div className="navbar-brand">
-        
-      <button
-        type="button"
-        className="brand-toggle"
-        onClick={() => {
-          onToggleSidebar()
-        }}
-        aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-        title="Click to toggle sidebar"
-      >
-        <img
-          src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/UH_CougarPaw.png/250px-UH_CougarPaw.png"
-          alt=""
-          className="brand-hand"
-          draggable="false"
-        />
-      </button>
+        <button
+          type="button"
+          className="brand-toggle"
+          onClick={onToggleSidebar}
+          aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        >
+          ☰
+        </button>
 
         <span className="brand-name">CoogMuseum</span>
       </div>
@@ -41,7 +37,7 @@ function Navbar({ onToggleSidebar, sidebarOpen }) {
           </div>
         </div>
 
-        <button className="btn secondary" onClick={logout}>
+        <button className="btn secondary" onClick={handleLogout}>
           Log out
         </button>
       </div>

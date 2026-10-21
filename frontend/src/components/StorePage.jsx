@@ -2,50 +2,6 @@ import { useEffect, useState } from 'react'
 import { Panel, Modal, SelectionActions } from './ui'
 import { useSelection } from '../hooks/useSelection'
 
-const giftShopItems = [
-  { ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Category: 'Books', StaffID: 1, StaffName: 'Maya Patel', Price: 45, Stock: 32 },
-  { ItemID: 2, ItemName: 'Water Lilies Tote Bag', Category: 'Accessories', StaffID: 1, StaffName: 'Maya Patel', Price: 24, Stock: 58 },
-  { ItemID: 3, ItemName: 'MFAH Logo Mug', Category: 'Home', StaffID: 1, StaffName: 'Maya Patel', Price: 16, Stock: 120 },
-  { ItemID: 4, ItemName: 'Art Postcard Set (12)', Category: 'Stationery', StaffID: 1, StaffName: 'Maya Patel', Price: 14, Stock: 200 },
-  { ItemID: 5, ItemName: 'Silk Scarf - Kahlo Florals', Category: 'Accessories', StaffID: 1, StaffName: 'Maya Patel', Price: 68, Stock: 12 },
-  { ItemID: 6, ItemName: "Kids' Watercolor Kit", Category: 'Kids', StaffID: 1, StaffName: 'Maya Patel', Price: 22, Stock: 40 },
-  { ItemID: 7, ItemName: 'Framed Print: Migrant Mother', Category: 'Prints', StaffID: 1, StaffName: 'Maya Patel', Price: 95, Stock: 6 },
-  { ItemID: 8, ItemName: 'Enamel Pin Set', Category: 'Accessories', StaffID: 1, StaffName: 'Maya Patel', Price: 12, Stock: 3 },
-]
-
-const cafeItems = [
-  { ItemID: 1, ItemName: 'Cappuccino', Category: 'Beverages', StaffID: 2, StaffName: 'Carlos Vargas', Price: 5.5 },
-  { ItemID: 2, ItemName: 'Cold Brew', Category: 'Beverages', StaffID: 2, StaffName: 'Carlos Vargas', Price: 5 },
-  { ItemID: 3, ItemName: 'Butter Croissant', Category: 'Pastries', StaffID: 2, StaffName: 'Carlos Vargas', Price: 4.25 },
-  { ItemID: 4, ItemName: 'Caprese Sandwich', Category: 'Sandwiches', StaffID: 2, StaffName: 'Carlos Vargas', Price: 11.5 },
-  { ItemID: 5, ItemName: 'Seasonal Salad', Category: 'Salads', StaffID: 2, StaffName: 'Carlos Vargas', Price: 12 },
-  { ItemID: 6, ItemName: 'Tomato Basil Soup', Category: 'Soups', StaffID: 2, StaffName: 'Carlos Vargas', Price: 7.5 },
-  { ItemID: 7, ItemName: 'Chocolate Tart', Category: 'Desserts', StaffID: 2, StaffName: 'Carlos Vargas', Price: 6.75 },
-  { ItemID: 8, ItemName: 'Sparkling Water', Category: 'Beverages', StaffID: 2, StaffName: 'Carlos Vargas', Price: 3 },
-]
-
-const giftShopSales = [
-  { SaleID: 1, ItemID: 1, ItemName: 'Exhibition Catalogue: Jasper Johns', Quantity: 1, SalePrice: 45, SaleDate: '2026-09-03', PaymentMethod: 'Credit Card', StaffID: 1, StaffName: 'Maya Patel', MembershipID: 1, MemberName: 'Patricia Holloway' },
-  { SaleID: 2, ItemID: 3, ItemName: 'MFAH Logo Mug', Quantity: 2, SalePrice: 16, SaleDate: '2026-09-06', PaymentMethod: 'Cash', StaffID: 1, StaffName: 'Maya Patel', MembershipID: null, MemberName: null },
-  { SaleID: 3, ItemID: 4, ItemName: 'Art Postcard Set (12)', Quantity: 1, SalePrice: 14, SaleDate: '2026-09-12', PaymentMethod: 'Mobile Pay', StaffID: 1, StaffName: 'Maya Patel', MembershipID: null, MemberName: null },
-  { SaleID: 4, ItemID: 2, ItemName: 'Water Lilies Tote Bag', Quantity: 1, SalePrice: 24, SaleDate: '2026-09-14', PaymentMethod: 'Debit Card', StaffID: 1, StaffName: 'Maya Patel', MembershipID: 2, MemberName: 'James Kowalski' },
-  { SaleID: 5, ItemID: 6, ItemName: "Kids' Watercolor Kit", Quantity: 2, SalePrice: 22, SaleDate: '2026-09-20', PaymentMethod: 'Credit Card', StaffID: 1, StaffName: 'Maya Patel', MembershipID: null, MemberName: null },
-  { SaleID: 6, ItemID: 8, ItemName: 'Enamel Pin Set', Quantity: 3, SalePrice: 12, SaleDate: '2026-09-22', PaymentMethod: 'Cash', StaffID: 1, StaffName: 'Maya Patel', MembershipID: null, MemberName: null },
-  { SaleID: 7, ItemID: 5, ItemName: 'Silk Scarf - Kahlo Florals', Quantity: 1, SalePrice: 68, SaleDate: '2026-09-25', PaymentMethod: 'Credit Card', StaffID: 1, StaffName: 'Maya Patel', MembershipID: null, MemberName: null },
-  { SaleID: 8, ItemID: 7, ItemName: 'Framed Print: Migrant Mother', Quantity: 1, SalePrice: 95, SaleDate: '2026-09-28', PaymentMethod: 'Credit Card', StaffID: 1, StaffName: 'Maya Patel', MembershipID: 3, MemberName: 'Aisha Okonkwo' },
-]
-
-const cafeSales = [
-  { SaleID: 1, ItemID: 1, ItemName: 'Cappuccino', Quantity: 2, SalePrice: 5.5, SaleDate: '2026-09-05', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 2, ItemID: 4, ItemName: 'Caprese Sandwich', Quantity: 1, SalePrice: 11.5, SaleDate: '2026-09-06', PaymentMethod: 'Mobile Pay', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: 1, MemberName: 'Patricia Holloway' },
-  { SaleID: 3, ItemID: 3, ItemName: 'Butter Croissant', Quantity: 3, SalePrice: 4.25, SaleDate: '2026-09-12', PaymentMethod: 'Cash', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 4, ItemID: 5, ItemName: 'Seasonal Salad', Quantity: 2, SalePrice: 12, SaleDate: '2026-09-14', PaymentMethod: 'Debit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 5, ItemID: 2, ItemName: 'Cold Brew', Quantity: 1, SalePrice: 5, SaleDate: '2026-09-20', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: 2, MemberName: 'James Kowalski' },
-  { SaleID: 6, ItemID: 6, ItemName: 'Tomato Basil Soup', Quantity: 2, SalePrice: 7.5, SaleDate: '2026-09-22', PaymentMethod: 'Credit Card', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 7, ItemID: 7, ItemName: 'Chocolate Tart', Quantity: 1, SalePrice: 6.75, SaleDate: '2026-09-25', PaymentMethod: 'Cash', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-  { SaleID: 8, ItemID: 8, ItemName: 'Sparkling Water', Quantity: 4, SalePrice: 3, SaleDate: '2026-09-27', PaymentMethod: 'Mobile Pay', StaffID: 2, StaffName: 'Carlos Vargas', MembershipID: null, MemberName: null },
-]
-
 const giftShopCategories = [
   'Books',
   'Accessories',

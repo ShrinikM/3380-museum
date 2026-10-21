@@ -362,7 +362,6 @@ function Dashboard() {
           </div>
 
           {renderExhibitionArtworksPanel()}
-          {renderActivityPanel()}
         </>
       )
     }
@@ -376,7 +375,6 @@ function Dashboard() {
           </div>
 
           {renderTopExhibitionsPanel()}
-          {renderActivityPanel()}
         </>
       )
     }

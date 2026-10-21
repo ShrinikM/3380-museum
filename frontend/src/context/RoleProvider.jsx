@@ -41,10 +41,6 @@ function RoleProvider({ children }) {
       return false
     }
 
-    if (path === '/') {
-      return true
-    }
-
     return ROLES[user.role]?.pages.includes(path) ?? false
   }
 

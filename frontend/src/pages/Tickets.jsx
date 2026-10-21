@@ -312,7 +312,6 @@ function Tickets() {
         </Panel>
       </div>
 
-      {}
       <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <label htmlFor="ticket-search" className="sr-only">

@@ -1,7 +1,7 @@
-
 import { useState } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import PublicNavbar from './components/PublicNavbar'
 import Sidebar from './components/Sidebar'
 import Exhibitions from './pages/Exhibitions'
 import Tickets from './pages/Tickets'
@@ -17,6 +17,8 @@ import Staff from './pages/Staff'
 import Reports from './pages/Reports'
 import Dashboard from './pages/Dashboard'
 import HomePage from './pages/HomePage'
+import AboutPage from './pages/AboutPage'
+import GalleryPage from './pages/GalleryPage'
 import { useRole } from './context/role'
 import './App.css'
 
@@ -38,12 +40,36 @@ function NotFound() {
   )
 }
 
+function PublicLayout() {
+  return (
+    <>
+      <PublicNavbar />
+
+      <main className="public-main">
+        <Outlet />
+      </main>
+    </>
+  )
+}
+
 function App() {
   const { user, canView } = useRole()
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   if (user === null) {
-    return <Login />
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    )
   }
 
   const protect = (path, page) => {
@@ -62,12 +88,10 @@ function App() {
 
         <main className="main-content">
           <Routes>
-            <Route path="/" element={protect('/', <HomePage />)} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/login" element={<Navigate to="/dashboard" replace />} />
 
-            <Route
-              path="/dashboard"
-              element={protect('/dashboard', <Dashboard />)}
-            />
+            <Route path="/dashboard" element={protect('/dashboard', <Dashboard />)} />
 
             <Route path="/artists" element={protect('/artists', <Artists />)} />
             <Route path="/artworks" element={protect('/artworks', <Artworks />)} />
