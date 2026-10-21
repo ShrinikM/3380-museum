@@ -95,6 +95,60 @@ const reportTypes = [
       { key: 'AverageDiscount', label: 'Average Discount %' },
     ],
   },
+  {
+    id: 'giftshop-items',
+    name: 'Gift Shop Revenue by Item',
+    formats: ['bar', 'pie'],
+    labelKey: 'ItemName',
+    charts: [
+      {
+        title: 'Revenue',
+        series: [{ key: 'Revenue', label: 'Revenue' }],
+        prefix: '$',
+        suffix: '',
+      },
+      {
+        title: 'Units Sold',
+        series: [{ key: 'UnitsSold', label: 'Units Sold' }],
+        prefix: '',
+        suffix: '',
+      },
+    ],
+    columns: [
+      { key: 'ItemName', label: 'Item' },
+      { key: 'Category', label: 'Category' },
+      { key: 'UnitsSold', label: 'Units Sold' },
+      { key: 'Revenue', label: 'Revenue' },
+      { key: 'PercentOfTotal', label: 'Percent of Total' },
+    ],
+  },
+  {
+    id: 'cafe-items',
+    name: 'Cafe Revenue by Item',
+    formats: ['bar', 'pie'],
+    labelKey: 'ItemName',
+    charts: [
+      {
+        title: 'Revenue',
+        series: [{ key: 'Revenue', label: 'Revenue' }],
+        prefix: '$',
+        suffix: '',
+      },
+      {
+        title: 'Units Sold',
+        series: [{ key: 'UnitsSold', label: 'Units Sold' }],
+        prefix: '',
+        suffix: '',
+      },
+    ],
+    columns: [
+      { key: 'ItemName', label: 'Item' },
+      { key: 'Category', label: 'Category' },
+      { key: 'UnitsSold', label: 'Units Sold' },
+      { key: 'Revenue', label: 'Revenue' },
+      { key: 'PercentOfTotal', label: 'Percent of Total' },
+    ],
+  },
 ]
 
 function getSavedHistory(storageKey) {

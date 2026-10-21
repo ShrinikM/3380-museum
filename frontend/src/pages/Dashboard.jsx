@@ -1,17 +1,9 @@
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import {
-  ArrowRight,
-  CalendarDays,
-  Images,
-  Layers3,
-  Ticket,
-  Users,
-} from 'lucide-react'
-import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -19,74 +11,48 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { callApi } from '../api'
 import { useRole } from '../context/role'
 
-const visitorData = [
-  { month: 'Jan', visitors: 120 },
-  { month: 'Feb', visitors: 180 },
-  { month: 'Mar', visitors: 150 },
-  { month: 'Apr', visitors: 230 },
-  { month: 'May', visitors: 200 },
-  { month: 'Jun', visitors: 280 },
-]
-
-const artworkData = [
-  {
-    name: 'Mona Lisa',
-    views: 245,
-    image:
-      'https://upload.wikimedia.org/wikipedia/commons/6/6a/Mona_Lisa.jpg',
-  },
-  {
-    name: 'The Great Wave',
-    views: 167,
-    image:
-      'https://upload.wikimedia.org/wikipedia/commons/0/0a/The_Great_Wave_off_Kanagawa.jpg',
-  },
-  {
-    name: 'Girl with a Pearl Earring',
-    views: 143,
-    image:
-      'https://upload.wikimedia.org/wikipedia/commons/d/d7/Meisje_met_de_parel.jpg',
-  },
-  {
-    name: 'The Persistence of Memory',
-    views: 121,
-    image:
-      'https://upload.wikimedia.org/wikipedia/en/d/dd/The_Persistence_of_Memory.jpg',
-  },
-]
-
-const collectionData = [
-  { name: 'Paintings', value: 45 },
-  { name: 'Sculptures', value: 25 },
-  { name: 'Photography', value: 20 },
-  { name: 'Other', value: 10 },
-]
-
-const colors = [
-  '#6f5bd3',
-  '#6eab91',
-  '#e3a45c',
-  '#7395cf',
-  '#cf8292',
-  '#b8a7f2',
-]
+const colors = ['#1a3c6e', '#c8962e', '#1a7b4e', '#b0271a', '#6b6a78']
 
 const numberFormat = new Intl.NumberFormat('en-US')
+
+const moneyFormat = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+})
+
+const priceFormat = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
 
 function formatNumber(value) {
   return numberFormat.format(value)
 }
 
-function Panel({ title, subtitle, action, children, className = '' }) {
+function formatMoney(value) {
+  return moneyFormat.format(value)
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function Panel({ title, action, children }) {
   return (
-    <section className={`dash-panel ${className}`}>
+    <section className="dash-panel">
       <div className="dash-panel-heading">
-        <div>
-          <h2>{title}</h2>
-          {subtitle && <p>{subtitle}</p>}
-        </div>
+        <h2>{title}</h2>
         {action}
       </div>
       {children}
@@ -94,31 +60,45 @@ function Panel({ title, subtitle, action, children, className = '' }) {
   )
 }
 
-function StatTile({ label, value, detail, icon: Icon, tone = 'blue' }) {
+function StatTile({ label, value }) {
   return (
     <article className="dash-stat-card">
-      <div className={`dash-stat-icon ${tone}`}>
-        <Icon size={20} strokeWidth={1.8} />
-      </div>
       <div className="dash-stat-label">{label}</div>
       <div className="dash-stat-value">{value}</div>
-      <div className="dash-stat-detail">{detail}</div>
     </article>
   )
 }
 
 function Dashboard() {
-  const { user, canView } = useRole()
+  const { user } = useRole()
   const isAdmin = user?.role === 'Admin'
+  const today = new Date().toLocaleDateString('en-CA')
 
-  const quickLinks = [
-    { title: 'Artists', path: '/artists', icon: Users },
-    { title: 'Artworks', path: '/artworks', icon: Images },
-    { title: 'Collections', path: '/collections', icon: Layers3 },
-    { title: 'Exhibitions', path: '/exhibitions', icon: CalendarDays },
-    { title: 'Tickets', path: '/tickets', icon: Ticket },
-    { title: 'Memberships', path: '/memberships', icon: Users },
-  ].filter((item) => canView(item.path))
+  const [startDate, setStartDate] = useState(today.slice(0, 4) + '-01-01')
+  const [endDate, setEndDate] = useState(today)
+  const [dashboard, setDashboard] = useState(null)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    if (!isAdmin || !startDate || !endDate || startDate > endDate) {
+      return
+    }
+
+    async function loadDashboard() {
+      try {
+        const data = await callApi(
+          '/api/dashboard?start=' + startDate + '&end=' + endDate,
+          'GET'
+        )
+        setDashboard(data)
+        setLoadError('')
+      } catch (err) {
+        setLoadError('Could not load dashboard: ' + err.message)
+      }
+    }
+
+    loadDashboard()
+  }, [startDate, endDate, isAdmin])
 
   if (!isAdmin) {
     return (
@@ -134,207 +114,263 @@ function Dashboard() {
   return (
     <div className="page dashboard-page">
       <div className="dash-page-header">
-        <div>
-          <span className="eyebrow">COOGMUSEUM / OVERVIEW</span>
-          <h1>CoogMuseum Dashboard</h1>
-          <p>Overview of visitors, exhibitions, and artwork.</p>
+        <h1>CoogMuseum Dashboard</h1>
+
+        <div className="dash-controls">
+          <div className="dash-control">
+            <label htmlFor="dash-start">Start Date</label>
+            <input
+              id="dash-start"
+              className="input"
+              type="date"
+              max={endDate || today}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          <div className="dash-control">
+            <label htmlFor="dash-end">End Date</label>
+            <input
+              id="dash-end"
+              className="input"
+              type="date"
+              min={startDate}
+              max={today}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="dash-stat-grid">
-        <StatTile
-          label="Total Artworks"
-          value={formatNumber(100)}
-          detail="Artwork records"
-          icon={Images}
-          tone="violet"
-        />
+      {loadError && (
+        <div className="dash-error" role="alert">
+          <p>{loadError}</p>
+        </div>
+      )}
 
-        <StatTile
-          label="Total Visitors"
-          value={formatNumber(1200)}
-          detail="Recorded museum visitors"
-          icon={Users}
-          tone="green"
-        />
+      {dashboard && (
+        <>
+          <div className="dash-stat-grid">
+            <StatTile
+              label="Total Artworks"
+              value={formatNumber(dashboard.artworks)}
+            />
 
-        <StatTile
-          label="Current Exhibitions"
-          value={formatNumber(8)}
-          detail="Currently active"
-          icon={CalendarDays}
-          tone="orange"
-        />
+            <StatTile
+              label="Tickets Sold"
+              value={formatNumber(dashboard.tickets)}
+            />
 
-        <StatTile
-          label="Total Artworks Viewed"
-          value={formatNumber(2450)}
-          detail="Recorded artwork views"
-          icon={Layers3}
-          tone="blue"
-        />
-      </div>
+            <StatTile
+              label="Revenue"
+              value={formatMoney(dashboard.revenue)}
+            />
 
-      <div className="dash-main-grid">
-        <Panel
-          title="Visitor Insights"
-          className="dash-chart-panel"
-        >
-          <div className="dash-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={visitorData}
-                margin={{ top: 12, right: 12, left: -15, bottom: 4 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#ebe8e2"
-                />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fill: '#777582', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: '#777582', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  formatter={(value) => [
-                    numberFormat.format(value),
-                    'Visitors',
-                  ]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="visitors"
-                  name="Visitors"
-                  stroke="#6eabcf"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-
-        <Panel title="Art Collection Breakdown">
-          <div className="dash-donut-wrap">
-            <ResponsiveContainer width="100%" height={205}>
-              <PieChart>
-                <Pie
-                  data={collectionData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={55}
-                  outerRadius={78}
-                  paddingAngle={3}
-                >
-                  {collectionData.map((item, index) => (
-                    <Cell
-                      key={`${item.name}-${index}`}
-                      fill={colors[index % colors.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => [
-                    numberFormat.format(value),
-                    'Artworks',
-                  ]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <StatTile
+              label="New Memberships"
+              value={formatNumber(dashboard.newMembers)}
+            />
           </div>
 
-          <div className="dash-legend">
-            {collectionData.map((item, index) => (
-              <div
-                className="dash-legend-row"
-                key={`${item.name}-${index}`}
-              >
-                <span
-                  className="dash-legend-dot"
-                  style={{
-                    background: colors[index % colors.length],
-                  }}
-                />
-                <span>{item.name}</span>
-                <strong>{formatNumber(item.value)}</strong>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
-
-      <Panel
-        title="Artwork Insights"
-        subtitle="Top artworks by views"
-      >
-        <div className="dash-activity-list">
-          {artworkData.map((item, index) => (
-            <div
-              className="dash-activity-item"
-              key={`${item.name}-${index}`}
+          <div className="dash-main-grid">
+            <Panel
+              title="Revenue by Source"
+              action={
+                <div className="dash-panel-total">
+                  {formatMoney(dashboard.revenue)}
+                </div>
+              }
             >
-              <img
-                src={item.image}
-                alt={item.name}
-                className="dash-artwork-image"
-                onError={(event) => {
-                  event.currentTarget.style.display = 'none'
-                }}
-              />
-
-              <div>
-                <strong>{item.name}</strong>
-                <p>Artwork views</p>
+              <div className="dash-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={dashboard.revenueBySource}
+                    margin={{ top: 12, right: 12, left: 0, bottom: 4 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#e3e0da"
+                    />
+                    <XAxis
+                      dataKey="Source"
+                      tick={{ fill: '#6b6a78', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: '#6b6a78', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(value) => '$' + numberFormat.format(value)}
+                    />
+                    <Tooltip
+                      formatter={(value) => [formatMoney(value), 'Revenue']}
+                    />
+                    <Bar
+                      dataKey="Revenue"
+                      fill={colors[0]}
+                      radius={[3, 3, 0, 0]}
+                      maxBarSize={56}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
+            </Panel>
 
-              <b>{formatNumber(item.views)}</b>
+            <Panel title="Collection Breakdown">
+              {dashboard.collection.length === 0 && (
+                <p className="dash-empty">No artworks yet.</p>
+              )}
+
+              {dashboard.collection.length > 0 && (
+                <>
+                  <div className="dash-donut-wrap">
+                    <ResponsiveContainer width="100%" height={205}>
+                      <PieChart>
+                        <Pie
+                          data={dashboard.collection}
+                          dataKey="Artworks"
+                          nameKey="Type"
+                          innerRadius={55}
+                          outerRadius={78}
+                          paddingAngle={3}
+                        >
+                          {dashboard.collection.map((item, index) => (
+                            <Cell
+                              key={item.Type}
+                              fill={colors[index % colors.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [
+                            numberFormat.format(value),
+                            'Artworks',
+                          ]}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="dash-legend">
+                    {dashboard.collection.map((item, index) => (
+                      <div className="dash-legend-row" key={item.Type}>
+                        <span
+                          className="dash-legend-dot"
+                          style={{ background: colors[index % colors.length] }}
+                        />
+                        <span>{item.Type}</span>
+                        <strong>{formatNumber(item.Artworks)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </Panel>
+          </div>
+
+          <div className="dash-main-grid">
+            <Panel title="Top Exhibitions">
+              <div className="table-wrap">
+                <table className="data-table">
+                  <caption className="sr-only">Top exhibitions by tickets sold</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Exhibition</th>
+                      <th scope="col">Tickets</th>
+                      <th scope="col">Revenue</th>
+                      <th scope="col">Avg. Price</th>
+                      <th scope="col">Capacity</th>
+                      <th scope="col">Capacity Used</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {dashboard.topExhibitions.map((item, index) => (
+                      <tr key={item.ExhibitionID}>
+                        <td className="strong">
+                          {index + 1}. {item.Name}
+                        </td>
+                        <td className="mono">{formatNumber(item.TicketsSold)}</td>
+                        <td className="mono">{formatMoney(item.Revenue)}</td>
+                        <td className="mono">{priceFormat.format(item.AveragePrice)}</td>
+                        <td className="mono">{formatNumber(item.Capacity)}</td>
+                        <td className="mono">{item.PercentOfCapacity}%</td>
+                      </tr>
+                    ))}
+
+                    {dashboard.topExhibitions.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="empty">
+                          No tickets sold in this period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+
+            <Panel title="Current Exhibitions">
+              {dashboard.currentExhibitions.length === 0 && (
+                <p className="dash-empty">No exhibitions are open right now.</p>
+              )}
+
+              <div className="dash-list">
+                {dashboard.currentExhibitions.map((item) => (
+                  <div key={item.ExhibitionID}>
+                    <div className="dash-row">
+                      <div>
+                        <strong>{item.Name}</strong>
+                        <p>Ends {item.EndDate}</p>
+                      </div>
+                      <div className="dash-row-value">
+                        {formatNumber(item.TicketsSold)} /{' '}
+                        {formatNumber(item.Capacity)}
+                        <span>{item.PercentFull}% full</span>
+                      </div>
+                    </div>
+
+                    <div className="dash-progress">
+                      <div
+                        className="dash-progress-fill"
+                        style={{ width: Math.min(item.PercentFull, 100) + '%' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+
+          <Panel title="Recent Activity">
+            {dashboard.activity.length === 0 && (
+              <p className="dash-empty">No activity yet.</p>
+            )}
+
+            <div className="dash-activity-scroll">
+              {dashboard.activity.map((item, index) => (
+                <div className="dash-activity-item" key={index}>
+                  <div>
+                    <strong>{item.Description}</strong>
+                    <p>
+                      {item.Kind}
+                      {item.StaffName ? ' · by ' + item.StaffName : ''}
+                    </p>
+                  </div>
+
+                  <span className="dash-activity-time">
+                    {formatDateTime(item.At)}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </Panel>
-
-      <Panel
-        title="Quick Access"
-        action={
-          <span className="dash-access-count">
-            {quickLinks.length} available
-          </span>
-        }
-      >
-        <div className="dash-quick-links">
-          {quickLinks.map((item) => {
-            const Icon = item.icon
-
-            return (
-              <Link
-                className="dash-quick-link"
-                to={item.path}
-                key={item.path}
-              >
-                <span className="dash-quick-icon">
-                  <Icon size={19} />
-                </span>
-                <span>
-                  <strong>{item.title}</strong>
-                </span>
-                <ArrowRight
-                  size={16}
-                  className="dash-quick-arrow"
-                />
-              </Link>
-            )
-          })}
-        </div>
-      </Panel>
+          </Panel>
+        </>
+      )}
     </div>
   )
 }

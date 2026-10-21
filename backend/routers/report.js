@@ -300,6 +300,51 @@ async function getMembershipTypesReport(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
+async function getItemRevenue(params, saleTable, itemTable) {
+  const dates = readDates(params);
+  const sales = getRange("sale.SaleDate", dates);
+
+  const [rows] = await pool.query(
+    `SELECT
+       item.ItemID,
+       item.ItemName,
+       item.Category,
+       SUM(sale.Quantity) AS UnitsSold,
+       SUM(sale.SalePrice * sale.Quantity) AS Revenue
+     FROM ` + saleTable + ` AS sale
+     JOIN ` + itemTable + ` AS item ON item.ItemID = sale.ItemID
+     WHERE sale.IsDeleted = 0` + sales.where + `
+     GROUP BY item.ItemID, item.ItemName, item.Category
+     ORDER BY Revenue DESC, item.ItemName`,
+    sales.values
+  );
+
+  let total = 0;
+  for (const row of rows) {
+    row.UnitsSold = Number(row.UnitsSold);
+    row.Revenue = Number(row.Revenue);
+    total = total + row.Revenue;
+  }
+
+  for (const row of rows) {
+    if (total > 0) {
+      row.PercentOfTotal = Math.round((row.Revenue / total) * 1000) / 10;
+    } else {
+      row.PercentOfTotal = 0;
+    }
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getGiftShopItemsReport(params, body, staffId) {
+  return getItemRevenue(params, "giftshopsale", "giftshop");
+}
+
+async function getCafeItemsReport(params, body, staffId) {
+  return getItemRevenue(params, "cafesale", "cafe");
+}
+
 module.exports = [
   { method: "GET", path: "/api/reports/collection", handler: getCollectionReport },
   { method: "GET", path: "/api/reports/exhibitions", handler: getExhibitionReport },
@@ -308,4 +353,6 @@ module.exports = [
   { method: "GET", path: "/api/reports/revenue", handler: getRevenueReport },
   { method: "GET", path: "/api/reports/ticket-sales", handler: getTicketSalesReport },
   { method: "GET", path: "/api/reports/membership-types", handler: getMembershipTypesReport },
+  { method: "GET", path: "/api/reports/giftshop-items", handler: getGiftShopItemsReport },
+  { method: "GET", path: "/api/reports/cafe-items", handler: getCafeItemsReport },
 ];

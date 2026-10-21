@@ -328,7 +328,7 @@ function Chart({ type, title, data, labelKey, series, prefix = '', suffix = '' }
 
   return (
     <div className="chart-card">
-      <h3 className="chart-title">{title}</h3>
+      {title && <h3 className="chart-title">{title}</h3>}
 
       {!hasValues && <p className="empty">No data for this date range.</p>}
 
