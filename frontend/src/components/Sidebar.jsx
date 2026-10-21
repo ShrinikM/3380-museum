@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
 import { useRole } from '../context/role'
 
+
 const SECTIONS = [
   {
     label: 'Overview',
     items: [
-      { to: '/', text: 'Dashboard' },
+      { to: '/', text: 'Home' },
+      { to: '/dashboard', text: 'Dashboard' },
     ],
   },
   {
@@ -40,6 +42,7 @@ const SECTIONS = [
     ],
   },
 ]
+
 
 function Sidebar() {
   const { canView } = useRole()

@@ -1,11 +1,31 @@
+
 import { useRole } from '../context/role'
 
-function Navbar() {
+
+function Navbar({ onToggleSidebar, sidebarOpen }) {
   const { user, logout } = useRole()
 
   return (
     <header className="navbar">
       <div className="navbar-brand">
+        
+      <button
+        type="button"
+        className="brand-toggle"
+        onClick={() => {
+          onToggleSidebar()
+        }}
+        aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        title="Click to toggle sidebar"
+      >
+        <img
+          src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/UH_CougarPaw.png/250px-UH_CougarPaw.png"
+          alt=""
+          className="brand-hand"
+          draggable="false"
+        />
+      </button>
+
         <span className="brand-name">CoogMuseum</span>
       </div>
 

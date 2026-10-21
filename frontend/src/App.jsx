@@ -1,7 +1,8 @@
+
+import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Sidebar from './components/Sidebar'
-import Dashboard from './pages/Dashboard'
 import Exhibitions from './pages/Exhibitions'
 import Tickets from './pages/Tickets'
 import Memberships from './pages/Memberships'
@@ -14,6 +15,8 @@ import Collections from './pages/Collections'
 import Donations from './pages/Donations'
 import Staff from './pages/Staff'
 import Reports from './pages/Reports'
+import Dashboard from './pages/Dashboard'
+import HomePage from './pages/HomePage'
 import { useRole } from './context/role'
 import './App.css'
 
@@ -37,6 +40,7 @@ function NotFound() {
 
 function App() {
   const { user, canView } = useRole()
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   if (user === null) {
     return <Login />
@@ -48,21 +52,21 @@ function App() {
 
   return (
     <>
-      <Navbar />
+      <Navbar
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
+      />
 
-      <div className="app-layout">
-        <Sidebar />
+      <div className={`app-layout ${sidebarOpen ? '' : 'sidebar-hidden'}`}>
+        {sidebarOpen && <Sidebar />}
 
         <main className="main-content">
           <Routes>
-            <Route
-              path="/"
-              element={protect('/', <Dashboard />)}
-            />
+            <Route path="/" element={protect('/', <HomePage />)} />
 
             <Route
               path="/dashboard"
-              element={<Navigate to="/" replace />}
+              element={protect('/dashboard', <Dashboard />)}
             />
 
             <Route path="/artists" element={protect('/artists', <Artists />)} />
