@@ -14,10 +14,6 @@ function formatDate(date) {
   return year + "-" + month + "-" + day;
 }
 
-function daysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
 function checkDate(value, fieldName) {
   const date = new Date(value);
 
@@ -107,14 +103,6 @@ function sumRevenue(rows) {
   return Math.round(total * 100) / 100;
 }
 
-async function getArtworkCount() {
-  const [rows] = await pool.query(
-    "SELECT COUNT(*) AS Artworks FROM artwork WHERE IsDeleted = 0"
-  );
-
-  return Number(rows[0].Artworks);
-}
-
 async function getCurrentExhibitions() {
   const [rows] = await pool.query(
     `SELECT
@@ -202,7 +190,7 @@ async function getCollectionBreakdown() {
   return rows;
 }
 
-async function getRecentActivity() {
+async function getRecentActivity(kinds) {
   const [rows] = await pool.query(
     `SELECT
        activity.At,
@@ -260,43 +248,206 @@ async function getRecentActivity() {
          artwork.CreatedBy
        FROM artwork
        WHERE artwork.IsDeleted = 0
+       UNION ALL
+       SELECT
+         artist.CreatedAt,
+         'Artist',
+         CONCAT('Artist added: ', artist.FirstName, ' ', artist.LastName),
+         artist.CreatedBy
+       FROM artist
+       WHERE artist.IsDeleted = 0
+       UNION ALL
+       SELECT
+         collection.CreatedAt,
+         'Collection',
+         CONCAT('Collection added: ', collection.Name),
+         collection.CreatedBy
+       FROM collection
+       WHERE collection.IsDeleted = 0
      ) AS activity
      LEFT JOIN staff ON staff.StaffID = activity.StaffID
+     WHERE activity.Kind IN (?)
      ORDER BY activity.At DESC
-     LIMIT 30`
+     LIMIT 30`,
+    [kinds]
   );
 
   return rows;
 }
 
-async function getDashboard(params, body, staffId) {
+async function getRole(staffId) {
+  const [rows] = await pool.query(
+    "SELECT Role FROM staff WHERE StaffID = ? AND IsDeleted = 0",
+    [staffId]
+  );
+
+  if (rows.length === 0) {
+    throw makeError(403, "Your account cannot view the dashboard");
+  }
+
+  return rows[0].Role;
+}
+
+async function getCount(table, extraWhere) {
+  const [rows] = await pool.query(
+    "SELECT COUNT(*) AS Total FROM " + table + " WHERE IsDeleted = 0" + extraWhere
+  );
+
+  return Number(rows[0].Total);
+}
+
+async function getActiveExhibitionCount() {
+  return getCount("exhibition", " AND StartDate <= CURDATE() AND EndDate >= CURDATE()");
+}
+
+async function getExhibitionArtworks() {
+  const [rows] = await pool.query(
+    `SELECT
+       exhibition.ExhibitionID,
+       exhibition.Name,
+       DATE_FORMAT(exhibition.EndDate, '%Y-%m-%d') AS EndDate,
+       COUNT(artwork.ArtworkID) AS ArtworkCount
+     FROM exhibition
+     LEFT JOIN artworkexhibition
+       ON artworkexhibition.ExhibitionID = exhibition.ExhibitionID
+     LEFT JOIN artwork
+       ON artwork.ArtworkID = artworkexhibition.ArtworkID
+       AND artwork.IsDeleted = 0
+     WHERE exhibition.IsDeleted = 0
+       AND exhibition.StartDate <= CURDATE()
+       AND exhibition.EndDate >= CURDATE()
+     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.EndDate
+     ORDER BY exhibition.EndDate, exhibition.Name`
+  );
+
+  for (const row of rows) {
+    row.ArtworkCount = Number(row.ArtworkCount);
+  }
+
+  return rows;
+}
+
+async function getCollectionSizes() {
+  const [rows] = await pool.query(
+    `SELECT
+       collection.CollectionID,
+       collection.Name,
+       COUNT(artwork.ArtworkID) AS Artworks
+     FROM collection
+     LEFT JOIN artwork
+       ON artwork.CollectionID = collection.CollectionID
+       AND artwork.IsDeleted = 0
+     WHERE collection.IsDeleted = 0
+     GROUP BY collection.CollectionID, collection.Name
+     ORDER BY Artworks DESC, collection.Name`
+  );
+
+  for (const row of rows) {
+    row.Artworks = Number(row.Artworks);
+  }
+
+  return rows;
+}
+
+async function getAdminDashboard(params) {
   const ranges = getRanges(params);
 
   const revenue = await getRevenue(ranges.start, ranges.end);
   const counts = await getCounts(ranges.start, ranges.end);
-  const artworks = await getArtworkCount();
-  const currentExhibitions = await getCurrentExhibitions();
-  const topExhibitions = await getTopExhibitions(ranges.start, ranges.end);
-  const collection = await getCollectionBreakdown();
-  const activity = await getRecentActivity();
+  const artworks = await getCount("artwork", "");
 
   const data = {
+    role: "Admin",
     start: ranges.start,
     end: ranges.end,
-    artworks: artworks,
-    tickets: counts.Tickets,
-    revenue: sumRevenue(revenue),
-    newMembers: counts.NewMembers,
+    tiles: [
+      { label: "Total Artworks", value: artworks, format: "number" },
+      { label: "Tickets Sold", value: counts.Tickets, format: "number" },
+      { label: "Revenue", value: sumRevenue(revenue), format: "money" },
+      { label: "New Memberships", value: counts.NewMembers, format: "number" },
+    ],
     revenueBySource: revenue,
-    currentExhibitions: currentExhibitions,
-    topExhibitions: topExhibitions,
-    collection: collection,
-    activity: activity,
+    collection: await getCollectionBreakdown(),
+    topExhibitions: await getTopExhibitions(ranges.start, ranges.end),
+    currentExhibitions: await getCurrentExhibitions(),
+    activity: await getRecentActivity([
+      "Ticket", "Gift Shop", "Cafe", "Membership", "Donation", "Artwork", "Artist", "Collection",
+    ]),
   };
 
   return { status: 200, data: data };
 }
 
+async function getStaffDashboard() {
+  const data = {
+    role: "Staff",
+    tiles: [
+      { label: "Total Artworks", value: await getCount("artwork", ""), format: "number" },
+      { label: "Total Artists", value: await getCount("artist", ""), format: "number" },
+      { label: "Collections", value: await getCount("collection", ""), format: "number" },
+      { label: "Active Exhibitions", value: await getActiveExhibitionCount(), format: "number" },
+    ],
+    collection: await getCollectionBreakdown(),
+    collectionSizes: await getCollectionSizes(),
+    exhibitionArtworks: await getExhibitionArtworks(),
+    activity: await getRecentActivity(["Artwork", "Artist", "Collection"]),
+  };
+
+  return { status: 200, data: data };
+}
+
+async function getOperatorDashboard(params) {
+  const ranges = getRanges(params);
+
+  const revenue = await getRevenue(ranges.start, ranges.end);
+  const counts = await getCounts(ranges.start, ranges.end);
+
+  let storeSales = 0;
+  const sources = [];
+  for (const row of revenue) {
+    if (row.Source === "Gift Shop" || row.Source === "Cafe") {
+      storeSales = storeSales + row.Revenue;
+    }
+    if (row.Source !== "Donations") {
+      sources.push(row);
+    }
+  }
+
+  const data = {
+    role: "Operator",
+    start: ranges.start,
+    end: ranges.end,
+    tiles: [
+      { label: "Tickets Sold", value: counts.Tickets, format: "number" },
+      { label: "Store Sales", value: Math.round(storeSales * 100) / 100, format: "money" },
+      { label: "New Memberships", value: counts.NewMembers, format: "number" },
+      { label: "Active Exhibitions", value: await getActiveExhibitionCount(), format: "number" },
+    ],
+    revenueBySource: sources,
+    topExhibitions: await getTopExhibitions(ranges.start, ranges.end),
+    currentExhibitions: await getCurrentExhibitions(),
+    activity: await getRecentActivity(["Ticket", "Gift Shop", "Cafe", "Membership"]),
+  };
+
+  return { status: 200, data: data };
+}
+
+async function getDashboard(params, body, staffId) {
+  const role = await getRole(staffId);
+
+  if (role === "Admin") {
+    return getAdminDashboard(params);
+  }
+  if (role === "Staff") {
+    return getStaffDashboard();
+  }
+  if (role === "Operator") {
+    return getOperatorDashboard(params);
+  }
+
+  throw makeError(403, "Your role cannot view the dashboard");
+}
+
 module.exports = [
-  { method: "GET", path: "/api/dashboard", handler: getDashboard },
+  { method: "GET", path: "/api/dashboard", handler: getDashboard, needsActor: true },
 ];

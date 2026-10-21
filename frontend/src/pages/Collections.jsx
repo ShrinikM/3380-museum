@@ -8,7 +8,7 @@ import { useSelection } from '../hooks/useSelection'
 function Collections() {
   const { user, canEdit } = useRole()
   const allowEdit = canEdit('/collections')
-  const showAudit = user.role === 'Admin' || user.role === 'Supervisor'
+  const showAudit = user.role === 'Admin'
 
   const [collections, setCollections] = useState([])
   const [loadError, setLoadError] = useState('')

@@ -7,7 +7,7 @@ import { useSelection } from '../hooks/useSelection'
 function Artists() {
   const { user, canEdit } = useRole()
   const allowEdit = canEdit('/artists')
-  const showAudit = user.role === 'Admin' || user.role === 'Supervisor'
+  const showAudit = user.role === 'Admin'
   const today = new Date().toISOString().split('T')[0]
 
   const [artists, setArtists] = useState([])

@@ -28,33 +28,6 @@ export const ROLES = {
     ],
   },
 
-  Supervisor: {
-    pages: [
-      '/artists',
-      '/artworks',
-      '/collections',
-      '/exhibitions',
-      '/tickets',
-      '/memberships',
-      '/gift-shop',
-      '/cafe',
-      '/donations',
-      '/staff',
-      '/reports',
-    ],
-    edit: [
-      '/artists',
-      '/artworks',
-      '/collections',
-      '/exhibitions',
-      '/tickets',
-      '/memberships',
-      '/gift-shop',
-      '/cafe',
-      '/donations',
-    ],
-  },
-
   Staff: {
     pages: [
       '/artists',
@@ -87,7 +60,6 @@ export const ROLES = {
 
 export const DEMO_LOGINS = [
   { username: 'admin', password: 'admin123', role: 'Admin' },
-  { username: 'supervisor', password: 'supervisor123', role: 'Supervisor' },
   { username: 'staff', password: 'staff123', role: 'Staff' },
   { username: 'operator', password: 'operator123', role: 'Operator' },
 ]

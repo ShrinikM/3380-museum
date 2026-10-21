@@ -4,7 +4,7 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 
-const ROLE_OPTIONS = ['Admin', 'Supervisor', 'Staff', 'Operator']
+const ROLE_OPTIONS = ['Admin', 'Staff', 'Operator']
 
 const DEPARTMENT_OPTIONS = [
   'Administration',
