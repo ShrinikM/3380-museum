@@ -41,7 +41,7 @@ function Memberships() {
   const [reloadCount, setReloadCount] = useState(0)
 
   const [search, setSearch] = useState('')
-  const [selectedType, setSelectedType] = useState('All') // 👈 Added membership type filter state
+  const [selectedType, setSelectedType] = useState('All') 
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
@@ -72,8 +72,8 @@ function Memberships() {
               (member.StartDate || '').split('T')[0] > today
                 ? 'upcoming'
                 : (member.EndDate || '').split('T')[0] < today
-                  ? 'expired'
-                  : 'active',
+                ? 'expired'
+                : 'active',
           }))
         )
 
@@ -115,7 +115,7 @@ function Memberships() {
     0
   )
 
-  // 🔍 Updated filter logic to support both search text and type dropdown filtering
+  
   const filtered = memberships.filter((member) => {
     const name = `${member.firstName} ${member.lastName}`.toLowerCase()
     const searchText = search.toLowerCase()
@@ -364,7 +364,7 @@ function Memberships() {
         ))}
       </div>
 
-      {/* Toolbar containing search input and membership type filter dropdown */}
+      {/* Uniform toolbar styling matching search and dropdown controls */}
       <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <label htmlFor="membership-search" className="sr-only">
@@ -391,6 +391,16 @@ function Memberships() {
             className="input"
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
+            style={{
+              height: '40px',
+              padding: '0 12px',
+              borderRadius: '6px',
+              border: '1px solid #cbd5e1',
+              backgroundColor: '#fff',
+              fontSize: '14px',
+              color: '#1e293b',
+              cursor: 'pointer',
+            }}
           >
             <option value="All">All Types</option>
             {membershipTypes.map((type) => (

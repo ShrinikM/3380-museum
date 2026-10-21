@@ -312,6 +312,7 @@ function Tickets() {
         </Panel>
       </div>
 
+      {/* Uniform toolbar styling matching search and dropdown controls */}
       <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <label htmlFor="ticket-search" className="sr-only">
@@ -338,6 +339,16 @@ function Tickets() {
             className="input"
             value={type}
             onChange={(e) => setType(e.target.value)}
+            style={{
+              height: '40px',
+              padding: '0 12px',
+              borderRadius: '6px',
+              border: '1px solid #cbd5e1',
+              backgroundColor: '#fff',
+              fontSize: '14px',
+              color: '#1e293b',
+              cursor: 'pointer',
+            }}
           >
             <option value="all">All Types</option>
             {ticketTypes.map((ticketType) => (
@@ -357,6 +368,16 @@ function Tickets() {
             className="input"
             value={exhibition}
             onChange={(e) => setExhibition(e.target.value)}
+            style={{
+              height: '40px',
+              padding: '0 12px',
+              borderRadius: '6px',
+              border: '1px solid #cbd5e1',
+              backgroundColor: '#fff',
+              fontSize: '14px',
+              color: '#1e293b',
+              cursor: 'pointer',
+            }}
           >
             <option value="all">All Exhibitions</option>
             {exhibitions.map((item) => (
