@@ -497,11 +497,17 @@ function Tickets() {
               required
             >
               <option value="">Select Exhibition</option>
-              {exhibitions.map((item) => (
-                <option key={item.ExhibitionID} value={item.ExhibitionID}>
-                  {item.Name}
-                </option>
-              ))}
+              {exhibitions
+                .filter(
+                  (item) =>
+                    item.Status === 'active' ||
+                    String(item.ExhibitionID) === formData.ExhibitionID
+                )
+                .map((item) => (
+                  <option key={item.ExhibitionID} value={item.ExhibitionID}>
+                    {item.Name}
+                  </option>
+                ))}
             </select>
           </div>
 

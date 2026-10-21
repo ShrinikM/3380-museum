@@ -110,6 +110,14 @@ async function deleteCollection(params, body, staffId) {
     throw makeError(409, "This collection still has artworks, so it cannot be deleted");
   }
 
+  const [exhibitions] = await pool.query(
+    "SELECT ExhibitionID FROM exhibition WHERE CollectionID = ? AND IsDeleted = 0",
+    [id]
+  );
+  if (exhibitions.length > 0) {
+    throw makeError(409, "This collection is used by an exhibition, so it cannot be deleted");
+  }
+
   await pool.query(
     "UPDATE collection SET IsDeleted = 1, UpdatedAt = NOW(), UpdatedBy = ? WHERE CollectionID = ?",
     [staffId, id]

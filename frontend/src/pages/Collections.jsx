@@ -207,6 +207,7 @@ function Collections() {
               <th scope="col">Collection</th>
               <th scope="col">Name</th>
               <th scope="col">Description</th>
+              <th scope="col">Artworks</th>
               {showAudit && <th scope="col">Created By</th>}
               {showAudit && <th scope="col">Last Updated By</th>}
             </tr>
@@ -239,6 +240,8 @@ function Collections() {
 
                 <td>{item.Description || '-'}</td>
 
+                <td>{item.ArtworkCount}</td>
+
                 {showAudit && <td>{item.CreatedByName || '-'}</td>}
                 {showAudit && <td>{item.UpdatedByName || '-'}</td>}
               </tr>
@@ -247,7 +250,7 @@ function Collections() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={3 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
+                  colSpan={4 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
                   className="empty"
                 >
                   No collections found.

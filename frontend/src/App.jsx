@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import PublicNavbar from './components/PublicNavbar'
 import Sidebar from './components/Sidebar'
@@ -20,6 +20,7 @@ import HomePage from './pages/HomePage'
 import AboutPage from './pages/AboutPage'
 import GalleryPage from './pages/GalleryPage'
 import { useRole } from './context/role'
+import { callApi } from './api'
 import './App.css'
 
 function NoAccess() {
@@ -55,6 +56,25 @@ function PublicLayout() {
 function App() {
   const { user, canView } = useRole()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [alerts, setAlerts] = useState([])
+  const location = useLocation()
+
+  useEffect(() => {
+    if (user === null) {
+      return
+    }
+
+    async function loadAlerts() {
+      try {
+        const data = await callApi('/api/alerts', 'GET')
+        setAlerts(data)
+      } catch {
+        setAlerts([])
+      }
+    }
+
+    loadAlerts()
+  }, [user, location.pathname])
 
   if (user === null) {
     return (
@@ -72,6 +92,8 @@ function App() {
     )
   }
 
+  const visibleAlerts = alerts.filter((alert) => canView(alert.Path))
+
   const protect = (path, page) => {
     return canView(path) ? page : <NoAccess />
   }
@@ -79,12 +101,13 @@ function App() {
   return (
     <>
       <Navbar
+        alerts={visibleAlerts}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
       />
 
       <div className={`app-layout ${sidebarOpen ? '' : 'sidebar-hidden'}`}>
-        {sidebarOpen && <Sidebar />}
+        {sidebarOpen && <Sidebar alerts={visibleAlerts} />}
 
         <main className="main-content">
           <Routes>

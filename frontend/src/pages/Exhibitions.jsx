@@ -9,6 +9,7 @@ function Exhibitions() {
   const allowEdit = canEdit('/exhibitions')
 
   const [exhibitions, setExhibitions] = useState([])
+  const [collections, setCollections] = useState([])
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('All') 
   const [open, setOpen] = useState(false)
@@ -24,6 +25,7 @@ function Exhibitions() {
     StartDate: '',
     EndDate: '',
     Capacity: '',
+    CollectionID: '',
   })
 
   useEffect(() => {
@@ -33,7 +35,10 @@ function Exhibitions() {
       setLoading(true)
 
       try {
-        const data = await callApi('/api/exhibitions', 'GET')
+        const [data, collectionsData] = await Promise.all([
+          callApi('/api/exhibitions', 'GET'),
+          callApi('/api/collections', 'GET'),
+        ])
 
         if (!Array.isArray(data)) {
           throw new Error(
@@ -42,6 +47,7 @@ function Exhibitions() {
         }
 
         if (!cancelled) {
+          setCollections(collectionsData)
           setExhibitions(
             data.map((exhibition) => ({
               ...exhibition,
@@ -87,6 +93,7 @@ function Exhibitions() {
       StartDate: '',
       EndDate: '',
       Capacity: '',
+      CollectionID: '',
     })
   }
 
@@ -113,6 +120,9 @@ function Exhibitions() {
         ? exhibition.EndDate.split('T')[0]
         : '',
       Capacity: String(exhibition.Capacity),
+      CollectionID: exhibition.CollectionID
+        ? String(exhibition.CollectionID)
+        : '',
     })
 
     setEditingId(exhibition.ExhibitionID)
@@ -170,6 +180,11 @@ function Exhibitions() {
       return
     }
 
+    if (!formData.CollectionID) {
+      alert('Please select a collection.')
+      return
+    }
+
     const duplicate = exhibitions.some(
       (exhibition) =>
         exhibition.Name.toLowerCase() === name.toLowerCase() &&
@@ -195,6 +210,7 @@ function Exhibitions() {
       StartDate: formData.StartDate,
       EndDate: formData.EndDate,
       Capacity: capacity,
+      CollectionID: Number(formData.CollectionID),
     }
 
     setSaving(true)
@@ -370,6 +386,7 @@ function Exhibitions() {
                 </th>
               )}
               <th scope="col">Exhibition</th>
+              <th scope="col">Collection</th>
               <th scope="col">Start Date</th>
               <th scope="col">End Date</th>
               <th scope="col">Tickets / Capacity</th>
@@ -382,7 +399,7 @@ function Exhibitions() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={allowEdit ? 8 : 7} className="empty">
+                <td colSpan={allowEdit ? 9 : 8} className="empty">
                   Loading exhibitions...
                 </td>
               </tr>
@@ -414,6 +431,8 @@ function Exhibitions() {
                       {exhibition.Description || '-'}
                     </div>
                   </td>
+
+                  <td>{exhibition.CollectionName || '-'}</td>
 
                   <td className="mono">
                     {exhibition.StartDate
@@ -450,7 +469,7 @@ function Exhibitions() {
 
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={allowEdit ? 8 : 7} className="empty">
+                <td colSpan={allowEdit ? 9 : 8} className="empty">
                   No exhibitions found matching this filter.
                 </td>
               </tr>
@@ -475,6 +494,24 @@ function Exhibitions() {
               maxLength={255}
               required
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="exhibition-collection">Collection</label>
+            <select
+              id="exhibition-collection"
+              name="CollectionID"
+              value={formData.CollectionID}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Collection</option>
+              {collections.map((item) => (
+                <option key={item.CollectionID} value={item.CollectionID}>
+                  {item.Name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group">

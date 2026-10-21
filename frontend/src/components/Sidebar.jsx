@@ -41,7 +41,7 @@ const SECTIONS = [
   },
 ]
 
-function Sidebar() {
+function Sidebar({ alerts }) {
   const { canView } = useRole()
 
   return (
@@ -58,17 +58,27 @@ function Sidebar() {
             <div className="sidebar-section" key={section.label}>
               <div className="sidebar-label">{section.label}</div>
 
-              {visibleItems.map(({ to, text }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    'sidebar-link' + (isActive ? ' active' : '')
-                  }
-                >
-                  {text}
-                </NavLink>
-              ))}
+              {visibleItems.map(({ to, text }) => {
+                const issueCount = alerts.filter(
+                  (alert) => alert.Path === to
+                ).length
+
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      'sidebar-link' + (isActive ? ' active' : '')
+                    }
+                  >
+                    {text}
+
+                    {issueCount > 0 && (
+                      <span className="sidebar-count">{issueCount}</span>
+                    )}
+                  </NavLink>
+                )
+              })}
             </div>
           )
         })}

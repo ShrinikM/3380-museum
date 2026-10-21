@@ -308,10 +308,8 @@ async function getExhibitionArtworks() {
        DATE_FORMAT(exhibition.EndDate, '%Y-%m-%d') AS EndDate,
        COUNT(artwork.ArtworkID) AS ArtworkCount
      FROM exhibition
-     LEFT JOIN artworkexhibition
-       ON artworkexhibition.ExhibitionID = exhibition.ExhibitionID
      LEFT JOIN artwork
-       ON artwork.ArtworkID = artworkexhibition.ArtworkID
+       ON artwork.CollectionID = exhibition.CollectionID
        AND artwork.IsDeleted = 0
      WHERE exhibition.IsDeleted = 0
        AND exhibition.StartDate <= CURDATE()

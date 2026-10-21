@@ -9,6 +9,8 @@ const selectExhibitions = `
     DATE_FORMAT(e.StartDate, '%Y-%m-%d') AS StartDate,
     DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate,
     e.Capacity,
+    e.CollectionID,
+    c.Name AS CollectionName,
 
     (SELECT COUNT(*)
      FROM ticket t
@@ -16,9 +18,8 @@ const selectExhibitions = `
        AND t.IsDeleted = 0) AS Tickets,
 
     (SELECT COUNT(*)
-     FROM artworkexhibition ae
-     JOIN artwork a ON a.ArtworkID = ae.ArtworkID
-     WHERE ae.ExhibitionID = e.ExhibitionID
+     FROM artwork a
+     WHERE a.CollectionID = e.CollectionID
        AND a.IsDeleted = 0) AS ArtworkCount,
 
     (SELECT GROUP_CONCAT(
@@ -39,6 +40,8 @@ const selectExhibitions = `
     END AS Status
 
   FROM exhibition e
+  JOIN collection c
+    ON c.CollectionID = e.CollectionID
   WHERE e.IsDeleted = 0
 `;
 
@@ -143,6 +146,20 @@ function checkExhibition(body) {
 
   exhibition.Capacity = capacity;
 
+  const collectionID = Number(body.CollectionID);
+
+  if (
+    body.CollectionID === "" ||
+    body.CollectionID === null ||
+    body.CollectionID === undefined ||
+    !Number.isSafeInteger(collectionID) ||
+    collectionID < 1
+  ) {
+    throw makeError(400, "Please select a collection");
+  }
+
+  exhibition.CollectionID = collectionID;
+
   return exhibition;
 }
 
@@ -196,6 +213,17 @@ async function checkDuplicateName(name, id = null) {
   }
 }
 
+async function checkCollection(collectionId) {
+  const [rows] = await pool.query(
+    "SELECT CollectionID FROM collection WHERE CollectionID = ? AND IsDeleted = 0",
+    [collectionId]
+  );
+
+  if (rows.length === 0) {
+    throw makeError(400, "The selected collection does not exist");
+  }
+}
+
 async function getExhibitions() {
   const [rows] = await pool.query(
     selectExhibitions + " ORDER BY e.StartDate"
@@ -211,18 +239,20 @@ async function addExhibition(params, body) {
   const exhibition = checkExhibition(body);
 
   await checkDuplicateName(exhibition.Name);
+  await checkCollection(exhibition.CollectionID);
 
   const [result] = await pool.query(
     `INSERT INTO exhibition
-      (Name, Description, StartDate, EndDate, Capacity,
+      (Name, Description, StartDate, EndDate, Capacity, CollectionID,
        CreatedAt, UpdatedAt, CreatedBy)
-     VALUES (?, ?, ?, ?, ?, NOW(), NOW(), NULL)`,
+     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL)`,
     [
       exhibition.Name,
       exhibition.Description,
       exhibition.StartDate,
       exhibition.EndDate,
       exhibition.Capacity,
+      exhibition.CollectionID,
     ]
   );
 
@@ -246,6 +276,10 @@ async function updateExhibition(params, body) {
 
   await checkDuplicateName(exhibition.Name, id);
 
+  if (Number(existing.CollectionID) !== exhibition.CollectionID) {
+    await checkCollection(exhibition.CollectionID);
+  }
+
   await pool.query(
     `UPDATE exhibition
      SET Name = ?,
@@ -253,6 +287,7 @@ async function updateExhibition(params, body) {
          StartDate = ?,
          EndDate = ?,
          Capacity = ?,
+         CollectionID = ?,
          UpdatedAt = NOW()
      WHERE ExhibitionID = ?
        AND IsDeleted = 0`,
@@ -262,6 +297,7 @@ async function updateExhibition(params, body) {
       exhibition.StartDate,
       exhibition.EndDate,
       exhibition.Capacity,
+      exhibition.CollectionID,
       id,
     ]
   );
