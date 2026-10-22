@@ -80,6 +80,14 @@ function Dashboard() {
 
   const showDates = user?.role !== 'Staff'
 
+  const hour = new Date().getHours()
+  let greeting = 'Good Evening'
+  if (hour < 12) {
+    greeting = 'Good Morning'
+  } else if (hour < 18) {
+    greeting = 'Good Afternoon'
+  }
+
   useEffect(() => {
     if (!startDate || !endDate || startDate > endDate) {
       return
@@ -201,25 +209,6 @@ function Dashboard() {
     )
   }
 
-  function renderCollectionSizesPanel() {
-    return (
-      <Panel title="Artworks by Collection">
-        {dashboard.collectionSizes.length === 0 && (
-          <p className="dash-empty">No collections yet.</p>
-        )}
-
-        <div className="dash-list">
-          {dashboard.collectionSizes.map((item) => (
-            <div className="dash-row" key={item.CollectionID}>
-              <strong>{item.Name}</strong>
-              <div className="dash-row-value">{formatNumber(item.Artworks)}</div>
-            </div>
-          ))}
-        </div>
-      </Panel>
-    )
-  }
-
   function renderTopExhibitionsPanel() {
     return (
       <Panel title="Top Exhibitions">
@@ -299,23 +288,25 @@ function Dashboard() {
     )
   }
 
-  function renderExhibitionArtworksPanel() {
+  function renderAssignedExhibitionsPanel() {
     return (
       <Panel title="Current Exhibitions">
-        {dashboard.exhibitionArtworks.length === 0 && (
-          <p className="dash-empty">No exhibitions are open right now.</p>
+        {dashboard.exhibitions.length === 0 && (
+          <p className="dash-empty">No exhibitions assigned to you.</p>
         )}
 
         <div className="dash-list">
-          {dashboard.exhibitionArtworks.map((item) => (
+          {dashboard.exhibitions.map((item) => (
             <div className="dash-row" key={item.ExhibitionID}>
               <div>
                 <strong>{item.Name}</strong>
-                <p>Ends {item.EndDate}</p>
+                <p>{item.CollectionName}</p>
               </div>
               <div className="dash-row-value">
-                {formatNumber(item.ArtworkCount)}
-                <span>artworks</span>
+                {item.Status === 'active'
+                  ? 'Ends ' + item.EndDate
+                  : 'Opens ' + item.StartDate}
+                <span>{item.Status === 'active' ? 'Active' : 'Upcoming'}</span>
               </div>
             </div>
           ))}
@@ -354,16 +345,7 @@ function Dashboard() {
 
   function renderPanels() {
     if (dashboard.role === 'Staff') {
-      return (
-        <>
-          <div className="dash-main-grid">
-            {renderCollectionSizesPanel()}
-            {renderCollectionPanel()}
-          </div>
-
-          {renderExhibitionArtworksPanel()}
-        </>
-      )
+      return renderAssignedExhibitionsPanel()
     }
 
     if (dashboard.role === 'Operator') {
@@ -399,7 +381,14 @@ function Dashboard() {
   return (
     <div className="page dashboard-page">
       <div className="dash-page-header">
-        <h1>CoogMuseum Dashboard</h1>
+        {user?.role === 'Staff' ? (
+          <h1>
+            {greeting}
+            {dashboard ? ', ' + dashboard.name : ''}
+          </h1>
+        ) : (
+          <h1>CoogMuseum Dashboard</h1>
+        )}
 
         {showDates && (
           <div className="dash-controls">
@@ -439,19 +428,21 @@ function Dashboard() {
 
       {dashboard && (
         <>
-          <div className="dash-stat-grid">
-            {dashboard.tiles.map((tile) => (
-              <StatTile
-                key={tile.label}
-                label={tile.label}
-                value={
-                  tile.format === 'money'
-                    ? formatMoney(tile.value)
-                    : formatNumber(tile.value)
-                }
-              />
-            ))}
-          </div>
+          {dashboard.tiles && (
+            <div className="dash-stat-grid">
+              {dashboard.tiles.map((tile) => (
+                <StatTile
+                  key={tile.label}
+                  label={tile.label}
+                  value={
+                    tile.format === 'money'
+                      ? formatMoney(tile.value)
+                      : formatNumber(tile.value)
+                  }
+                />
+              ))}
+            </div>
+          )}
 
           {renderPanels()}
         </>

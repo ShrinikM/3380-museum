@@ -24,6 +24,7 @@ const emptyForm = {
   firstName: '',
   lastName: '',
   email: '',
+  phone: '',
   type: '',
   startDate: '',
   endDate: '',
@@ -58,6 +59,7 @@ function Memberships() {
             firstName: member.FirstName,
             lastName: member.LastName,
             email: member.Email,
+            phone: member.Phone || '',
             type: member.MembershipType,
             startDate: member.StartDate
               ? member.StartDate.split('T')[0]
@@ -160,6 +162,7 @@ function Memberships() {
       firstName: member.firstName,
       lastName: member.lastName,
       email: member.email,
+      phone: member.phone,
       type: member.type,
       startDate: member.startDate,
       endDate: member.endDate,
@@ -243,6 +246,7 @@ function Memberships() {
       FirstName: firstName,
       LastName: lastName,
       Email: email,
+      Phone: formData.phone.trim(),
       MembershipType: formData.type,
       StartDate: formData.startDate,
       EndDate: formData.endDate,
@@ -464,6 +468,9 @@ function Memberships() {
                     {member.firstName} {member.lastName}
                   </div>
                   <div className="cell-sub mono">{member.email}</div>
+                  {member.phone && (
+                    <div className="cell-sub mono">{member.phone}</div>
+                  )}
                 </td>
 
                 <td>
@@ -544,6 +551,19 @@ function Memberships() {
               value={formData.email}
               onChange={handleChange}
               required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="membership-phone">Phone</label>
+            <input
+              id="membership-phone"
+              name="phone"
+              type="tel"
+              autoComplete="tel"
+              maxLength={20}
+              value={formData.phone}
+              onChange={handleChange}
             />
           </div>
 

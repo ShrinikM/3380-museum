@@ -10,6 +10,8 @@ function Exhibitions() {
 
   const [exhibitions, setExhibitions] = useState([])
   const [collections, setCollections] = useState([])
+  const [staffList, setStaffList] = useState([])
+  const [staffMenuOpen, setStaffMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('All') 
   const [open, setOpen] = useState(false)
@@ -26,6 +28,7 @@ function Exhibitions() {
     EndDate: '',
     Capacity: '',
     CollectionID: '',
+    StaffIDs: [],
   })
 
   useEffect(() => {
@@ -39,6 +42,11 @@ function Exhibitions() {
           callApi('/api/exhibitions', 'GET'),
           callApi('/api/collections', 'GET'),
         ])
+
+        if (allowEdit) {
+          const staffData = await callApi('/api/staff', 'GET')
+          setStaffList(staffData.filter((person) => person.Role === 'Staff'))
+        }
 
         if (!Array.isArray(data)) {
           throw new Error(
@@ -77,13 +85,27 @@ function Exhibitions() {
     return () => {
       cancelled = true
     }
-  }, [reloadCount])
+  }, [reloadCount, allowEdit])
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     })
+  }
+
+  const toggleStaff = (staffId) => {
+    if (formData.StaffIDs.includes(staffId)) {
+      setFormData({
+        ...formData,
+        StaffIDs: formData.StaffIDs.filter((id) => id !== staffId),
+      })
+    } else {
+      setFormData({
+        ...formData,
+        StaffIDs: [...formData.StaffIDs, staffId],
+      })
+    }
   }
 
   const resetForm = () => {
@@ -94,11 +116,13 @@ function Exhibitions() {
       EndDate: '',
       Capacity: '',
       CollectionID: '',
+      StaffIDs: [],
     })
   }
 
   const closeModal = () => {
     resetForm()
+    setStaffMenuOpen(false)
     setEditingId(null)
     setOpen(false)
   }
@@ -123,6 +147,7 @@ function Exhibitions() {
       CollectionID: exhibition.CollectionID
         ? String(exhibition.CollectionID)
         : '',
+      StaffIDs: exhibition.StaffIDs,
     })
 
     setEditingId(exhibition.ExhibitionID)
@@ -185,6 +210,11 @@ function Exhibitions() {
       return
     }
 
+    if (formData.StaffIDs.length === 0) {
+      alert('Please assign at least one staff member.')
+      return
+    }
+
     const duplicate = exhibitions.some(
       (exhibition) =>
         exhibition.Name.toLowerCase() === name.toLowerCase() &&
@@ -211,6 +241,7 @@ function Exhibitions() {
       EndDate: formData.EndDate,
       Capacity: capacity,
       CollectionID: Number(formData.CollectionID),
+      StaffIDs: formData.StaffIDs,
     }
 
     setSaving(true)
@@ -564,6 +595,40 @@ function Exhibitions() {
               maxLength={255}
               rows={3}
             />
+          </div>
+
+          <div className="form-group form-full">
+            <label>Assigned Staff</label>
+
+            <button
+              type="button"
+              className="dropdown-btn"
+              onClick={() => setStaffMenuOpen(!staffMenuOpen)}
+            >
+              {formData.StaffIDs.length === 0
+                ? 'Select staff'
+                : formData.StaffIDs.length + ' staff selected'}
+              <span>{staffMenuOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {staffMenuOpen && (
+              <div className="check-list">
+                {staffList.length === 0 && (
+                  <span className="muted">No staff available.</span>
+                )}
+
+                {staffList.map((person) => (
+                  <label className="check-item" key={person.StaffID}>
+                    <input
+                      type="checkbox"
+                      checked={formData.StaffIDs.includes(Number(person.StaffID))}
+                      onChange={() => toggleStaff(Number(person.StaffID))}
+                    />
+                    {person.FirstName} {person.LastName}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-actions">

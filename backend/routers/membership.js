@@ -8,6 +8,7 @@ async function getMemberships() {
        LastName,
        CONCAT(FirstName, ' ', LastName) AS Name,
        Email,
+       Phone,
        MembershipType,
        DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
@@ -36,11 +37,24 @@ function makeError(status, message) {
   return error;
 }
 
+function onlyDigits(value) {
+  return String(value).replace(/\D/g, "");
+}
+
+function checkDuplicate(error) {
+  if (error.code === "ER_DUP_ENTRY") {
+    throw makeError(409, "A membership with this email or phone number already exists.");
+  }
+
+  throw error;
+}
+
 function validateMembership(body) {
   const {
     FirstName,
     LastName,
     Email,
+    Phone,
     MembershipType,
     StartDate,
     EndDate,
@@ -109,10 +123,21 @@ function validateMembership(body) {
     throw makeError(400, "Membership cannot be longer than one year.");
   }
 
+  let phone = null;
+
+  if (Phone !== undefined && Phone !== null && String(Phone).trim() !== "") {
+    phone = onlyDigits(Phone);
+
+    if (phone.length < 10 || phone.length > 15) {
+      throw makeError(400, "Phone number must have 10 to 15 digits.");
+    }
+  }
+
   return {
     FirstName: FirstName.trim(),
     LastName: LastName.trim(),
-    Email: Email.trim(),
+    Email: Email.trim().toLowerCase(),
+    Phone: phone,
     MembershipType,
     StartDate,
     EndDate,
@@ -140,6 +165,7 @@ async function findMembership(id) {
        LastName,
        CONCAT(FirstName, ' ', LastName) AS Name,
        Email,
+       Phone,
        MembershipType,
        DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
@@ -168,24 +194,31 @@ async function findMembership(id) {
 async function addMembership(params, body) {
   const membership = validateMembership(body);
 
-  const [result] = await pool.query(
-    `INSERT INTO membership (
-       FirstName, LastName, Email, MembershipType,
-       StartDate, EndDate, Price, PaymentMethod,
-       DiscountPercent, CreatedAt, UpdatedAt, IsDeleted
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 0)`,
-    [
-      membership.FirstName,
-      membership.LastName,
-      membership.Email,
-      membership.MembershipType,
-      membership.StartDate,
-      membership.EndDate,
-      membership.Price,
-      membership.PaymentMethod,
-      membership.DiscountPercent,
-    ]
-  );
+  let result;
+
+  try {
+    [result] = await pool.query(
+      `INSERT INTO membership (
+         FirstName, LastName, Email, Phone, MembershipType,
+         StartDate, EndDate, Price, PaymentMethod,
+         DiscountPercent, CreatedAt, UpdatedAt, IsDeleted
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 0)`,
+      [
+        membership.FirstName,
+        membership.LastName,
+        membership.Email,
+        membership.Phone,
+        membership.MembershipType,
+        membership.StartDate,
+        membership.EndDate,
+        membership.Price,
+        membership.PaymentMethod,
+        membership.DiscountPercent,
+      ]
+    );
+  } catch (error) {
+    checkDuplicate(error);
+  }
 
   return {
     status: 201,
@@ -197,32 +230,40 @@ async function updateMembership(params, body) {
   const id = checkId(params);
   const membership = validateMembership(body);
 
-  const [result] = await pool.query(
-    `UPDATE membership
-     SET FirstName = ?,
-         LastName = ?,
-         Email = ?,
-         MembershipType = ?,
-         StartDate = ?,
-         EndDate = ?,
-         Price = ?,
-         PaymentMethod = ?,
-         DiscountPercent = ?,
-         UpdatedAt = NOW()
-     WHERE MembershipID = ? AND IsDeleted = 0`,
-    [
-      membership.FirstName,
-      membership.LastName,
-      membership.Email,
-      membership.MembershipType,
-      membership.StartDate,
-      membership.EndDate,
-      membership.Price,
-      membership.PaymentMethod,
-      membership.DiscountPercent,
-      id,
-    ]
-  );
+  let result;
+
+  try {
+    [result] = await pool.query(
+      `UPDATE membership
+       SET FirstName = ?,
+           LastName = ?,
+           Email = ?,
+           Phone = ?,
+           MembershipType = ?,
+           StartDate = ?,
+           EndDate = ?,
+           Price = ?,
+           PaymentMethod = ?,
+           DiscountPercent = ?,
+           UpdatedAt = NOW()
+       WHERE MembershipID = ? AND IsDeleted = 0`,
+      [
+        membership.FirstName,
+        membership.LastName,
+        membership.Email,
+        membership.Phone,
+        membership.MembershipType,
+        membership.StartDate,
+        membership.EndDate,
+        membership.Price,
+        membership.PaymentMethod,
+        membership.DiscountPercent,
+        id,
+      ]
+    );
+  } catch (error) {
+    checkDuplicate(error);
+  }
 
   if (result.affectedRows === 0) {
     const existing = await findMembership(id);
@@ -234,6 +275,60 @@ async function updateMembership(params, body) {
   return {
     status: 200,
     data: await findMembership(id),
+  };
+}
+
+async function lookupMembership(params) {
+  const search = String(params.q || "").trim();
+
+  if (search === "") {
+    throw makeError(400, "Enter an email or phone number.");
+  }
+
+  let where = "";
+  let value = "";
+
+  if (search.includes("@")) {
+    where = "LOWER(Email) = ?";
+    value = search.toLowerCase();
+  } else {
+    value = onlyDigits(search);
+    where = "Phone = ?";
+
+    if (value.length < 10) {
+      throw makeError(400, "Enter a full phone number.");
+    }
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       MembershipID,
+       CONCAT(FirstName, ' ', LastName) AS Name,
+       MembershipType,
+       DiscountPercent,
+       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
+       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
+       CASE
+         WHEN EndDate < CURDATE() THEN 'expired'
+         WHEN StartDate > CURDATE() THEN 'upcoming'
+         ELSE 'active'
+       END AS Status
+     FROM membership
+     WHERE IsDeleted = 0 AND ` + where,
+    [value]
+  );
+
+  if (rows.length === 0) {
+    throw makeError(404, "No membership found.");
+  }
+
+  return {
+    status: 200,
+    data: {
+      ...rows[0],
+      MembershipID: Number(rows[0].MembershipID),
+      DiscountPercent: Number(rows[0].DiscountPercent),
+    },
   };
 }
 
@@ -262,6 +357,11 @@ module.exports = [
     method: "GET",
     path: "/api/memberships",
     handler: getMemberships,
+  },
+  {
+    method: "GET",
+    path: "/api/memberships/lookup",
+    handler: lookupMembership,
   },
   {
     method: "POST",

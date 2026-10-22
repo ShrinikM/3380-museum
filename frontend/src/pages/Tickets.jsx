@@ -4,14 +4,13 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 
-const ticketTypes = ['Adult', 'Senior', 'Student', 'Child', 'Member']
+const ticketTypes = ['Adult', 'Senior', 'Student', 'Child']
 
 const ticketPrices = {
   Adult: 25,
   Senior: 20,
   Student: 15,
   Child: 15,
-  Member: 18,
 }
 
 const emptyForm = {
@@ -22,6 +21,12 @@ const emptyForm = {
   MembershipID: '',
 }
 
+function getPrice(ticketType, discount) {
+  const basePrice = ticketPrices[ticketType] || 0
+
+  return (basePrice * (1 - discount / 100)).toFixed(2)
+}
+
 function Tickets() {
   const { canEdit } = useRole()
   const allowEdit = canEdit('/tickets')
@@ -29,7 +34,6 @@ function Tickets() {
 
   const [tickets, setTickets] = useState([])
   const [exhibitions, setExhibitions] = useState([])
-  const [memberships, setMemberships] = useState([])
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
 
@@ -39,16 +43,17 @@ function Tickets() {
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
+  const [lookupText, setLookupText] = useState('')
+  const [lookupMessage, setLookupMessage] = useState('')
+  const [member, setMember] = useState(null)
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [ticketsData, exhibitionsData, membershipsData] =
-          await Promise.all([
-            callApi('/api/tickets', 'GET'),
-            callApi('/api/exhibitions', 'GET'),
-            callApi('/api/memberships', 'GET'),
-          ])
+        const [ticketsData, exhibitionsData] = await Promise.all([
+          callApi('/api/tickets', 'GET'),
+          callApi('/api/exhibitions', 'GET'),
+        ])
 
         setTickets(
           ticketsData.map((ticket) => ({
@@ -58,7 +63,6 @@ function Tickets() {
         )
 
         setExhibitions(exhibitionsData)
-        setMemberships(membershipsData)
         setLoadError('')
       } catch (err) {
         setLoadError('Could not load tickets: ' + err.message)
@@ -75,7 +79,7 @@ function Tickets() {
   const revenue = tickets.reduce((sum, ticket) => sum + ticket.Price, 0)
 
   const memberTickets = tickets.filter(
-    (ticket) => ticket.TicketType === 'Member'
+    (ticket) => ticket.MembershipID !== null
   ).length
 
   const filtered = tickets.filter((ticket) => {
@@ -103,35 +107,67 @@ function Tickets() {
 
   const handleTypeChange = (e) => {
     const value = e.target.value
+    const discount = member ? member.DiscountPercent : 0
 
     setFormData({
       ...formData,
       TicketType: value,
-      Price: value ? ticketPrices[value] : '',
-      MembershipID: value === 'Member' ? formData.MembershipID : '',
+      Price: value ? getPrice(value, discount) : '',
     })
   }
 
-  const handleMembershipChange = (e) => {
-    const membershipID = e.target.value
+  const handleLookup = async () => {
+    if (!lookupText.trim()) {
+      setLookupMessage('Enter an email or phone number.')
+      return
+    }
 
-    const membership = memberships.find(
-      (member) => Number(member.MembershipID) === Number(membershipID)
-    )
+    try {
+      const found = await callApi(
+        '/api/memberships/lookup?q=' + encodeURIComponent(lookupText.trim()),
+        'GET'
+      )
 
-    const basePrice = ticketPrices[formData.TicketType] || 0
-    const discount = membership ? Number(membership.DiscountPercent) : 0
-    const price = basePrice * (1 - discount / 100)
+      if (found.Status === 'expired') {
+        setLookupMessage(found.Name + ' - membership expired on ' + found.EndDate)
+        return
+      }
 
+      if (found.Status === 'upcoming') {
+        setLookupMessage(found.Name + ' - membership starts on ' + found.StartDate)
+        return
+      }
+
+      setMember(found)
+      setLookupMessage('')
+      setFormData({
+        ...formData,
+        MembershipID: String(found.MembershipID),
+        Price: formData.TicketType
+          ? getPrice(formData.TicketType, found.DiscountPercent)
+          : '',
+      })
+    } catch (err) {
+      setLookupMessage(err.message)
+    }
+  }
+
+  const removeMember = () => {
+    setMember(null)
+    setLookupText('')
+    setLookupMessage('')
     setFormData({
       ...formData,
-      MembershipID: membershipID,
-      Price: membershipID ? price.toFixed(2) : basePrice,
+      MembershipID: '',
+      Price: formData.TicketType ? getPrice(formData.TicketType, 0) : '',
     })
   }
 
   const resetForm = () => {
     setFormData(emptyForm)
+    setLookupText('')
+    setLookupMessage('')
+    setMember(null)
   }
 
   const openAddModal = () => {
@@ -150,6 +186,18 @@ function Tickets() {
       SaleDate: ticket.SaleDate ? ticket.SaleDate.split('T')[0] : '',
       MembershipID: ticket.MembershipID ? String(ticket.MembershipID) : '',
     })
+
+    setLookupText('')
+    setLookupMessage('')
+    setMember(
+      ticket.MembershipID
+        ? {
+            MembershipID: ticket.MembershipID,
+            Name: ticket.MembershipName,
+            DiscountPercent: ticket.MemberDiscount,
+          }
+        : null
+    )
 
     setOpen(true)
   }
@@ -178,31 +226,12 @@ function Tickets() {
       return
     }
 
-    if (formData.TicketType === 'Member' && !formData.MembershipID) {
-      alert('Member tickets require a Membership.')
-      return
-    }
-
-    if (formData.TicketType !== 'Member' && formData.MembershipID) {
-      alert('Only Member tickets can have a Membership.')
-      return
-    }
-
     const selectedExhibition = exhibitions.find(
       (item) => Number(item.ExhibitionID) === Number(formData.ExhibitionID)
     )
 
     if (!selectedExhibition) {
       alert('Please select a valid Exhibition.')
-      return
-    }
-
-    const selectedMembership = memberships.find(
-      (member) => Number(member.MembershipID) === Number(formData.MembershipID)
-    )
-
-    if (formData.MembershipID && !selectedMembership) {
-      alert('Please select a valid Membership.')
       return
     }
 
@@ -419,11 +448,6 @@ function Tickets() {
 
           <tbody>
             {filtered.map((ticket) => {
-              const member = memberships.find(
-                (item) =>
-                  Number(item.MembershipID) === Number(ticket.MembershipID)
-              )
-
               return (
                 <tr
                   key={ticket.TicketID}
@@ -460,8 +484,10 @@ function Tickets() {
                   </td>
 
                   <td>
-                    {member ? (
-                      <span className="chip chip-primary">{member.Name}</span>
+                    {ticket.MembershipName ? (
+                      <span className="chip chip-primary">
+                        {ticket.MembershipName}
+                      </span>
                     ) : (
                       <span className="muted">-</span>
                     )}
@@ -557,22 +583,52 @@ function Tickets() {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="ticket-membership">Membership</label>
-            <select
-              id="ticket-membership"
-              name="MembershipID"
-              value={formData.MembershipID}
-              onChange={handleMembershipChange}
-              disabled={formData.TicketType !== 'Member'}
-            >
-              <option value="">No Membership</option>
-              {memberships.map((member) => (
-                <option key={member.MembershipID} value={member.MembershipID}>
+          <div className="form-group form-full">
+            <label htmlFor="ticket-member-lookup">
+              Member Email or Phone
+            </label>
+
+            {member === null && (
+              <div className="lookup-row">
+                <input
+                  id="ticket-member-lookup"
+                  type="text"
+                  value={lookupText}
+                  onChange={(e) => setLookupText(e.target.value)}
+                />
+
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={handleLookup}
+                >
+                  Find
+                </button>
+              </div>
+            )}
+
+            {member !== null && (
+              <div className="lookup-row">
+                <span className="chip chip-primary">
                   {member.Name}
-                </option>
-              ))}
-            </select>
+                  {member.DiscountPercent !== null
+                    ? ' - ' + member.DiscountPercent + '% off'
+                    : ''}
+                </span>
+
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={removeMember}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
+            {lookupMessage && (
+              <p className="lookup-message">{lookupMessage}</p>
+            )}
           </div>
 
           <div className="form-actions">

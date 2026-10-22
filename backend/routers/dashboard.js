@@ -300,49 +300,29 @@ async function getActiveExhibitionCount() {
   return getCount("exhibition", " AND StartDate <= CURDATE() AND EndDate >= CURDATE()");
 }
 
-async function getExhibitionArtworks() {
+async function getAssignedExhibitions(staffId) {
   const [rows] = await pool.query(
     `SELECT
        exhibition.ExhibitionID,
        exhibition.Name,
+       collection.Name AS CollectionName,
+       DATE_FORMAT(exhibition.StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(exhibition.EndDate, '%Y-%m-%d') AS EndDate,
-       COUNT(artwork.ArtworkID) AS ArtworkCount
-     FROM exhibition
-     LEFT JOIN artwork
-       ON artwork.CollectionID = exhibition.CollectionID
-       AND artwork.IsDeleted = 0
-     WHERE exhibition.IsDeleted = 0
-       AND exhibition.StartDate <= CURDATE()
+       CASE
+         WHEN exhibition.StartDate <= CURDATE() THEN 'active'
+         ELSE 'upcoming'
+       END AS Status
+     FROM exhibitionstaff
+     JOIN exhibition
+       ON exhibition.ExhibitionID = exhibitionstaff.ExhibitionID
+     JOIN collection
+       ON collection.CollectionID = exhibition.CollectionID
+     WHERE exhibitionstaff.StaffID = ?
+       AND exhibition.IsDeleted = 0
        AND exhibition.EndDate >= CURDATE()
-     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.EndDate
-     ORDER BY exhibition.EndDate, exhibition.Name`
+     ORDER BY exhibition.StartDate, exhibition.Name`,
+    [staffId]
   );
-
-  for (const row of rows) {
-    row.ArtworkCount = Number(row.ArtworkCount);
-  }
-
-  return rows;
-}
-
-async function getCollectionSizes() {
-  const [rows] = await pool.query(
-    `SELECT
-       collection.CollectionID,
-       collection.Name,
-       COUNT(artwork.ArtworkID) AS Artworks
-     FROM collection
-     LEFT JOIN artwork
-       ON artwork.CollectionID = collection.CollectionID
-       AND artwork.IsDeleted = 0
-     WHERE collection.IsDeleted = 0
-     GROUP BY collection.CollectionID, collection.Name
-     ORDER BY Artworks DESC, collection.Name`
-  );
-
-  for (const row of rows) {
-    row.Artworks = Number(row.Artworks);
-  }
 
   return rows;
 }
@@ -376,18 +356,16 @@ async function getAdminDashboard(params) {
   return { status: 200, data: data };
 }
 
-async function getStaffDashboard() {
+async function getStaffDashboard(staffId) {
+  const [rows] = await pool.query(
+    "SELECT CONCAT(FirstName, ' ', LastName) AS Name FROM staff WHERE StaffID = ?",
+    [staffId]
+  );
+
   const data = {
     role: "Staff",
-    tiles: [
-      { label: "Total Artworks", value: await getCount("artwork", ""), format: "number" },
-      { label: "Total Artists", value: await getCount("artist", ""), format: "number" },
-      { label: "Collections", value: await getCount("collection", ""), format: "number" },
-      { label: "Active Exhibitions", value: await getActiveExhibitionCount(), format: "number" },
-    ],
-    collection: await getCollectionBreakdown(),
-    collectionSizes: await getCollectionSizes(),
-    exhibitionArtworks: await getExhibitionArtworks(),
+    name: rows[0].Name,
+    exhibitions: await getAssignedExhibitions(staffId),
   };
 
   return { status: 200, data: data };
@@ -435,7 +413,7 @@ async function getDashboard(params, body, staffId) {
     return getAdminDashboard(params);
   }
   if (role === "Staff") {
-    return getStaffDashboard();
+    return getStaffDashboard(staffId);
   }
   if (role === "Operator") {
     return getOperatorDashboard(params);

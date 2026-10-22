@@ -2193,3 +2193,81 @@ input[type='radio'] {
     transition-duration: 0.01ms !important;
   }
 }
+/* Member lookup */
+
+.form-full {
+  grid-column: 1 / -1;
+}
+
+.lookup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lookup-row input {
+  flex: 1;
+}
+
+.lookup-message {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* Staff dropdown */
+
+.dropdown-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 45px;
+  padding: 11px 13px;
+  border: 1px solid #ded9d7;
+  border-radius: 8px;
+  background: #fdfcfb;
+  color: var(--foreground);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dropdown-btn:hover {
+  border-color: #bdb4b1;
+  background: #fff;
+}
+
+.dropdown-btn span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #ded9d7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.form-group .check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 13px;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.form-group .check-item:hover {
+  background: var(--primary-tint);
+}
+
+.form-group .check-item input {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--primary);
+}

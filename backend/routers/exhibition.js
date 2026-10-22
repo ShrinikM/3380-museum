@@ -22,6 +22,12 @@ const selectExhibitions = `
      WHERE a.CollectionID = e.CollectionID
        AND a.IsDeleted = 0) AS ArtworkCount,
 
+    (SELECT GROUP_CONCAT(es.StaffID)
+     FROM exhibitionstaff es
+     JOIN staff s ON s.StaffID = es.StaffID
+     WHERE es.ExhibitionID = e.ExhibitionID
+       AND s.IsDeleted = 0) AS StaffIDs,
+
     (SELECT GROUP_CONCAT(
        CONCAT(s.FirstName, ' ', s.LastName)
        ORDER BY s.LastName
@@ -160,6 +166,24 @@ function checkExhibition(body) {
 
   exhibition.CollectionID = collectionID;
 
+  if (!Array.isArray(body.StaffIDs) || body.StaffIDs.length === 0) {
+    throw makeError(400, "Please assign at least one staff member");
+  }
+
+  exhibition.StaffIDs = [];
+
+  for (const value of body.StaffIDs) {
+    const staffID = Number(value);
+
+    if (!Number.isSafeInteger(staffID) || staffID < 1) {
+      throw makeError(400, "Each staff id must be a positive integer");
+    }
+
+    if (!exhibition.StaffIDs.includes(staffID)) {
+      exhibition.StaffIDs.push(staffID);
+    }
+  }
+
   return exhibition;
 }
 
@@ -170,6 +194,9 @@ function formatExhibition(row) {
     ArtworkCount: Number(row.ArtworkCount),
     StaffNames: row.StaffNames
       ? row.StaffNames.split(",")
+      : [],
+    StaffIDs: row.StaffIDs
+      ? row.StaffIDs.split(",").map(Number)
       : [],
     Capacity: Number(row.Capacity),
   };
@@ -224,6 +251,46 @@ async function checkCollection(collectionId) {
   }
 }
 
+async function checkStaff(staffIds) {
+  const [rows] = await pool.query(
+    "SELECT StaffID FROM staff WHERE Role = 'Staff' AND IsDeleted = 0 AND StaffID IN (?)",
+    [staffIds]
+  );
+
+  if (rows.length !== staffIds.length) {
+    throw makeError(400, "One of the selected staff members does not exist");
+  }
+}
+
+async function saveStaff(exhibitionId, staffIds, actorId) {
+  const [rows] = await pool.query(
+    "SELECT StaffID FROM exhibitionstaff WHERE ExhibitionID = ?",
+    [exhibitionId]
+  );
+
+  const currentIds = rows.map((row) => Number(row.StaffID));
+
+  for (const staffId of staffIds) {
+    if (!currentIds.includes(staffId)) {
+      await pool.query(
+        `INSERT INTO exhibitionstaff
+          (ExhibitionID, StaffID, CreatedAt, UpdatedAt, CreatedBy)
+         VALUES (?, ?, NOW(), NOW(), ?)`,
+        [exhibitionId, staffId, actorId]
+      );
+    }
+  }
+
+  for (const staffId of currentIds) {
+    if (!staffIds.includes(staffId)) {
+      await pool.query(
+        "DELETE FROM exhibitionstaff WHERE ExhibitionID = ? AND StaffID = ?",
+        [exhibitionId, staffId]
+      );
+    }
+  }
+}
+
 async function getExhibitions() {
   const [rows] = await pool.query(
     selectExhibitions + " ORDER BY e.StartDate"
@@ -235,11 +302,12 @@ async function getExhibitions() {
   };
 }
 
-async function addExhibition(params, body) {
+async function addExhibition(params, body, staffId) {
   const exhibition = checkExhibition(body);
 
   await checkDuplicateName(exhibition.Name);
   await checkCollection(exhibition.CollectionID);
+  await checkStaff(exhibition.StaffIDs);
 
   const [result] = await pool.query(
     `INSERT INTO exhibition
@@ -256,6 +324,8 @@ async function addExhibition(params, body) {
     ]
   );
 
+  await saveStaff(result.insertId, exhibition.StaffIDs, staffId);
+
   const newExhibition = await findExhibition(result.insertId);
 
   return {
@@ -264,7 +334,7 @@ async function addExhibition(params, body) {
   };
 }
 
-async function updateExhibition(params, body) {
+async function updateExhibition(params, body, staffId) {
   const id = checkId(params);
   const exhibition = checkExhibition(body);
 
@@ -279,6 +349,8 @@ async function updateExhibition(params, body) {
   if (Number(existing.CollectionID) !== exhibition.CollectionID) {
     await checkCollection(exhibition.CollectionID);
   }
+
+  await checkStaff(exhibition.StaffIDs);
 
   await pool.query(
     `UPDATE exhibition
@@ -301,6 +373,8 @@ async function updateExhibition(params, body) {
       id,
     ]
   );
+
+  await saveStaff(id, exhibition.StaffIDs, staffId);
 
   const updatedExhibition = await findExhibition(id);
 
@@ -342,11 +416,13 @@ module.exports = [
     method: "POST",
     path: "/api/exhibitions",
     handler: addExhibition,
+    needsActor: true,
   },
   {
     method: "PUT",
     path: "/api/exhibitions/:id",
     handler: updateExhibition,
+    needsActor: true,
   },
   {
     method: "DELETE",

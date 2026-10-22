@@ -1,13 +1,12 @@
 const pool = require("../db");
 
-const ticketTypes = ["Adult", "Senior", "Student", "Child", "Member"];
+const ticketTypes = ["Adult", "Senior", "Student", "Child"];
 
 const ticketPrices = {
   Adult: 25,
   Senior: 20,
   Student: 15,
   Child: 15,
-  Member: 18,
 };
 
 const selectTickets = `
@@ -19,6 +18,7 @@ const selectTickets = `
     t.ExhibitionID,
     e.Name AS ExhibitionName,
     t.MembershipID,
+    m.DiscountPercent AS MemberDiscount,
     CASE
       WHEN m.MembershipID IS NOT NULL
       THEN CONCAT(m.FirstName, ' ', m.LastName)
@@ -102,14 +102,6 @@ function checkTicket(body) {
     }
   }
 
-  if (body.TicketType === "Member" && membershipID === null) {
-    throw makeError(400, "Member tickets require a membership");
-  }
-
-  if (body.TicketType !== "Member" && membershipID !== null) {
-    throw makeError(400, "Only Member tickets can have a membership");
-  }
-
   return {
     ExhibitionID: exhibitionID,
     TicketType: body.TicketType,
@@ -183,6 +175,9 @@ async function getTickets() {
       MembershipID: ticket.MembershipID === null
         ? null
         : Number(ticket.MembershipID),
+      MemberDiscount: ticket.MemberDiscount === null
+        ? null
+        : Number(ticket.MemberDiscount),
     })),
   };
 }
