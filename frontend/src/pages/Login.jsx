@@ -52,7 +52,7 @@ function Login() {
           {error && <p className="login-error">{error}</p>}
 
           <button type="submit" className="btn primary">
-            Log in
+            Log In
           </button>
 
           <Link to="/" className="btn secondary">

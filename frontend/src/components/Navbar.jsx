@@ -82,7 +82,7 @@ function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
         </div>
 
         <button className="btn secondary" onClick={handleLogout}>
-          Log out
+          Log Out
         </button>
       </div>
     </header>
