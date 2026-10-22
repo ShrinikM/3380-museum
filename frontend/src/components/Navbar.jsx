@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { useRole } from '../context/role'
 
+const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
+
 function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
   const { user, logout } = useRole()
   const navigate = useNavigate()
@@ -26,6 +28,11 @@ function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
         </button>
 
         <span className="brand-name">CoogMuseum</span>
+        <span
+          className="brand-hand"
+          style={{ WebkitMaskImage: `url(${HAND})`, maskImage: `url(${HAND})` }}
+          aria-hidden="true"
+        />
       </div>
 
       <div className="navbar-right">

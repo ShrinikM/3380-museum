@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useRole } from '../context/role'
 
+const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
+
 function Login() {
   const { login } = useRole()
   const [username, setUsername] = useState('')
@@ -21,7 +23,11 @@ function Login() {
   return (
     <div className="login-page">
       <div className="card login-card">
-        <h1 className="page-title">CoogMuseum</h1>
+        <div className="login-brand">
+          <h1 className="page-title">CoogMuseum</h1>
+          <img src={HAND} alt="" className="login-hand" />
+        </div>
+
         <form onSubmit={handleSubmit} className="login-form">
 
           <div className="form-group">

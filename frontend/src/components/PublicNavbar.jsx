@@ -1,10 +1,17 @@
 import { NavLink } from 'react-router-dom'
 
-function PublicNavbar() {
+const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
+
+function PublicNavbar(){
   return (
     <header className="navbar">
       <div className="navbar-brand">
         <span className="brand-name">CoogMuseum</span>
+        <span
+          className="brand-hand"
+          style={{ WebkitMaskImage: `url(${HAND})`, maskImage: `url(${HAND})` }}
+          aria-hidden="true"
+        />
       </div>
 
       <nav className="navbar-links">

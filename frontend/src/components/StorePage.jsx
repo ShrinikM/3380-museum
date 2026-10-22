@@ -1,24 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Panel, Modal, SelectionActions } from './ui'
 import { useSelection } from '../hooks/useSelection'
+import { callApi } from '../api'
+import { PAYMENT_METHODS, LOW_STOCK } from '../data/constants'
 
-const giftShopCategories = [
-  'Books',
-  'Accessories',
-  'Home',
-  'Stationery',
-  'Kids',
-  'Prints',
-]
+const STORES = {
+  giftshop: {
+    title: 'Gift Shop',
+    name: 'gift shop',
+    staffId: 1,
+    payments: PAYMENT_METHODS.giftshopsale,
+    categories: ['Books', 'Accessories', 'Home', 'Stationery', 'Kids', 'Prints'],
+  },
+  cafe: {
+    title: 'Café',
+    name: 'café',
+    staffId: 2,
+    payments: PAYMENT_METHODS.cafesale,
+    categories: ['Beverages', 'Pastries', 'Sandwiches', 'Salads', 'Soups', 'Desserts'],
+  },
+}
 
-const cafeCategories = [
-  'Beverages',
-  'Pastries',
-  'Sandwiches',
-  'Salads',
-  'Soups',
-  'Desserts',
-]
+const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9' -]+$/
 
 const emptyForm = {
   ItemName: '',
@@ -32,506 +35,299 @@ const emptyForm = {
   MembershipID: '',
 }
 
-function StorePage({ kind }) {
-  const today = new Date().toISOString().split('T')[0]
+// Local date as YYYY-MM-DD (toISOString would give the UTC date)
+function localToday(){
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+function toItem(item){
+  return {
+    ...item,
+    Price: Number(item.Price),
+    ...(item.Stock !== undefined ? { Stock: Number(item.Stock) } : {}),
+  }
+}
+
+function toSale(sale){
+  return {
+    ...sale,
+    SalePrice: Number(sale.SalePrice),
+    Quantity: Number(sale.Quantity),
+  }
+}
+
+function saleTotal(sale){
+  return sale.SalePrice * sale.Quantity
+}
+
+function StorePage({ kind }){
+  const store = STORES[kind]
   const isGiftShop = kind === 'giftshop'
-  const title = isGiftShop ? 'Gift Shop' : 'Café'
-  const categories = isGiftShop ? giftShopCategories : cafeCategories
+  const base = `/api/store/${kind}`
+  const today = localToday()
 
   const [items, setItems] = useState([])
   const [sales, setSales] = useState([])
   const [loadError, setLoadError] = useState('')
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadStoreData() {
-      try {
-        setLoadError('')
-
-        const [itemsResponse, salesResponse] = await Promise.all([
-          fetch(`/api/store/${kind}/items`),
-          fetch(`/api/store/${kind}/sales`),
-        ])
-
-        if (!itemsResponse.ok || !salesResponse.ok) {
-          throw new Error('Could not reach the server')
-        }
-
-        const [itemsData, salesData] = await Promise.all([
-          itemsResponse.json(),
-          salesResponse.json(),
-        ])
-
-        if (cancelled) return
-
-        setItems(
-          itemsData.map((item) => ({
-            ...item,
-            Price: Number(item.Price),
-            ...(item.Stock !== undefined
-              ? { Stock: Number(item.Stock) }
-              : {}),
-          }))
-        )
-
-        setSales(
-          salesData.map((sale) => ({
-            ...sale,
-            SalePrice: Number(sale.SalePrice),
-            Quantity: Number(sale.Quantity),
-          }))
-        )
-      } catch (error) {
-        if (!cancelled) {
-          setLoadError(error.message)
-        }
-      }
-    }
-
-    loadStoreData()
-
-    return () => {
-      cancelled = true
-    }
-  }, [kind])
-
 
   const [tab, setTab] = useState('items')
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
+  const [formError, setFormError] = useState('')
 
-  const payments = ['Cash', 'Credit Card', 'Debit Card', 'Mobile Pay']
+  const loadStoreData = useCallback(async()=>{
+    const [itemsData, salesData] = await Promise.all([
+      callApi(`${base}/items`, 'GET'),
+      callApi(`${base}/sales`, 'GET'),
+    ])
 
-  const resetForm = () => {
-    setFormData(emptyForm)
-    setEditingId(null)
-  }
+    setItems(itemsData.map(toItem))
+    setSales(salesData.map(toSale))
+    setLoadError('')
+  }, [base])
 
-  const closeModal = () => {
-    resetForm()
-    setOpen(false)
-  }
+  useEffect(()=>{
+    loadStoreData().catch((error)=>setLoadError(error.message))
+  }, [loadStoreData])
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
-  }
+  const query = search.toLowerCase()
 
-  const openAddModal = () => {
-    resetForm()
+  const filteredItems = items.filter((item)=>
+    `${item.ItemName} ${item.Category}`.toLowerCase().includes(query)
+  )
+
+  const filteredSales = sales.filter((sale)=>
+    `${sale.SaleID} ${sale.ItemName ?? ''} ${sale.PaymentMethod}`.toLowerCase().includes(query)
+  )
+
+  const itemSelection = useSelection(filteredItems, (item)=>item.ItemID)
+  const saleSelection = useSelection(filteredSales, (sale)=>sale.SaleID)
+  const selection = tab === 'items' ? itemSelection : saleSelection
+
+  const revenue = sales.reduce((sum, sale)=>sum + saleTotal(sale), 0)
+
+  // Form
+
+  const openModal = (values, id)=>{
+    setFormData({ ...emptyForm, ...values })
+    setEditingId(id)
+    setFormError('')
     setOpen(true)
   }
 
-  const openEditModal = (item) => {
-    setEditingId(item.ItemID)
-    setFormData({
-      ...emptyForm,
+  const closeModal = ()=>{
+    setOpen(false)
+    setFormData(emptyForm)
+    setEditingId(null)
+    setFormError('')
+  }
+
+  const handleChange = (e)=>{
+    const { name, value } = e.target
+    setFormData((current)=>({ ...current, [name]: value }))
+  }
+
+  const openAddModal = ()=>openModal({}, null)
+
+  const openEditItem = (item)=>{
+    openModal({
       ItemName: item.ItemName,
       Category: item.Category,
       Price: String(item.Price),
       Stock: isGiftShop ? String(item.Stock) : '',
-    })
-    setOpen(true)
+    }, item.ItemID)
   }
 
-  const openEditSaleModal = (sale) => {
-    setEditingId(sale.SaleID)
-    setFormData({
-      ...emptyForm,
+  const openEditSale = (sale)=>{
+    openModal({
       ItemID: String(sale.ItemID),
       Quantity: String(sale.Quantity),
       SaleDate: sale.SaleDate,
       PaymentMethod: sale.PaymentMethod,
-      MembershipID: sale.MembershipID
-        ? String(sale.MembershipID)
-        : '',
-    })
-    setOpen(true)
+      MembershipID: sale.MembershipID ? String(sale.MembershipID) : '',
+    }, sale.SaleID)
   }
 
+  const validateItem = ()=>{
+    const stock = Number(formData.Stock)
 
-  const handleSubmit = async (e) => {
+    if(!NAME_PATTERN.test(formData.ItemName.trim())){
+      return 'Item Name can only contain letters, numbers, spaces, hyphens, or apostrophes.'
+    }
+
+    if(!formData.Category){
+      return 'Please select a Category.'
+    }
+
+    if(!(Number(formData.Price) > 0)){
+      return 'Price must be greater than 0.'
+    }
+
+    if(isGiftShop && (formData.Stock === '' || !Number.isInteger(stock) || stock < 0)){
+      return 'Stock must be a non-negative whole number.'
+    }
+
+    return ''
+  }
+
+  const validateSale = ()=>{
+    const quantity = Number(formData.Quantity)
+    const membershipId = Number(formData.MembershipID)
+    const item = items.find((current)=>Number(current.ItemID) === Number(formData.ItemID))
+
+    if(!item){
+      return 'Please select an Item.'
+    }
+
+    if(!Number.isInteger(quantity) || quantity < 1){
+      return 'Quantity must be at least 1.'
+    }
+
+    if(!formData.SaleDate){
+      return 'Please select a Sale Date.'
+    }
+
+    if(formData.SaleDate > today){
+      return 'Sale Date cannot be in the future.'
+    }
+
+    if(!formData.PaymentMethod){
+      return 'Please select a Payment Method.'
+    }
+
+    if(formData.MembershipID && (!Number.isInteger(membershipId) || membershipId < 1)){
+      return 'Membership ID must be a positive whole number.'
+    }
+
+    if(isGiftShop){
+      // When editing, the original sale's quantity goes back into stock first
+      const original = sales.find((sale)=>Number(sale.SaleID) === Number(editingId))
+      const returned = original && Number(original.ItemID) === Number(item.ItemID)
+        ? original.Quantity
+        : 0
+
+      if(quantity > item.Stock + returned){
+        return 'There is not enough stock available.'
+      }
+    }
+
+    return ''
+  }
+
+  const buildItem = ()=>({
+    ItemName: formData.ItemName.trim(),
+    Category: formData.Category,
+    Price: Number(formData.Price),
+    StaffID: store.staffId,
+    ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
+  })
+
+  const buildSale = ()=>({
+    ItemID: Number(formData.ItemID),
+    Quantity: Number(formData.Quantity),
+    SaleDate: formData.SaleDate,
+    PaymentMethod: formData.PaymentMethod,
+    StaffID: store.staffId,
+    MembershipID: formData.MembershipID ? Number(formData.MembershipID) : null,
+  })
+
+  const handleSubmit = async (e)=>{
     e.preventDefault()
 
-    if (tab === 'items') {
-      const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9' -]+$/
+    const isItem = tab === 'items'
+    const error = isItem ? validateItem() : validateSale()
 
-      if (!textPattern.test(formData.ItemName.trim())) {
-        alert(
-          'Item Name can only contain letters, numbers, spaces, hyphens, or apostrophes.'
-        )
-        return
-      }
-
-      if (!formData.Category) {
-        alert('Please select a Category.')
-        return
-      }
-
-      if (
-        !Number.isFinite(Number(formData.Price)) ||
-        Number(formData.Price) <= 0
-      ) {
-        alert('Price must be greater than 0.')
-        return
-      }
-
-      if (
-        isGiftShop &&
-        (!formData.Stock ||
-          !Number.isInteger(Number(formData.Stock)) ||
-          Number(formData.Stock) < 0)
-      ) {
-        if (formData.Stock !== '0') {
-          alert('Stock must be a non-negative whole number.')
-          return
-        }
-      }
-
-      const itemData = {
-        ItemName: formData.ItemName.trim(),
-        Category: formData.Category,
-        Price: Number(formData.Price),
-        StaffID: isGiftShop ? 1 : 2,
-        ...(isGiftShop ? { Stock: Number(formData.Stock) } : {}),
-      }
-
-      try {
-        const url =
-          editingId === null
-            ? `/api/store/${kind}/items`
-            : `/api/store/${kind}/items/${editingId}`
-
-        const response = await fetch(url, {
-          method: editingId === null ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(itemData),
-        })
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Could not save the item.')
-        }
-
-        const itemsResponse = await fetch(`/api/store/${kind}/items`)
-
-        if (!itemsResponse.ok) {
-          throw new Error(
-            'Item saved, but the item list could not be refreshed.'
-          )
-        }
-
-        const itemsData = await itemsResponse.json()
-
-        setItems(
-          itemsData.map((item) => ({
-            ...item,
-            Price: Number(item.Price),
-            ...(item.Stock !== undefined
-              ? { Stock: Number(item.Stock) }
-              : {}),
-          }))
-        )
-
-        closeModal()
-        itemSelection.clear()
-      } catch (error) {
-        alert(error.message)
-      }
-
-      return
-    } else {
-      if (!formData.ItemID) {
-        alert('Please select an Item.')
-        return
-      }
-
-      if (
-        !Number.isInteger(Number(formData.Quantity)) ||
-        Number(formData.Quantity) < 1
-      ) {
-        alert('Quantity must be at least 1.')
-        return
-      }
-
-      if (!formData.SaleDate) {
-        alert('Please select a Sale Date.')
-        return
-      }
-
-      if (formData.SaleDate > today) {
-        alert('Sale Date cannot be in the future.')
-        return
-      }
-
-      if (!formData.PaymentMethod) {
-        alert('Please select a Payment Method.')
-        return
-      }
-
-      if (
-        formData.MembershipID &&
-        (!Number.isInteger(Number(formData.MembershipID)) ||
-          Number(formData.MembershipID) < 1)
-      ) {
-        alert('Membership ID must be a positive whole number.')
-        return
-      }
-
-      const item = items.find(
-        (currentItem) =>
-          Number(currentItem.ItemID) === Number(formData.ItemID)
-      )
-
-      if (!item) {
-        alert('Please select a valid Item.')
-        return
-      }
-
-      const originalSale =
-        editingId !== null
-          ? sales.find(
-            (sale) => Number(sale.SaleID) === Number(editingId)
-          )
-          : null
-
-      if (editingId !== null && !originalSale) {
-        alert('Could not find the sale you are editing. Refresh and try again.')
-        return
-      }
-
-      if (isGiftShop) {
-        const availableStock =
-          originalSale &&
-            Number(originalSale.ItemID) === Number(item.ItemID)
-            ? Number(item.Stock) + Number(originalSale.Quantity)
-            : Number(item.Stock)
-
-        if (Number(formData.Quantity) > availableStock) {
-          alert('There is not enough stock available.')
-          return
-        }
-      }
-
-      const saleDataToSave = {
-        ItemID: Number(formData.ItemID),
-        Quantity: Number(formData.Quantity),
-        SaleDate: formData.SaleDate,
-        PaymentMethod: formData.PaymentMethod,
-        StaffID: isGiftShop ? 1 : 2,
-        MembershipID: formData.MembershipID
-          ? Number(formData.MembershipID)
-          : null,
-      }
-
-      try {
-        const url =
-          editingId === null
-            ? `/api/store/${kind}/sales`
-            : `/api/store/${kind}/sales/${editingId}`
-
-        const response = await fetch(url, {
-          method: editingId === null ? 'POST' : 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(saleDataToSave),
-        })
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Could not save the sale.')
-        }
-
-        const [salesResponse, itemsResponse] = await Promise.all([
-          fetch(`/api/store/${kind}/sales`),
-          fetch(`/api/store/${kind}/items`),
-        ])
-
-        if (!salesResponse.ok || !itemsResponse.ok) {
-          throw new Error(
-            'Sale saved, but the lists could not be refreshed.'
-          )
-        }
-
-        const [salesData, itemsData] = await Promise.all([
-          salesResponse.json(),
-          itemsResponse.json(),
-        ])
-
-        setSales(
-          salesData.map((sale) => ({
-            ...sale,
-            SalePrice: Number(sale.SalePrice),
-            Quantity: Number(sale.Quantity),
-          }))
-        )
-
-        setItems(
-          itemsData.map((item) => ({
-            ...item,
-            Price: Number(item.Price),
-            ...(item.Stock !== undefined
-              ? { Stock: Number(item.Stock) }
-              : {}),
-          }))
-        )
-
-        closeModal()
-        saleSelection.clear()
-      } catch (error) {
-        alert(error.message)
-      }
-
+    if(error){
+      setFormError(error)
       return
     }
-  }
 
+    const path = isItem ? `${base}/items` : `${base}/sales`
+    const url = editingId === null ? path : `${path}/${editingId}`
+    const method = editingId === null ? 'POST' : 'PUT'
 
+    try{
+      await callApi(url, method, isItem ? buildItem() : buildSale())
+    }
+    catch(saveError){
+      setFormError(saveError.message)
+      return
+    }
 
+    closeModal()
+    selection.clear()
 
-  const deleteSale = async (sale) => {
-    const response = await fetch(
-      `/api/store/${kind}/sales/${sale.SaleID}`,
-      {
-        method: 'DELETE',
-      }
-    )
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to delete sale.')
+    try{
+      await loadStoreData()
+    }
+    catch{
+      setLoadError('Saved, but the lists could not be refreshed.')
     }
   }
 
-  const refreshStoreData = async () => {
-    const [salesResponse, itemsResponse] = await Promise.all([
-      fetch(`/api/store/${kind}/sales`),
-      fetch(`/api/store/${kind}/items`),
-    ])
+  // Delete
 
-    if (!salesResponse.ok || !itemsResponse.ok) {
-      throw new Error('Deleted, but the lists could not be refreshed.')
+  const deleteItem = async (item)=>{
+    const hasSales = sales.some((sale)=>Number(sale.ItemID) === Number(item.ItemID))
+
+    if(hasSales){
+      throw new Error('This item has sales records. Delete those sales before deleting the item.')
     }
 
-    const [salesData, itemsData] = await Promise.all([
-      salesResponse.json(),
-      itemsResponse.json(),
-    ])
-
-    setSales(
-      salesData.map((sale) => ({
-        ...sale,
-        SalePrice: Number(sale.SalePrice),
-        Quantity: Number(sale.Quantity),
-      }))
-    )
-
-    setItems(
-      itemsData.map((item) => ({
-        ...item,
-        Price: Number(item.Price),
-        ...(item.Stock !== undefined
-          ? { Stock: Number(item.Stock) }
-          : {}),
-      }))
-    )
+    await callApi(`${base}/items/${item.ItemID}`, 'DELETE')
   }
 
+  const deleteSale = async (sale)=>{
+    await callApi(`${base}/sales/${sale.SaleID}`, 'DELETE')
+  }
 
-
-
-  const deleteItem = async (item) => {
-    const hasSales = sales.some(
-      (sale) => sale.ItemID === item.ItemID
-    )
-
-    if (hasSales) {
-      throw new Error(
-        'This item has sales records. Delete those sales before deleting the item.'
-      )
+  const handleEditSelected = ()=>{
+    if(tab === 'items'){
+      openEditItem(itemSelection.selectedRows[0])
     }
-
-    const response = await fetch(
-      `/api/store/${kind}/items/${item.ItemID}`,
-      {
-        method: 'DELETE',
-      }
-    )
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Could not delete the item.')
+    else{
+      openEditSale(saleSelection.selectedRows[0])
     }
   }
 
+  const handleDeleteSelected = async ()=>{
+    const deleted = tab === 'items'
+      ? await itemSelection.deleteSelected('item', (item)=>item.ItemName, deleteItem)
+      : await saleSelection.deleteSelected('sale', (sale)=>`Sale ${sale.SaleID}`, deleteSale)
 
-  const filteredItems = items.filter((item) => {
-    const text = `${item.ItemName} ${item.Category}`.toLowerCase()
-    return text.includes(search.toLowerCase())
-  })
+    if(!deleted){
+      return
+    }
 
-  const filteredSales = sales.filter((sale) => {
-    const text =
-      `${sale.SaleID} ${sale.ItemName ?? ''} ${sale.PaymentMethod}`.toLowerCase()
-    return text.includes(search.toLowerCase())
-  })
-
-  const total = (sale) => Number(sale.SalePrice) * sale.Quantity
-  const revenue = sales.reduce((sum, sale) => sum + total(sale), 0)
-
-  const itemSelection = useSelection(filteredItems, (item) => item.ItemID)
-  const saleSelection = useSelection(filteredSales, (sale) => sale.SaleID)
-
-  const selection = tab === 'items' ? itemSelection : saleSelection
-
-  const handleEditSelected = () => {
-    if (tab === 'items') {
-      openEditModal(itemSelection.selectedRows[0])
-    } else {
-      openEditSaleModal(saleSelection.selectedRows[0])
+    try{
+      await loadStoreData()
+    }
+    catch{
+      setLoadError('Deleted, but the lists could not be refreshed.')
     }
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted =
-      tab === 'items'
-        ? await itemSelection.deleteSelected(
-            'item',
-            (item) => item.ItemName,
-            deleteItem
-          )
-        : await saleSelection.deleteSelected(
-            'sale',
-            (sale) => `Sale ${sale.SaleID}`,
-            deleteSale
-          )
-
-    if (!deleted) return
-
-    try {
-      await refreshStoreData()
-    } catch (error) {
-      alert(error.message)
-    }
+  const switchTab = (name)=>{
+    setTab(name)
+    itemSelection.clear()
+    saleSelection.clear()
   }
+
+  const isNew = editingId === null
+  const modalTitle = tab === 'items'
+    ? (isNew ? 'Add Item' : 'Edit Item')
+    : (isNew ? 'Record Sale' : 'Edit Sale')
+  const submitLabel = isNew ? modalTitle : 'Save Changes'
 
   return (
     <div className="page">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">{title}</h1>
-        </div>
+        <h1 className="page-title">{store.title}</h1>
 
         <div className="page-header-actions">
           <SelectionActions
@@ -540,11 +336,7 @@ function StorePage({ kind }) {
             onDelete={handleDeleteSelected}
           />
 
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openAddModal}
-          >
+          <button type="button" className="btn primary" onClick={openAddModal}>
             {tab === 'items' ? 'Add Item' : 'Record Sale'}
           </button>
         </div>
@@ -559,23 +351,19 @@ function StorePage({ kind }) {
         <Panel className="summary-card">
           <div className="summary-value">
             {isGiftShop
-              ? items.reduce((sum, item) => sum + item.Stock, 0).toLocaleString()
-              : categories.length}
+              ? items.reduce((sum, item)=>sum + item.Stock, 0).toLocaleString()
+              : store.categories.length}
           </div>
-          <div className="summary-label">
-            {isGiftShop ? 'Units in Stock' : 'Categories'}
-          </div>
+          <div className="summary-label">{isGiftShop ? 'Units in Stock' : 'Categories'}</div>
         </Panel>
 
         <Panel className="summary-card">
           <div className="summary-value">
             {isGiftShop
-              ? items.filter((item) => item.Stock < 5).length
+              ? items.filter((item)=>item.Stock < LOW_STOCK).length
               : sales.length}
           </div>
-          <div className="summary-label">
-            {isGiftShop ? 'Low Stock Items' : 'Sales Recorded'}
-          </div>
+          <div className="summary-label">{isGiftShop ? 'Low Stock Items' : 'Sales Recorded'}</div>
         </Panel>
 
         <Panel className="summary-card">
@@ -588,12 +376,7 @@ function StorePage({ kind }) {
         <button
           type="button"
           className={`tab${tab === 'items' ? ' active' : ''}`}
-          onClick={() => {
-            setTab('items')
-            resetForm()
-            itemSelection.clear()
-            saleSelection.clear()
-          }}
+          onClick={()=>switchTab('items')}
         >
           Items ({items.length})
         </button>
@@ -601,12 +384,7 @@ function StorePage({ kind }) {
         <button
           type="button"
           className={`tab${tab === 'sales' ? ' active' : ''}`}
-          onClick={() => {
-            setTab('sales')
-            resetForm()
-            itemSelection.clear()
-            saleSelection.clear()
-          }}
+          onClick={()=>switchTab('sales')}
         >
           Sales ({sales.length})
         </button>
@@ -623,26 +401,21 @@ function StorePage({ kind }) {
           type="search"
           className="search-input"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e)=>setSearch(e.target.value)}
           placeholder={tab === 'items' ? 'Search items...' : 'Search sales...'}
         />
       </div>
 
       {loadError && (
         <p className="load-error" role="alert">
-          Could not load {isGiftShop ? 'gift shop' : 'café'}: {loadError}
+          Could not load {store.name}: {loadError}
         </p>
       )}
 
       {tab === 'items' ? (
         <div className="card table-wrap">
-          <table
-            className={
-              'data-table' +
-              (itemSelection.selectedRows.length > 0 ? ' selecting' : '')
-            }
-          >
-            <caption className="sr-only">{title} items</caption>
+          <table className={`data-table${itemSelection.selectedRows.length > 0 ? ' selecting' : ''}`}>
+            <caption className="sr-only">{store.title} items</caption>
             <thead>
               <tr>
                 <th scope="col" className="select-col">
@@ -657,43 +430,30 @@ function StorePage({ kind }) {
             </thead>
 
             <tbody>
-              {filteredItems.map((item) => (
+              {filteredItems.map((item)=>(
                 <tr
                   key={item.ItemID}
-                  className={
-                    itemSelection.isSelected(item.ItemID) ? 'selected-row' : ''
-                  }
+                  className={itemSelection.isSelected(item.ItemID) ? 'selected-row' : ''}
                 >
                   <td className="select-col">
                     <input
                       type="checkbox"
                       checked={itemSelection.isSelected(item.ItemID)}
-                      onChange={() => itemSelection.toggle(item.ItemID)}
+                      onChange={()=>itemSelection.toggle(item.ItemID)}
                       aria-label={`Select ${item.ItemName}`}
                     />
                   </td>
-
                   <td className="strong">{item.ItemName}</td>
-
                   <td>{item.Category}</td>
-
-                  <td className="mono">${Number(item.Price).toFixed(2)}</td>
-
-                  {isGiftShop && (
-                    <td className="mono">
-                      {item.Stock}
-                    </td>
-                  )}
-
+                  <td className="mono">${item.Price.toFixed(2)}</td>
+                  {isGiftShop && <td className="mono">{item.Stock}</td>}
                   <td>{item.StaffName}</td>
                 </tr>
               ))}
 
               {filteredItems.length === 0 && (
                 <tr>
-                  <td colSpan={isGiftShop ? 6 : 5} className="empty">
-                    No items found.
-                  </td>
+                  <td colSpan={isGiftShop ? 6 : 5} className="empty">No items found.</td>
                 </tr>
               )}
             </tbody>
@@ -701,13 +461,8 @@ function StorePage({ kind }) {
         </div>
       ) : (
         <div className="card table-wrap">
-          <table
-            className={
-              'data-table' +
-              (saleSelection.selectedRows.length > 0 ? ' selecting' : '')
-            }
-          >
-            <caption className="sr-only">{title} sales</caption>
+          <table className={`data-table${saleSelection.selectedRows.length > 0 ? ' selecting' : ''}`}>
+            <caption className="sr-only">{store.title} sales</caption>
             <thead>
               <tr>
                 <th scope="col" className="select-col">
@@ -725,48 +480,33 @@ function StorePage({ kind }) {
             </thead>
 
             <tbody>
-              {filteredSales.map((sale) => (
+              {filteredSales.map((sale)=>(
                 <tr
                   key={sale.SaleID}
-                  className={
-                    saleSelection.isSelected(sale.SaleID) ? 'selected-row' : ''
-                  }
+                  className={saleSelection.isSelected(sale.SaleID) ? 'selected-row' : ''}
                 >
                   <td className="select-col">
                     <input
                       type="checkbox"
                       checked={saleSelection.isSelected(sale.SaleID)}
-                      onChange={() => saleSelection.toggle(sale.SaleID)}
+                      onChange={()=>saleSelection.toggle(sale.SaleID)}
                       aria-label={`Select sale ${sale.SaleID}`}
                     />
                   </td>
-
-                  <td className="mono">
-                    #{String(sale.SaleID).padStart(5, '0')}
-                  </td>
-
+                  <td className="mono">#{String(sale.SaleID).padStart(5, '0')}</td>
                   <td>{sale.ItemName}</td>
                   <td className="mono">{sale.Quantity}</td>
-                  <td className="mono">${total(sale).toFixed(2)}</td>
+                  <td className="mono">${saleTotal(sale).toFixed(2)}</td>
                   <td className="mono">{sale.SaleDate}</td>
-
                   <td>{sale.PaymentMethod}</td>
-
-                  <td>
-                    {sale.MemberName || (
-                      <span className="cell-sub">Walk-in</span>
-                    )}
-                  </td>
-
+                  <td>{sale.MemberName || <span className="cell-sub">Walk-in</span>}</td>
                   <td>{sale.StaffName}</td>
                 </tr>
               ))}
 
               {filteredSales.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="empty">
-                    No sales found.
-                  </td>
+                  <td colSpan={9} className="empty">No sales found.</td>
                 </tr>
               )}
             </tbody>
@@ -774,20 +514,8 @@ function StorePage({ kind }) {
         </div>
       )}
 
-      <Modal
-        open={open}
-        title={
-          tab === 'items'
-            ? editingId === null
-              ? 'Add Item'
-              : 'Edit Item'
-            : editingId === null
-              ? 'Record Sale'
-              : 'Edit Sale'
-        }
-        onClose={closeModal}
-      >
-        <form className="form-grid" onSubmit={handleSubmit}>
+      <Modal open={open} title={modalTitle} onClose={closeModal}>
+        <form className="form-grid" onSubmit={handleSubmit} noValidate>
           {tab === 'items' ? (
             <>
               <div className="form-group">
@@ -797,7 +525,6 @@ function StorePage({ kind }) {
                   name="ItemName"
                   value={formData.ItemName}
                   onChange={handleChange}
-                  required
                 />
               </div>
 
@@ -808,13 +535,10 @@ function StorePage({ kind }) {
                   name="Category"
                   value={formData.Category}
                   onChange={handleChange}
-                  required
                 >
                   <option value="">Select Category</option>
-                  {categories.map((itemCategory) => (
-                    <option key={itemCategory} value={itemCategory}>
-                      {itemCategory}
-                    </option>
+                  {store.categories.map((category)=>(
+                    <option key={category} value={category}>{category}</option>
                   ))}
                 </select>
               </div>
@@ -829,7 +553,6 @@ function StorePage({ kind }) {
                   step="0.01"
                   value={formData.Price}
                   onChange={handleChange}
-                  required
                 />
               </div>
 
@@ -844,7 +567,6 @@ function StorePage({ kind }) {
                     step="1"
                     value={formData.Stock}
                     onChange={handleChange}
-                    required
                   />
                 </div>
               )}
@@ -858,13 +580,10 @@ function StorePage({ kind }) {
                   name="ItemID"
                   value={formData.ItemID}
                   onChange={handleChange}
-                  required
                 >
                   <option value="">Select Item</option>
-                  {items.map((item) => (
-                    <option key={item.ItemID} value={item.ItemID}>
-                      {item.ItemName}
-                    </option>
+                  {items.map((item)=>(
+                    <option key={item.ItemID} value={item.ItemID}>{item.ItemName}</option>
                   ))}
                 </select>
               </div>
@@ -879,7 +598,6 @@ function StorePage({ kind }) {
                   step="1"
                   value={formData.Quantity}
                   onChange={handleChange}
-                  required
                 />
               </div>
 
@@ -892,7 +610,6 @@ function StorePage({ kind }) {
                   max={today}
                   value={formData.SaleDate}
                   onChange={handleChange}
-                  required
                 />
               </div>
 
@@ -903,13 +620,10 @@ function StorePage({ kind }) {
                   name="PaymentMethod"
                   value={formData.PaymentMethod}
                   onChange={handleChange}
-                  required
                 >
                   <option value="">Select Payment</option>
-                  {payments.map((paymentMethod) => (
-                    <option key={paymentMethod} value={paymentMethod}>
-                      {paymentMethod}
-                    </option>
+                  {store.payments.map((method)=>(
+                    <option key={method} value={method}>{method}</option>
                   ))}
                 </select>
               </div>
@@ -930,23 +644,15 @@ function StorePage({ kind }) {
             </>
           )}
 
+          {formError && <p className="form-error" role="alert">{formError}</p>}
+
           <div className="form-actions">
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={closeModal}
-            >
+            <button type="button" className="btn secondary" onClick={closeModal}>
               Cancel
             </button>
 
             <button type="submit" className="btn primary">
-              {tab === 'items'
-                ? editingId === null
-                  ? 'Add Item'
-                  : 'Save Changes'
-                : editingId === null
-                  ? 'Record Sale'
-                  : 'Save Changes'}
+              {submitLabel}
             </button>
           </div>
         </form>
