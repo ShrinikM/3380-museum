@@ -17,6 +17,7 @@ function Artworks() {
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
+  const [selectedType, setSelectedType] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
 
@@ -130,11 +131,14 @@ function Artworks() {
   const filtered = artworks.filter((artwork) => {
     const searchText = search.toLowerCase()
 
-    return (
+    const matchesSearch =
       (artwork.Title || '').toLowerCase().includes(searchText) ||
       (artwork.ArtistName || '').toLowerCase().includes(searchText) ||
       (artwork.CollectionName || '').toLowerCase().includes(searchText)
-    )
+
+    const matchesType = selectedType === '' || artwork.Type === selectedType
+
+    return matchesSearch && matchesType
   })
 
   const {
@@ -185,19 +189,51 @@ function Artworks() {
         )}
       </div>
 
-      <div className="toolbar">
-        <label htmlFor="artwork-search" className="sr-only">
-          Search artworks
-        </label>
-        <input
-          id="artwork-search"
-          type="search"
-          className="search-input"
-          name="artworkSearch"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search artworks..."
-        />
+      <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '220px' }}>
+          <label htmlFor="artwork-search" className="sr-only">
+            Search artworks
+          </label>
+          <input
+            id="artwork-search"
+            type="search"
+            className="search-input"
+            name="artworkSearch"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search artworks..."
+            style={{ width: '100%', height: '40px', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        <div style={{ minWidth: '180px' }}>
+          <label htmlFor="artwork-type-filter" className="sr-only">
+            Filter by type
+          </label>
+          <select
+            id="artwork-type-filter"
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            style={{ 
+              width: '100%', 
+              height: '40px', 
+              padding: '0 12px', 
+              boxSizing: 'border-box', 
+              cursor: 'pointer',
+              backgroundColor: '#fff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              color: '#334155'
+            }}
+          >
+            <option value="">All Types</option>
+            {ARTWORK_TYPES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loadError && (
