@@ -28,7 +28,7 @@ function PublicNavbar(){
         </NavLink>
 
         <NavLink to="/login" className="btn secondary">
-          Login / Sign up
+          Login
         </NavLink>
       </nav>
     </header>
