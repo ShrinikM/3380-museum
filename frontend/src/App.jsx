@@ -19,6 +19,7 @@ import Dashboard from './pages/Dashboard'
 import HomePage from './pages/HomePage'
 import AboutPage from './pages/AboutPage'
 import GalleryPage from './pages/GalleryPage'
+import CustomerPage from './pages/Customerpage'
 import { useRole } from './context/role'
 import { callApi } from './api'
 import './App.css'
@@ -59,8 +60,10 @@ function App() {
   const [alerts, setAlerts] = useState([])
   const location = useLocation()
 
+  const isCustomer = user !== null && user.role === 'Customer'
+
   useEffect(() => {
-    if (user === null) {
+    if (user === null || user.role === 'Customer') {
       return
     }
 
@@ -88,6 +91,23 @@ function App() {
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    )
+  }
+
+  if (isCustomer) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Navigate to="/account" replace />} />
+
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/account" element={<CustomerPage />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/account" replace />} />
       </Routes>
     )
   }

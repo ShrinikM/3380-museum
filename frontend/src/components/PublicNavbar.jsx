@@ -1,8 +1,17 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useRole } from '../context/role'
 
 const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
 
 function PublicNavbar(){
+  const { user, logout } = useRole()
+  const navigate = useNavigate()
+
+  const handleLogout = ()=>{
+    logout()
+    navigate('/')
+  }
+
   return (
     <header className="navbar">
       <div className="navbar-brand">
@@ -27,9 +36,21 @@ function PublicNavbar(){
           Gallery
         </NavLink>
 
-        <NavLink to="/login" className="btn secondary">
-          Log In
-        </NavLink>
+        {user === null ? (
+          <NavLink to="/login" className="btn secondary">
+            Log In
+          </NavLink>
+        ) : (
+          <>
+            <NavLink to="/account" className="navbar-link">
+              My Account
+            </NavLink>
+
+            <button type="button" className="btn secondary" onClick={handleLogout}>
+              Log Out
+            </button>
+          </>
+        )}
       </nav>
     </header>
   )

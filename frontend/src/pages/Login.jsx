@@ -9,15 +9,16 @@ function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    setLoading(true)
 
-    const success = login(username, password)
+    const message = await login(username.trim(), password)
 
-    if(!success){
-      setError('Wrong username or password.')
-    }
+    setLoading(false)
+    setError(message)
   }
 
   return (
@@ -31,8 +32,10 @@ function Login() {
         <form onSubmit={handleSubmit} className="login-form">
 
           <div className="form-group">
-            <label>Username</label>
+            <label htmlFor="login-username">Username</label>
             <input
+              id="login-username"
+              autoComplete="username"
               value={username}
               onChange={(e)=> setUsername(e.target.value)}
               required
@@ -40,9 +43,11 @@ function Login() {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label htmlFor="login-password">Password</label>
             <input
+              id="login-password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e)=> setPassword(e.target.value)}
               required
@@ -51,8 +56,8 @@ function Login() {
 
           {error && <p className="login-error">{error}</p>}
 
-          <button type="submit" className="btn primary">
-            Log In
+          <button type="submit" className="btn primary" disabled={loading}>
+            {loading ? 'Logging In...' : 'Log In'}
           </button>
 
           <Link to="/" className="btn secondary">

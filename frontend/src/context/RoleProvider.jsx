@@ -1,33 +1,45 @@
 import { useState } from 'react'
 import { RoleContext } from './role'
 import { ROLES, DEMO_LOGINS } from '../data/roles'
+import { callApi } from '../api'
 
 function getSavedUser() {
-  const saved = localStorage.getItem('user')
-
-  if(saved === null){
+  try {
+    return JSON.parse(localStorage.getItem('user'))
+  } catch {
     return null
   }
-
-  return JSON.parse(saved)
 }
 
 function RoleProvider({ children }) {
   const [user, setUser] = useState(getSavedUser)
 
-  const login = (username, password) => {
-    const found = DEMO_LOGINS.find((item)=>
+  const saveUser = (loggedInUser) => {
+    localStorage.setItem('user', JSON.stringify(loggedInUser))
+    setUser(loggedInUser)
+  }
+
+  const login = async (username, password) => {
+    const staff = DEMO_LOGINS.find((item)=>
       item.username === username && item.password === password
     )
 
-    if(!found){
-      return false
+    if(staff){
+      saveUser({ username: staff.username, role: staff.role })
+      return ''
     }
 
-    const loggedInUser = { username: found.username, role: found.role }
-    localStorage.setItem('user', JSON.stringify(loggedInUser))
-    setUser(loggedInUser)
-    return true
+    try {
+      const customer = await callApi('/api/customer/login', 'POST', {
+        Username: username,
+        Password: password,
+      })
+
+      saveUser(customer)
+      return ''
+    } catch (error) {
+      return error.message
+    }
   }
 
   const logout = () => {
@@ -35,22 +47,20 @@ function RoleProvider({ children }) {
     setUser(null)
   }
 
-
   const canView = (path) => {
-    if (user === null) {
+    if(user === null){
       return false
     }
 
     return ROLES[user.role]?.pages.includes(path) ?? false
   }
 
-
   const canEdit = (path) => {
     if(user === null){
       return false
     }
 
-    return ROLES[user.role].edit.includes(path)
+    return ROLES[user.role]?.edit.includes(path) ?? false
   }
 
   return (
