@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { callApi } from '../api'
-import { useRole } from '../context/role'
-import './CustomerPage.css'
+import './Customerpage.css'
 
 const TABS = [
   { id: 'membership', label: 'My Membership' },
   { id: 'tickets', label: 'Buy Tickets' },
   { id: 'shop', label: 'Gift Shop' },
+  { id: 'purchases', label: 'Purchases' },
 ]
 
 const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
+const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const MAX_PER_ORDER = 20
 
 const STATUS_TEXT = {
   active: 'Active',
   upcoming: 'Starts soon',
   expired: 'Expired',
+  cancelled: 'Cancelled',
 }
 
 function money(value){
@@ -60,9 +62,90 @@ function Stepper({ value, max, onChange, label }){
 }
 
 
-function MembershipTab({ account }){
-  const { membership, tickets, orders } = account
+function MembershipTab({ account, onChanged }){
+  const { membership, terms, plans } = account
+  const [renewing, setRenewing] = useState(false)
+  const [plan, setPlan] = useState('')
+  const [payment, setPayment] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleCancel = async ()=>{
+    const confirmed = window.confirm('Are you sure you want to cancel your membership?')
+
+    if(!confirmed){
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try{
+      await callApi('/api/customer/membership/cancel', 'POST')
+      onChanged('Your membership has been cancelled.')
+    }
+    catch(cancelError){
+      setError(cancelError.message)
+    }
+    finally{
+      setSaving(false)
+    }
+  }
+
+  const openRenew = ()=>{
+    setRenewing(true)
+    setPlan('')
+    setPayment('')
+    setError('')
+  }
+
+  const closeRenew = ()=>{
+    setRenewing(false)
+    setError('')
+  }
+
+  const handleRenew = async ()=>{
+    if(!plan){
+      setError('Please choose a plan.')
+      return
+    }
+
+    if(!payment){
+      setError('Please choose a payment method.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try{
+      const result = await callApi('/api/customer/membership/renew', 'POST', {
+        MembershipType: plan,
+        PaymentMethod: payment,
+      })
+
+      setRenewing(false)
+      onChanged(`Your ${plan} membership is active. You paid ${money(result.total)}.`)
+    }
+    catch(renewError){
+      setError(renewError.message)
+    }
+    finally{
+      setSaving(false)
+    }
+  }
+
+  if(membership === null){
+    return (
+      <section className="cp-card">
+        <p className="cp-empty">You don't have a membership right now. You can sign up at the front desk.</p>
+      </section>
+    )
+  }
+
   const isActive = membership.Status === 'active'
+  const canCancel = isActive || membership.Status === 'upcoming'
+  const selectedPlan = plans.find((item)=>item.MembershipType === plan)
 
   return (
     <div className="cp-stack">
@@ -106,15 +189,162 @@ function MembershipTab({ account }){
           )}
         </dl>
 
-        {membership.Status === 'expired' && (
-          <p className="cp-note">Your membership has expired. You can renew it at the front desk.</p>
+        {!canCancel && (
+          <p className="cp-note">
+            Your membership is {membership.Status}. Renew it to get your ticket discount back.
+          </p>
+        )}
+
+        {!renewing && (
+          <div className="cp-member-actions">
+            <button type="button" className="btn primary" onClick={openRenew}>
+              {canCancel ? 'Change Plan' : 'Renew Membership'}
+            </button>
+
+            {canCancel && (
+              <button
+                type="button"
+                className="btn danger"
+                onClick={handleCancel}
+                disabled={saving}
+              >
+                {saving ? 'Cancelling...' : 'Cancel Membership'}
+              </button>
+            )}
+          </div>
         )}
       </section>
 
-      <section className="cp-card">
-        <h2>My Tickets</h2>
+      {renewing && (
+        <section className="cp-card">
+          <div className="cp-label">{canCancel ? 'Change plan' : 'Renew'}</div>
+          <h2>Choose a plan</h2>
 
-        {tickets.length === 0 ? (
+          <div className="cp-plans">
+            {plans.map((item)=>{
+              const isCurrent = isActive && item.MembershipType === membership.MembershipType
+
+              return (
+                <button
+                  key={item.MembershipType}
+                  type="button"
+                  className={`cp-option${item.MembershipType === plan ? ' is-selected' : ''}`}
+                  onClick={()=>{
+                    setPlan(item.MembershipType)
+                    setError('')
+                  }}
+                  disabled={isCurrent}
+                >
+                  <span className="cp-option-name">{item.MembershipType}</span>
+                  <span className="cp-option-text">{money(item.Price)} for one year</span>
+                  <span className="cp-option-meta">
+                    {isCurrent ? 'Your current plan' : `${item.DiscountPercent}% off tickets`}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="form-group cp-renew-payment">
+            <label htmlFor="cp-membership-payment">Payment</label>
+            <select
+              id="cp-membership-payment"
+              value={payment}
+              onChange={(e)=>{
+                setPayment(e.target.value)
+                setError('')
+              }}
+            >
+              <option value="">Choose a payment method</option>
+              {MEMBERSHIP_PAYMENTS.map((method)=>(
+                <option key={method} value={method}>{method}</option>
+              ))}
+            </select>
+          </div>
+
+          {error && <p className="form-error" role="alert">{error}</p>}
+
+          <div className="cp-member-actions">
+            <button type="button" className="btn secondary" onClick={closeRenew} disabled={saving}>
+              Back
+            </button>
+            <button type="button" className="btn primary" onClick={handleRenew} disabled={saving}>
+              {saving ? 'Processing...' : selectedPlan ? `Pay ${money(selectedPlan.Price)}` : 'Pay'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!renewing && error && <p className="form-error" role="alert">{error}</p>}
+
+      <section className="cp-card">
+        <h2>Membership History</h2>
+
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Plan</th>
+                <th scope="col">Term</th>
+                <th scope="col">Price</th>
+                <th scope="col">Payment</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {terms.map((term)=>(
+                <tr key={term.TermID}>
+                  <td className="strong">{term.MembershipType}</td>
+                  <td>{formatDate(term.StartDate)} - {formatDate(term.EndDate)}</td>
+                  <td>{money(term.Price)}</td>
+                  <td>{term.PaymentMethod}</td>
+                  <td>
+                    <span className={`badge badge-${term.Status}`}>
+                      {STATUS_TEXT[term.Status]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+
+function PurchasesTab({ purchases }){
+  const [view, setView] = useState('tickets')
+  const { tickets, orders } = purchases
+
+  return (
+    <section className="cp-card">
+      <div className="cp-card-head">
+        <h2>Purchases</h2>
+
+        <div className="cp-toggle" role="group" aria-label="Purchase type">
+          <button
+            type="button"
+            className={view === 'tickets' ? 'is-active' : ''}
+            aria-pressed={view === 'tickets'}
+            onClick={()=>setView('tickets')}
+          >
+            Tickets
+          </button>
+          <button
+            type="button"
+            className={view === 'orders' ? 'is-active' : ''}
+            aria-pressed={view === 'orders'}
+            onClick={()=>setView('orders')}
+          >
+            Gift Shop
+          </button>
+        </div>
+      </div>
+
+      {view === 'tickets' && (
+        tickets.length === 0 ? (
           <p className="cp-empty">You haven't bought any tickets yet.</p>
         ) : (
           <div className="table-wrap">
@@ -139,13 +369,11 @@ function MembershipTab({ account }){
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        )
+      )}
 
-      <section className="cp-card">
-        <h2>My Orders</h2>
-
-        {orders.length === 0 ? (
+      {view === 'orders' && (
+        orders.length === 0 ? (
           <p className="cp-empty">You haven't ordered anything from the gift shop yet.</p>
         ) : (
           <div className="table-wrap">
@@ -172,9 +400,9 @@ function MembershipTab({ account }){
               </tbody>
             </table>
           </div>
-        )}
-      </section>
-    </div>
+        )
+      )}
+    </section>
   )
 }
 
@@ -384,7 +612,7 @@ function ShopTab({ items, onBought }){
               <div className="cp-label">{item.Category}</div>
               <h3>{item.ItemName}</h3>
               <div className="cp-item-price">{money(item.Price)}</div>
-              <div className="cp-item-stock">
+              <div className={`cp-item-stock${!soldOut && item.Stock > 5 ? ' is-in' : ''}`}>
                 {soldOut ? 'Out of stock' : item.Stock <= 5 ? `Only ${item.Stock} left` : 'In stock'}
               </div>
 
@@ -469,25 +697,27 @@ function ShopTab({ items, onBought }){
 
 
 function CustomerPage(){
-  const { user } = useRole()
   const [tab, setTab] = useState('membership')
   const [account, setAccount] = useState(null)
   const [ticketData, setTicketData] = useState(null)
   const [shopItems, setShopItems] = useState(null)
+  const [purchases, setPurchases] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [message, setMessage] = useState('')
 
   const loadAll = useCallback(async()=>{
     try{
-      const [accountData, exhibitionData, items] = await Promise.all([
+      const [accountData, exhibitionData, items, purchaseData] = await Promise.all([
         callApi('/api/customer/account', 'GET'),
         callApi('/api/customer/exhibitions', 'GET'),
         callApi('/api/customer/shop', 'GET'),
+        callApi('/api/customer/purchases', 'GET'),
       ])
 
       setAccount(accountData)
       setTicketData(exhibitionData)
       setShopItems(items)
+      setPurchases(purchaseData)
       setLoadError('')
     }
     catch(error){
@@ -509,7 +739,7 @@ function CustomerPage(){
     loadAll()
   }
 
-  const firstName = (user.name || '').split(' ')[0]
+  const firstName = account && account.membership ? account.membership.FirstName : ''
 
   return (
     <div className="cp-page">
@@ -540,9 +770,10 @@ function CustomerPage(){
 
       {!loadError && account === null && <p className="cp-empty">Loading...</p>}
 
-      {account && tab === 'membership' && <MembershipTab account={account} />}
+      {account && tab === 'membership' && <MembershipTab account={account} onChanged={handleBought} />}
       {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} onBought={handleBought} />}
       {shopItems && tab === 'shop' && <ShopTab items={shopItems} onBought={handleBought} />}
+      {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} />}
     </div>
   )
 }

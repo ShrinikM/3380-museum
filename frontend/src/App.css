@@ -679,6 +679,7 @@ textarea:focus-visible {
 }
 
 .badge-expired,
+.badge-cancelled,
 .badge-low {
   background: var(--danger-bg);
   color: var(--danger);

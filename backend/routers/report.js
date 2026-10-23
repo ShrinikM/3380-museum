@@ -115,22 +115,23 @@ async function getMembershipReport(params, body, staffId) {
   const dates = readDates(params);
   const conditions = [];
   const values = [];
-  addRange("StartDate", dates, conditions, values);
+  addRange("term.StartDate", dates, conditions, values);
 
   const [rows] = await pool.query(
     `SELECT
-       MembershipID,
-       CONCAT(FirstName, ' ', LastName) AS MemberName,
-       Email,
-       MembershipType,
-       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
-       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
-       Price,
-       DiscountPercent,
-       PaymentMethod
-     FROM membership
-     WHERE IsDeleted = 0` + joinConditions(conditions) + `
-     ORDER BY StartDate`,
+       membership.MembershipID,
+       CONCAT(membership.FirstName, ' ', membership.LastName) AS MemberName,
+       membership.Email,
+       term.MembershipType,
+       DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
+       DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
+       term.Price,
+       term.DiscountPercent,
+       term.PaymentMethod
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0` + joinConditions(conditions) + `
+     ORDER BY term.StartDate`,
     values
   );
 
@@ -190,7 +191,7 @@ async function getRevenueReport(params, body, staffId) {
   const tickets = getRange("SaleDate", dates);
   const giftShop = getRange("SaleDate", dates);
   const cafe = getRange("SaleDate", dates);
-  const memberships = getRange("StartDate", dates);
+  const memberships = getRange("term.StartDate", dates);
   const donations = getRange("DonationDate", dates);
 
   const [rows] = await pool.query(
@@ -206,9 +207,10 @@ async function getRevenueReport(params, body, staffId) {
      FROM cafesale
      WHERE IsDeleted = 0` + cafe.where + `
      UNION ALL
-     SELECT 'Memberships' AS Source, COALESCE(SUM(Price), 0) AS Revenue
-     FROM membership
-     WHERE IsDeleted = 0` + memberships.where + `
+     SELECT 'Memberships' AS Source, COALESCE(SUM(term.Price), 0) AS Revenue
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0` + memberships.where + `
      UNION ALL
      SELECT 'Donations' AS Source, COALESCE(SUM(AmountDonated), 0) AS Revenue
      FROM donations
@@ -276,18 +278,19 @@ async function getTicketSalesReport(params, body, staffId) {
 
 async function getMembershipTypesReport(params, body, staffId) {
   const dates = readDates(params);
-  const memberships = getRange("StartDate", dates);
+  const memberships = getRange("term.StartDate", dates);
 
   const [rows] = await pool.query(
     `SELECT
-       MembershipType,
+       term.MembershipType,
        COUNT(*) AS Members,
-       COALESCE(SUM(Price), 0) AS Revenue,
-       ROUND(AVG(DiscountPercent), 1) AS AverageDiscount
-     FROM membership
-     WHERE IsDeleted = 0` + memberships.where + `
-     GROUP BY MembershipType
-     ORDER BY FIELD(MembershipType, 'Individual', 'Family', 'Student', 'Senior')`,
+       COALESCE(SUM(term.Price), 0) AS Revenue,
+       ROUND(AVG(term.DiscountPercent), 1) AS AverageDiscount
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0` + memberships.where + `
+     GROUP BY term.MembershipType
+     ORDER BY FIELD(term.MembershipType, 'Individual', 'Family', 'Student', 'Senior')`,
     memberships.values
   );
 

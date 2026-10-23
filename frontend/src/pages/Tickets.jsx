@@ -133,6 +133,11 @@ function Tickets() {
         return
       }
 
+      if (found.Status === 'cancelled') {
+        setLookupMessage(found.Name + ' - membership was cancelled')
+        return
+      }
+
       if (found.Status === 'upcoming') {
         setLookupMessage(found.Name + ' - membership starts on ' + found.StartDate)
         return

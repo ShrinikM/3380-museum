@@ -51,7 +51,6 @@ function Memberships() {
     async function loadMemberships() {
       try {
         const data = await callApi('/api/memberships', 'GET')
-        const today = new Date().toISOString().split('T')[0]
 
         setMemberships(
           data.map((member) => ({
@@ -70,12 +69,7 @@ function Memberships() {
             price: Number(member.Price),
             discount: Number(member.DiscountPercent),
             payment: member.PaymentMethod,
-            status:
-              (member.StartDate || '').split('T')[0] > today
-                ? 'upcoming'
-                : (member.EndDate || '').split('T')[0] < today
-                ? 'expired'
-                : 'active',
+            status: member.Status,
           }))
         )
 
@@ -109,7 +103,7 @@ function Memberships() {
     (member) => member.status === 'upcoming'
   )
   const expired = memberships.filter(
-    (member) => member.status === 'expired'
+    (member) => member.status === 'expired' || member.status === 'cancelled'
   )
 
   const revenue = memberships.reduce(
@@ -336,7 +330,7 @@ function Memberships() {
 
         <Panel className="summary-card">
           <div className="summary-value">{expired.length}</div>
-          <div className="summary-label">Expired</div>
+          <div className="summary-label">Expired / Cancelled</div>
         </Panel>
 
         <Panel className="summary-card">

@@ -1,5 +1,6 @@
 const pool = require("../db");
 const { ticketPrices, ticketTypes } = require("../prices");
+const { joinCurrentTerm, activeTerm } = require("../terms");
 
 const selectTickets = `
   SELECT
@@ -10,7 +11,7 @@ const selectTickets = `
     t.ExhibitionID,
     e.Name AS ExhibitionName,
     t.MembershipID,
-    m.DiscountPercent AS MemberDiscount,
+    term.DiscountPercent AS MemberDiscount,
     CASE
       WHEN m.MembershipID IS NOT NULL
       THEN CONCAT(m.FirstName, ' ', m.LastName)
@@ -21,6 +22,7 @@ const selectTickets = `
     ON e.ExhibitionID = t.ExhibitionID
   LEFT JOIN membership m
     ON m.MembershipID = t.MembershipID
+  ${joinCurrentTerm("m", "LEFT JOIN")}
   WHERE t.IsDeleted = 0
 `;
 
@@ -119,12 +121,12 @@ async function checkReferences(ticket) {
 
   if (ticket.MembershipID !== null) {
     const [memberships] = await pool.query(
-      `SELECT MembershipID, DiscountPercent
-       FROM membership
-       WHERE MembershipID = ?
-         AND IsDeleted = 0
-         AND StartDate <= CURDATE()
-         AND EndDate >= CURDATE()`,
+      `SELECT m.MembershipID, term.DiscountPercent
+       FROM membership m
+       ${joinCurrentTerm("m")}
+       WHERE m.MembershipID = ?
+         AND m.IsDeleted = 0
+         AND ${activeTerm}`,
       [ticket.MembershipID]
     );
 

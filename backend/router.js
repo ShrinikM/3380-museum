@@ -42,7 +42,6 @@ function sendError(res, error) {
     console.log("Database error:", error.code, error.message);
     sendJson(res, 503, { error: "Database is unavailable" });
   } else if (error.sqlState === "45000") {
-    // Raised by our triggers, e.g. "Not enough stock for this sale"
     sendJson(res, 400, { error: error.sqlMessage });
   } else {
     console.log(error);
@@ -96,32 +95,6 @@ async function getActor(req) {
 
   knownStaff.set(username, rows[0].StaffID);
   return rows[0].StaffID;
-}
-
-// Customers log in with an account linked to their membership.
-// Not cached, so a deleted membership loses access right away.
-async function getCustomer(req) {
-  const username = req.headers["x-username"];
-
-  if (typeof username !== "string" || username.trim() === "") {
-    throw makeError(401, "Please log in to continue");
-  }
-
-  const [rows] = await pool.query(
-    `SELECT c.MembershipID
-     FROM customercredentials c
-     JOIN membership m
-       ON m.MembershipID = c.MembershipID
-       AND m.IsDeleted = 0
-     WHERE c.Username = ?`,
-    [username]
-  );
-
-  if (rows.length === 0) {
-    throw makeError(401, "Unknown customer");
-  }
-
-  return Number(rows[0].MembershipID);
 }
 
 function matchPath(routePath, requestPath) {
@@ -181,15 +154,12 @@ async function handleRequest(req, res) {
       }
     }
 
-    // Staff routes get the StaffID, customer routes get the MembershipID
-    let actorId = null;
+    let staffId = null;
     if (found.route.needsActor) {
-      actorId = await getActor(req);
-    } else if (found.route.needsCustomer) {
-      actorId = await getCustomer(req);
+      staffId = await getActor(req);
     }
 
-    const result = await found.route.handler(found.params, body, actorId);
+    const result = await found.route.handler(found.params, body, staffId);
     sendJson(res, result.status, result.data);
   } catch (error) {
     sendError(res, error);

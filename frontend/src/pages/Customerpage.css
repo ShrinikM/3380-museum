@@ -84,6 +84,90 @@
   border-top: 4px solid var(--primary);
 }
 
+.cp-member-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.cp-member-actions .btn {
+  min-height: 32px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.cp-plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cp-renew-payment {
+  margin-top: 20px;
+}
+
+.cp-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.cp-card .cp-card-head h2 {
+  margin: 0;
+}
+
+.cp-card-head + .cp-empty {
+  padding: 28px 0 12px;
+  text-align: center;
+}
+
+.cp-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+}
+
+.cp-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.cp-toggle button:hover:not(.is-active) {
+  color: var(--foreground);
+}
+
+.cp-toggle button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.12);
+}
+
+.cp-toggle button.is-active {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(28, 28, 42, 0.12);
+}
+
 .cp-member-head {
   display: flex;
   align-items: flex-start;
@@ -114,7 +198,8 @@
   color: var(--warning);
 }
 
-.cp-status.is-expired {
+.cp-status.is-expired,
+.cp-status.is-cancelled {
   background: var(--danger-bg);
   color: var(--danger);
 }
@@ -325,6 +410,11 @@
   font-size: 13px;
 }
 
+.cp-item-stock.is-in {
+  color: var(--success);
+  font-weight: 600;
+}
+
 .cp-item .btn,
 .cp-item .cp-stepper {
   margin-top: auto;
@@ -351,11 +441,20 @@
   .cp-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .cp-plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 640px) {
   .cp-page {
     padding: 24px 16px 48px;
+  }
+
+  .cp-card-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .cp-header h1 {

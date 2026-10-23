@@ -1,5 +1,6 @@
 
 const pool = require("../db");
+const { joinCurrentTerm, activeTerm } = require("../terms");
 
 const storeTypes = {
   giftshop: {
@@ -190,12 +191,12 @@ async function checkMembership(connection, membershipID) {
   if (membershipID === null) return;
 
   const [rows] = await connection.query(
-    `SELECT MembershipID
-     FROM membership
-     WHERE MembershipID = ?
-       AND IsDeleted = 0
-       AND StartDate <= CURDATE()
-       AND EndDate >= CURDATE()`,
+    `SELECT m.MembershipID
+     FROM membership m
+     ${joinCurrentTerm("m")}
+     WHERE m.MembershipID = ?
+       AND m.IsDeleted = 0
+       AND ${activeTerm}`,
     [membershipID]
   );
 

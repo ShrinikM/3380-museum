@@ -60,9 +60,10 @@ async function getRevenue(start, end) {
      FROM cafesale
      WHERE IsDeleted = 0 AND SaleDate >= ? AND SaleDate <= ?
      UNION ALL
-     SELECT 'Memberships' AS Source, COALESCE(SUM(Price), 0) AS Revenue
-     FROM membership
-     WHERE IsDeleted = 0 AND StartDate >= ? AND StartDate <= ?
+     SELECT 'Memberships' AS Source, COALESCE(SUM(term.Price), 0) AS Revenue
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0 AND term.StartDate >= ? AND term.StartDate <= ?
      UNION ALL
      SELECT 'Donations' AS Source, COALESCE(SUM(AmountDonated), 0) AS Revenue
      FROM donations
@@ -82,8 +83,15 @@ async function getCounts(start, end) {
     `SELECT
        (SELECT COUNT(*) FROM ticket
         WHERE IsDeleted = 0 AND SaleDate >= ? AND SaleDate <= ?) AS Tickets,
-       (SELECT COUNT(*) FROM membership
-        WHERE IsDeleted = 0 AND StartDate >= ? AND StartDate <= ?) AS NewMembers`,
+       (SELECT COUNT(*) FROM membershipterm term
+        JOIN membership ON membership.MembershipID = term.MembershipID
+        WHERE membership.IsDeleted = 0
+          AND term.StartDate >= ? AND term.StartDate <= ?
+          AND term.TermID = (
+            SELECT MIN(earliest.TermID)
+            FROM membershipterm earliest
+            WHERE earliest.MembershipID = term.MembershipID
+          )) AS NewMembers`,
     [start, end, start, end]
   );
 
@@ -226,11 +234,12 @@ async function getRecentActivity(kinds) {
        WHERE cafesale.IsDeleted = 0
        UNION ALL
        SELECT
-         membership.CreatedAt,
+         term.CreatedAt,
          'Membership',
-         CONCAT(membership.MembershipType, ' membership for ', membership.FirstName, ' ', membership.LastName),
-         membership.CreatedBy
-       FROM membership
+         CONCAT(term.MembershipType, ' membership for ', membership.FirstName, ' ', membership.LastName),
+         term.CreatedBy
+       FROM membershipterm term
+       JOIN membership ON membership.MembershipID = term.MembershipID
        WHERE membership.IsDeleted = 0
        UNION ALL
        SELECT

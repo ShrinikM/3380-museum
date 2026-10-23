@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { RoleContext } from './role'
 import { ROLES, DEMO_LOGINS } from '../data/roles'
-import { callApi } from '../api'
 
 function getSavedUser() {
   try {
@@ -14,32 +13,19 @@ function getSavedUser() {
 function RoleProvider({ children }) {
   const [user, setUser] = useState(getSavedUser)
 
-  const saveUser = (loggedInUser) => {
-    localStorage.setItem('user', JSON.stringify(loggedInUser))
-    setUser(loggedInUser)
-  }
-
-  const login = async (username, password) => {
-    const staff = DEMO_LOGINS.find((item)=>
+  const login = (username, password) => {
+    const found = DEMO_LOGINS.find((item)=>
       item.username === username && item.password === password
     )
 
-    if(staff){
-      saveUser({ username: staff.username, role: staff.role })
-      return ''
+    if(!found){
+      return false
     }
 
-    try {
-      const customer = await callApi('/api/customer/login', 'POST', {
-        Username: username,
-        Password: password,
-      })
-
-      saveUser(customer)
-      return ''
-    } catch (error) {
-      return error.message
-    }
+    const loggedInUser = { username: found.username, role: found.role }
+    localStorage.setItem('user', JSON.stringify(loggedInUser))
+    setUser(loggedInUser)
+    return true
   }
 
   const logout = () => {

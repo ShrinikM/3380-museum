@@ -1,23 +1,29 @@
 const pool = require("../db");
+const { joinCurrentTerm, termStatus } = require("../terms");
+
+const selectMemberships = `
+  SELECT
+    m.MembershipID,
+    m.FirstName,
+    m.LastName,
+    CONCAT(m.FirstName, ' ', m.LastName) AS Name,
+    m.Email,
+    m.Phone,
+    term.MembershipType,
+    DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
+    DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
+    term.Price,
+    term.PaymentMethod,
+    term.DiscountPercent,
+    ${termStatus} AS Status
+  FROM membership m
+  ${joinCurrentTerm("m")}
+  WHERE m.IsDeleted = 0
+`;
 
 async function getMemberships() {
   const [rows] = await pool.query(
-    `SELECT
-       MembershipID,
-       FirstName,
-       LastName,
-       CONCAT(FirstName, ' ', LastName) AS Name,
-       Email,
-       Phone,
-       MembershipType,
-       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
-       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
-       Price,
-       PaymentMethod,
-       DiscountPercent
-     FROM membership
-     WHERE IsDeleted = 0
-     ORDER BY LastName, FirstName`
+    selectMemberships + " ORDER BY m.LastName, m.FirstName"
   );
 
   return {
@@ -159,21 +165,7 @@ function checkId(params) {
 
 async function findMembership(id) {
   const [rows] = await pool.query(
-    `SELECT
-       MembershipID,
-       FirstName,
-       LastName,
-       CONCAT(FirstName, ' ', LastName) AS Name,
-       Email,
-       Phone,
-       MembershipType,
-       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
-       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
-       Price,
-       PaymentMethod,
-       DiscountPercent
-     FROM membership
-     WHERE MembershipID = ? AND IsDeleted = 0`,
+    selectMemberships + " AND m.MembershipID = ?",
     [id]
   );
 
@@ -194,57 +186,71 @@ async function findMembership(id) {
 async function addMembership(params, body) {
   const membership = validateMembership(body);
 
-  let result;
+  const connection = await pool.getConnection();
 
   try {
-    [result] = await pool.query(
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
       `INSERT INTO membership (
-         FirstName, LastName, Email, Phone, MembershipType,
-         StartDate, EndDate, Price, PaymentMethod,
-         DiscountPercent, CreatedAt, UpdatedAt, IsDeleted
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 0)`,
+         FirstName, LastName, Email, Phone,
+         CreatedAt, UpdatedAt, IsDeleted
+       ) VALUES (?, ?, ?, ?, NOW(), NOW(), 0)`,
       [
         membership.FirstName,
         membership.LastName,
         membership.Email,
         membership.Phone,
+      ]
+    );
+
+    await connection.query(
+      `INSERT INTO membershipterm (
+         MembershipID, MembershipType, StartDate, EndDate, Price,
+         DiscountPercent, PaymentMethod, CreatedAt
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        result.insertId,
         membership.MembershipType,
         membership.StartDate,
         membership.EndDate,
         membership.Price,
-        membership.PaymentMethod,
         membership.DiscountPercent,
+        membership.PaymentMethod,
       ]
     );
-  } catch (error) {
-    checkDuplicate(error);
-  }
 
-  return {
-    status: 201,
-    data: await findMembership(result.insertId),
-  };
+    await connection.commit();
+
+    return {
+      status: 201,
+      data: await findMembership(result.insertId),
+    };
+  } catch (error) {
+    await connection.rollback();
+    checkDuplicate(error);
+  } finally {
+    connection.release();
+  }
 }
 
 async function updateMembership(params, body) {
   const id = checkId(params);
   const membership = validateMembership(body);
 
-  let result;
+  await findMembership(id);
+
+  const connection = await pool.getConnection();
 
   try {
-    [result] = await pool.query(
+    await connection.beginTransaction();
+
+    await connection.query(
       `UPDATE membership
        SET FirstName = ?,
            LastName = ?,
            Email = ?,
            Phone = ?,
-           MembershipType = ?,
-           StartDate = ?,
-           EndDate = ?,
-           Price = ?,
-           PaymentMethod = ?,
-           DiscountPercent = ?,
            UpdatedAt = NOW()
        WHERE MembershipID = ? AND IsDeleted = 0`,
       [
@@ -252,30 +258,50 @@ async function updateMembership(params, body) {
         membership.LastName,
         membership.Email,
         membership.Phone,
+        id,
+      ]
+    );
+
+    await connection.query(
+      `UPDATE membershipterm
+       SET MembershipType = ?,
+           StartDate = ?,
+           EndDate = ?,
+           Price = ?,
+           DiscountPercent = ?,
+           PaymentMethod = ?
+       WHERE TermID = (
+         SELECT TermID FROM (
+           SELECT TermID
+           FROM membershipterm
+           WHERE MembershipID = ?
+           ORDER BY TermID DESC
+           LIMIT 1
+         ) AS latest
+       )`,
+      [
         membership.MembershipType,
         membership.StartDate,
         membership.EndDate,
         membership.Price,
-        membership.PaymentMethod,
         membership.DiscountPercent,
+        membership.PaymentMethod,
         id,
       ]
     );
+
+    await connection.commit();
+
+    return {
+      status: 200,
+      data: await findMembership(id),
+    };
   } catch (error) {
+    await connection.rollback();
     checkDuplicate(error);
+  } finally {
+    connection.release();
   }
-
-  if (result.affectedRows === 0) {
-    const existing = await findMembership(id);
-    if (!existing) {
-      throw makeError(404, "Membership not found.");
-    }
-  }
-
-  return {
-    status: 200,
-    data: await findMembership(id),
-  };
 }
 
 async function lookupMembership(params) {
@@ -289,11 +315,11 @@ async function lookupMembership(params) {
   let value = "";
 
   if (search.includes("@")) {
-    where = "LOWER(Email) = ?";
+    where = "LOWER(m.Email) = ?";
     value = search.toLowerCase();
   } else {
     value = onlyDigits(search);
-    where = "Phone = ?";
+    where = "m.Phone = ?";
 
     if (value.length < 10) {
       throw makeError(400, "Enter a full phone number.");
@@ -302,19 +328,16 @@ async function lookupMembership(params) {
 
   const [rows] = await pool.query(
     `SELECT
-       MembershipID,
-       CONCAT(FirstName, ' ', LastName) AS Name,
-       MembershipType,
-       DiscountPercent,
-       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
-       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
-       CASE
-         WHEN EndDate < CURDATE() THEN 'expired'
-         WHEN StartDate > CURDATE() THEN 'upcoming'
-         ELSE 'active'
-       END AS Status
-     FROM membership
-     WHERE IsDeleted = 0 AND ` + where,
+       m.MembershipID,
+       CONCAT(m.FirstName, ' ', m.LastName) AS Name,
+       term.MembershipType,
+       term.DiscountPercent,
+       DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
+       DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
+       ${termStatus} AS Status
+     FROM membership m
+     ${joinCurrentTerm("m")}
+     WHERE m.IsDeleted = 0 AND ` + where,
     [value]
   );
 

@@ -9,16 +9,15 @@ function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
-    setLoading(true)
 
-    const message = await login(username.trim(), password)
+    const success = login(username.trim(), password)
 
-    setLoading(false)
-    setError(message)
+    if(!success){
+      setError('Wrong username or password.')
+    }
   }
 
   return (
@@ -56,8 +55,8 @@ function Login() {
 
           {error && <p className="login-error">{error}</p>}
 
-          <button type="submit" className="btn primary" disabled={loading}>
-            {loading ? 'Logging In...' : 'Log In'}
+          <button type="submit" className="btn primary">
+            Log In
           </button>
 
           <Link to="/" className="btn secondary">
