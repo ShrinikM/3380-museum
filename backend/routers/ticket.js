@@ -1,13 +1,5 @@
 const pool = require("../db");
-
-const ticketTypes = ["Adult", "Senior", "Student", "Child"];
-
-const ticketPrices = {
-  Adult: 25,
-  Senior: 20,
-  Student: 15,
-  Child: 15,
-};
+const { ticketPrices, ticketTypes } = require("../prices");
 
 const selectTickets = `
   SELECT
