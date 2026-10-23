@@ -11,8 +11,9 @@ const reportRoutes = require("./routers/report");
 const dashboardRoutes = require("./routers/dashboard");
 const donationRoutes = require("./routers/donation");
 const alertRoutes = require("./routers/alert");
+const customerRoutes = require("./routers/customer");
 
-const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes, reportRoutes, dashboardRoutes, donationRoutes, alertRoutes);
+const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes, reportRoutes, dashboardRoutes, donationRoutes, alertRoutes, customerRoutes);
 
 const databaseErrorCodes = [
   "ECONNREFUSED",
@@ -40,6 +41,9 @@ function sendError(res, error) {
   } else if (databaseErrorCodes.includes(error.code)) {
     console.log("Database error:", error.code, error.message);
     sendJson(res, 503, { error: "Database is unavailable" });
+  } else if (error.sqlState === "45000") {
+    // Raised by our triggers, e.g. "Not enough stock for this sale"
+    sendJson(res, 400, { error: error.sqlMessage });
   } else {
     console.log(error);
     sendJson(res, 500, { error: "Something went wrong on the server" });
@@ -92,6 +96,32 @@ async function getActor(req) {
 
   knownStaff.set(username, rows[0].StaffID);
   return rows[0].StaffID;
+}
+
+// Customers log in with an account linked to their membership.
+// Not cached, so a deleted membership loses access right away.
+async function getCustomer(req) {
+  const username = req.headers["x-username"];
+
+  if (typeof username !== "string" || username.trim() === "") {
+    throw makeError(401, "Please log in to continue");
+  }
+
+  const [rows] = await pool.query(
+    `SELECT c.MembershipID
+     FROM customercredentials c
+     JOIN membership m
+       ON m.MembershipID = c.MembershipID
+       AND m.IsDeleted = 0
+     WHERE c.Username = ?`,
+    [username]
+  );
+
+  if (rows.length === 0) {
+    throw makeError(401, "Unknown customer");
+  }
+
+  return Number(rows[0].MembershipID);
 }
 
 function matchPath(routePath, requestPath) {
@@ -151,12 +181,15 @@ async function handleRequest(req, res) {
       }
     }
 
-    let staffId = null;
+    // Staff routes get the StaffID, customer routes get the MembershipID
+    let actorId = null;
     if (found.route.needsActor) {
-      staffId = await getActor(req);
+      actorId = await getActor(req);
+    } else if (found.route.needsCustomer) {
+      actorId = await getCustomer(req);
     }
 
-    const result = await found.route.handler(found.params, body, staffId);
+    const result = await found.route.handler(found.params, body, actorId);
     sendJson(res, result.status, result.data);
   } catch (error) {
     sendError(res, error);

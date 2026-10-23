@@ -32,3 +32,6 @@ Password: staff123
 
 Username: operator 
 Password: operator123 
+
+Username: customer
+Password: customer123
