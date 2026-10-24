@@ -6,15 +6,61 @@ const HAND = '/images/coog-hand.png'
 const HERO_IMAGE = '/images/rumskib.jpeg' 
 
 function Login() {
-  const { login } = useRole()
+  const { login, loginCustomer, registerCustomer } = useRole()
+  const [mode, setMode] = useState('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const handleSubmit = (e) => {
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'register' : 'login')
+    setError('')
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    setError('')
 
-    const success = login(username.trim(), password)
+    if (mode === 'register') {
+      setBusy(true)
+
+      try {
+        await registerCustomer({
+          FirstName: firstName,
+          LastName: lastName,
+          Email: email,
+          Phone: phone,
+          Password: password,
+        })
+      } catch (err) {
+        setError(err.message)
+        setBusy(false)
+      }
+
+      return
+    }
+
+    const name = username.trim()
+
+    if (name.includes('@')) {
+      setBusy(true)
+
+      try {
+        await loginCustomer(name, password)
+      } catch (err) {
+        setError(err.message)
+        setBusy(false)
+      }
+
+      return
+    }
+
+    const success = login(name, password)
 
     if (!success) {
       setError('Wrong username or password.')
@@ -79,23 +125,75 @@ function Login() {
 
           <form onSubmit={handleSubmit} className="login-form">
 
-            <div className="form-group">
-              <label htmlFor="login-username">Username</label>
-              <input
-                id="login-username"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
+            {mode === 'login' && (
+              <div className="form-group">
+                <label htmlFor="login-username">Username or email</label>
+                <input
+                  id="login-username"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            {mode === 'register' && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="register-first">First name</label>
+                  <input
+                    id="register-first"
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="register-last">Last name</label>
+                  <input
+                    id="register-last"
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="register-email">Email</label>
+                  <input
+                    id="register-email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="register-phone">Phone (optional)</label>
+                  <input
+                    id="register-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="form-group">
               <label htmlFor="login-password">Password</label>
               <input
                 id="login-password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                minLength={mode === 'register' ? 8 : undefined}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -104,8 +202,12 @@ function Login() {
 
             {error && <p className="login-error">{error}</p>}
 
-            <button type="submit" className="btn primary">
-              Log In
+            <button type="submit" className="btn primary" disabled={busy}>
+              {mode === 'login' ? 'Log In' : 'Create Account'}
+            </button>
+
+            <button type="button" className="btn secondary" onClick={switchMode}>
+              {mode === 'login' ? 'Create a customer account' : 'I already have an account'}
             </button>
 
             <Link to="/" className="btn secondary">

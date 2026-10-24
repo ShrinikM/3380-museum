@@ -285,7 +285,47 @@ function Exhibitions() {
   } = useSelection(filtered, (exhibition) => exhibition.ExhibitionID)
 
   const handleEditSelected = () => {
+    if (selectedExhibitions[0].Status === 'cancelled') {
+      alert('A cancelled exhibition cannot be edited.')
+      return
+    }
+
     openEditModal(selectedExhibitions[0])
+  }
+
+  const cancellable =
+    selectedExhibitions.length === 1 &&
+    (selectedExhibitions[0].Status === 'active' ||
+      selectedExhibitions[0].Status === 'upcoming')
+
+  const handleCancelSelected = async () => {
+    const exhibition = selectedExhibitions[0]
+
+    const reason = window.prompt(
+      `Why is "${exhibition.Name}" being cancelled? Ticket holders will be notified and marked for a refund.`
+    )
+
+    if (reason === null) return
+
+    if (!reason.trim()) {
+      alert('Please enter a reason.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      await callApi(`/api/exhibitions/${exhibition.ExhibitionID}/cancel`, 'POST', {
+        Reason: reason.trim(),
+      })
+
+      clear()
+      setReloadCount((count) => count + 1)
+    } catch (err) {
+      alert('Could not cancel exhibition: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDeleteSelected = async () => {
@@ -315,6 +355,17 @@ function Exhibitions() {
               disabled={saving}
             />
 
+            {cancellable && (
+              <button
+                type="button"
+                className="btn danger"
+                onClick={handleCancelSelected}
+                disabled={saving}
+              >
+                Cancel Exhibition
+              </button>
+            )}
+
             <button
               type="button"
               className="btn primary"
@@ -327,7 +378,7 @@ function Exhibitions() {
         )}
       </div>
 
-      <div className="grid-3 section-gap-sm">
+      <div className="grid-4 section-gap-sm">
         <Panel className="summary-card">
           <div className="summary-value">
             {exhibitions.filter((e) => e.Status === 'active').length}
@@ -347,6 +398,13 @@ function Exhibitions() {
             {exhibitions.filter((e) => e.Status === 'completed').length}
           </div>
           <div className="summary-label">Completed Exhibitions</div>
+        </Panel>
+
+        <Panel className="summary-card">
+          <div className="summary-value">
+            {exhibitions.filter((e) => e.Status === 'cancelled').length}
+          </div>
+          <div className="summary-label">Cancelled Exhibitions</div>
         </Panel>
       </div>
 
@@ -391,6 +449,7 @@ function Exhibitions() {
             <option value="active">Active</option>
             <option value="upcoming">Upcoming</option>
             <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </div>
       </div>
@@ -494,6 +553,9 @@ function Exhibitions() {
                       variant={exhibition.Status || 'unknown'}
                       label={exhibition.Status || 'Unknown'}
                     />
+                    {exhibition.Status === 'cancelled' && exhibition.CancellationReason && (
+                      <div className="cell-sub">{exhibition.CancellationReason}</div>
+                    )}
                   </td>
                 </tr>
               ))}

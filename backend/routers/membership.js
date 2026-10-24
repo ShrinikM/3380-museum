@@ -4,11 +4,12 @@ const { joinCurrentTerm, termStatus } = require("../terms");
 const selectMemberships = `
   SELECT
     m.MembershipID,
-    m.FirstName,
-    m.LastName,
-    CONCAT(m.FirstName, ' ', m.LastName) AS Name,
-    m.Email,
-    m.Phone,
+    m.CustomerID,
+    c.FirstName,
+    c.LastName,
+    CONCAT(c.FirstName, ' ', c.LastName) AS Name,
+    c.Email,
+    c.Phone,
     term.MembershipType,
     DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
     DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
@@ -17,13 +18,15 @@ const selectMemberships = `
     term.DiscountPercent,
     ${termStatus} AS Status
   FROM membership m
+  JOIN customer c
+    ON c.CustomerID = m.CustomerID
   ${joinCurrentTerm("m")}
   WHERE m.IsDeleted = 0
 `;
 
 async function getMemberships() {
   const [rows] = await pool.query(
-    selectMemberships + " ORDER BY m.LastName, m.FirstName"
+    selectMemberships + " ORDER BY c.LastName, c.FirstName"
   );
 
   return {
@@ -31,6 +34,7 @@ async function getMemberships() {
     data: rows.map((membership) => ({
       ...membership,
       MembershipID: Number(membership.MembershipID),
+      CustomerID: Number(membership.CustomerID),
       Price: Number(membership.Price),
       DiscountPercent: Number(membership.DiscountPercent),
     })),
@@ -49,7 +53,7 @@ function onlyDigits(value) {
 
 function checkDuplicate(error) {
   if (error.code === "ER_DUP_ENTRY") {
-    throw makeError(409, "A membership with this email or phone number already exists.");
+    throw makeError(409, "A customer with this email or phone number already exists.");
   }
 
   throw error;
@@ -178,6 +182,7 @@ async function findMembership(id) {
   return {
     ...membership,
     MembershipID: Number(membership.MembershipID),
+    CustomerID: Number(membership.CustomerID),
     Price: Number(membership.Price),
     DiscountPercent: Number(membership.DiscountPercent),
   };
@@ -191,18 +196,66 @@ async function addMembership(params, body) {
   try {
     await connection.beginTransaction();
 
-    const [result] = await connection.query(
-      `INSERT INTO membership (
-         FirstName, LastName, Email, Phone,
-         CreatedAt, UpdatedAt, IsDeleted
-       ) VALUES (?, ?, ?, ?, NOW(), NOW(), 0)`,
-      [
-        membership.FirstName,
-        membership.LastName,
-        membership.Email,
-        membership.Phone,
-      ]
+    const [customers] = await connection.query(
+      `SELECT c.CustomerID, m.MembershipID, m.IsDeleted
+       FROM customer c
+       LEFT JOIN membership m
+         ON m.CustomerID = c.CustomerID
+       WHERE c.Email = ?
+       FOR UPDATE`,
+      [membership.Email]
     );
+
+    let customerId = 0;
+    let membershipId = 0;
+
+    if (customers.length === 0) {
+      const [customer] = await connection.query(
+        `INSERT INTO customer (
+           FirstName, LastName, Email, Phone,
+           CreatedAt, UpdatedAt, IsDeleted
+         ) VALUES (?, ?, ?, ?, NOW(), NOW(), 0)`,
+        [
+          membership.FirstName,
+          membership.LastName,
+          membership.Email,
+          membership.Phone,
+        ]
+      );
+
+      customerId = customer.insertId;
+    } else {
+      customerId = Number(customers[0].CustomerID);
+
+      if (
+        customers[0].MembershipID !== null &&
+        Number(customers[0].IsDeleted) === 0
+      ) {
+        throw makeError(409, "This customer already has a membership.");
+      }
+
+      if (customers[0].MembershipID !== null) {
+        membershipId = Number(customers[0].MembershipID);
+      }
+    }
+
+    if (membershipId === 0) {
+      const [result] = await connection.query(
+        `INSERT INTO membership (
+           CustomerID, CreatedAt, UpdatedAt, IsDeleted
+         ) VALUES (?, NOW(), NOW(), 0)`,
+        [customerId]
+      );
+
+      membershipId = result.insertId;
+    } else {
+      await connection.query(
+        `UPDATE membership
+         SET IsDeleted = 0, UpdatedAt = NOW()
+         WHERE MembershipID = ?`,
+        [membershipId]
+      );
+    }
 
     await connection.query(
       `INSERT INTO membershipterm (
@@ -210,7 +263,7 @@ async function addMembership(params, body) {
          DiscountPercent, PaymentMethod, CreatedAt
        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
-        result.insertId,
+        membershipId,
         membership.MembershipType,
         membership.StartDate,
         membership.EndDate,
@@ -224,7 +277,7 @@ async function addMembership(params, body) {
 
     return {
       status: 201,
-      data: await findMembership(result.insertId),
+      data: await findMembership(membershipId),
     };
   } catch (error) {
     await connection.rollback();
@@ -246,13 +299,16 @@ async function updateMembership(params, body) {
     await connection.beginTransaction();
 
     await connection.query(
-      `UPDATE membership
-       SET FirstName = ?,
-           LastName = ?,
-           Email = ?,
-           Phone = ?,
-           UpdatedAt = NOW()
-       WHERE MembershipID = ? AND IsDeleted = 0`,
+      `UPDATE customer c
+       JOIN membership m
+         ON m.CustomerID = c.CustomerID
+       SET c.FirstName = ?,
+           c.LastName = ?,
+           c.Email = ?,
+           c.Phone = ?,
+           c.UpdatedAt = NOW(),
+           m.UpdatedAt = NOW()
+       WHERE m.MembershipID = ? AND m.IsDeleted = 0`,
       [
         membership.FirstName,
         membership.LastName,
@@ -315,11 +371,11 @@ async function lookupMembership(params) {
   let value = "";
 
   if (search.includes("@")) {
-    where = "LOWER(m.Email) = ?";
+    where = "LOWER(c.Email) = ?";
     value = search.toLowerCase();
   } else {
     value = onlyDigits(search);
-    where = "m.Phone = ?";
+    where = "c.Phone = ?";
 
     if (value.length < 10) {
       throw makeError(400, "Enter a full phone number.");
@@ -329,13 +385,15 @@ async function lookupMembership(params) {
   const [rows] = await pool.query(
     `SELECT
        m.MembershipID,
-       CONCAT(m.FirstName, ' ', m.LastName) AS Name,
+       CONCAT(c.FirstName, ' ', c.LastName) AS Name,
        term.MembershipType,
        term.DiscountPercent,
        DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
        ${termStatus} AS Status
      FROM membership m
+     JOIN customer c
+       ON c.CustomerID = m.CustomerID
      ${joinCurrentTerm("m")}
      WHERE m.IsDeleted = 0 AND ` + where,
     [value]

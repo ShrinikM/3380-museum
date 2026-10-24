@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { RoleContext } from './role'
+import { callApi } from '../api'
 import { ROLES, DEMO_LOGINS } from '../data/roles'
 
 function getSavedUser() {
@@ -28,7 +29,38 @@ function RoleProvider({ children }) {
     return true
   }
 
+  const startCustomer = (data) => {
+    const loggedInUser = {
+      username: data.customer.Email,
+      name: data.customer.FirstName,
+      role: 'Customer',
+      token: data.token,
+    }
+
+    localStorage.setItem('user', JSON.stringify(loggedInUser))
+    setUser(loggedInUser)
+  }
+
+  const loginCustomer = async (email, password) => {
+    const data = await callApi('/api/customer/login', 'POST', {
+      Email: email,
+      Password: password,
+    })
+
+    startCustomer(data)
+  }
+
+  const registerCustomer = async (details) => {
+    const data = await callApi('/api/customer/register', 'POST', details)
+
+    startCustomer(data)
+  }
+
   const logout = () => {
+    if (user !== null && user.token) {
+      callApi('/api/customer/logout', 'POST').catch(() => {})
+    }
+
     localStorage.removeItem('user')
     setUser(null)
   }
@@ -50,7 +82,7 @@ function RoleProvider({ children }) {
   }
 
   return (
-    <RoleContext.Provider value={{ user, login, logout, canView, canEdit }}>
+    <RoleContext.Provider value={{ user, login, loginCustomer, registerCustomer, logout, canView, canEdit }}>
       {children}
     </RoleContext.Provider>
   )

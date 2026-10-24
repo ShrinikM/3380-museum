@@ -6,6 +6,8 @@ const {
   membershipTypes,
 } = require("../prices");
 const { joinCurrentTerm, termStatus } = require("../terms");
+const { hashPassword, checkPassword } = require("../passwords");
+const { startSession, endSessions } = require("../sessions");
 
 const onlinePayments = ["Credit Card", "Debit Card", "Mobile Pay"];
 
@@ -43,33 +45,193 @@ function checkPositiveId(value, label) {
   return id;
 }
 
-async function findCustomer(staffId) {
+function checkName(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw makeError(400, `${label} is required`);
+  }
+
+  if (value.trim().length > 255) {
+    throw makeError(400, `${label} must be 255 characters or fewer`);
+  }
+
+  return value.trim();
+}
+
+function checkEmail(value) {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+    throw makeError(400, "Please enter a valid email address");
+  }
+
+  return email;
+}
+
+function checkPhone(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return null;
+  }
+
+  const phone = onlyDigits(value);
+
+  if (phone.length < 10 || phone.length > 15) {
+    throw makeError(400, "Phone number must have 10 to 15 digits");
+  }
+
+  return phone;
+}
+
+function checkNewPassword(value) {
+  if (typeof value !== "string" || value.length < 8 || value.length > 100) {
+    throw makeError(400, "Password must be 8 to 100 characters");
+  }
+
+  return value;
+}
+
+function checkRegistration(body) {
+  return {
+    FirstName: checkName(body.FirstName, "First name"),
+    LastName: checkName(body.LastName, "Last name"),
+    Email: checkEmail(body.Email),
+    Phone: checkPhone(body.Phone),
+    Password: checkNewPassword(body.Password),
+  };
+}
+
+async function findCustomer(customerId) {
   const [rows] = await pool.query(
-    `SELECT StaffID, Email, PhoneNumber
-     FROM staff
-     WHERE StaffID = ?
-       AND IsDeleted = 0
-       AND Role = 'Customer'`,
-    [staffId]
+    `SELECT CustomerID, FirstName, LastName, Email, Phone
+     FROM customer
+     WHERE CustomerID = ?
+       AND IsDeleted = 0`,
+    [customerId]
   );
 
   if (rows.length === 0) {
-    throw makeError(403, "Only customer accounts can use this page");
+    throw makeError(401, "Please log in to continue");
   }
 
-  return rows[0];
+  return {
+    ...rows[0],
+    CustomerID: Number(rows[0].CustomerID),
+  };
 }
 
-async function findMembership(customer) {
-  const phone = onlyDigits(customer.PhoneNumber);
+async function registerCustomer(params, body) {
+  const details = checkRegistration(body);
+  const connection = await pool.getConnection();
 
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT c.CustomerID, c.IsDeleted, cc.CustomerID AS HasLogin
+       FROM customer c
+       LEFT JOIN customercredentials cc
+         ON cc.CustomerID = c.CustomerID
+       WHERE c.Email = ?
+       FOR UPDATE`,
+      [details.Email]
+    );
+
+    let customerId = 0;
+
+    if (rows.length > 0) {
+      if (Number(rows[0].IsDeleted) === 1 || rows[0].HasLogin !== null) {
+        throw makeError(409, "An account with this email already exists");
+      }
+
+      customerId = Number(rows[0].CustomerID);
+    } else {
+      const [result] = await connection.query(
+        `INSERT INTO customer
+          (FirstName, LastName, Email, Phone,
+           CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+         VALUES (?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+        [details.FirstName, details.LastName, details.Email, details.Phone]
+      );
+
+      customerId = result.insertId;
+    }
+
+    await connection.query(
+      `INSERT INTO customercredentials
+        (CustomerID, PasswordHash, CreatedAt, UpdatedAt)
+       VALUES (?, ?, NOW(), NOW())`,
+      [customerId, hashPassword(details.Password)]
+    );
+
+    await connection.commit();
+
+    return {
+      status: 201,
+      data: {
+        token: startSession(customerId),
+        customer: await findCustomer(customerId),
+      },
+    };
+  } catch (error) {
+    await connection.rollback();
+
+    if (error.code === "ER_DUP_ENTRY") {
+      throw makeError(
+        409,
+        "An account with this email or phone number already exists"
+      );
+    }
+
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function loginCustomer(params, body) {
+  const email = checkEmail(body.Email);
+
+  if (typeof body.Password !== "string" || body.Password === "") {
+    throw makeError(400, "Please enter your password");
+  }
+
+  const [rows] = await pool.query(
+    `SELECT c.CustomerID, cc.PasswordHash
+     FROM customer c
+     JOIN customercredentials cc
+       ON cc.CustomerID = c.CustomerID
+     WHERE c.Email = ?
+       AND c.IsDeleted = 0`,
+    [email]
+  );
+
+  if (rows.length === 0 || !checkPassword(body.Password, rows[0].PasswordHash)) {
+    throw makeError(401, "Wrong email or password");
+  }
+
+  const customerId = Number(rows[0].CustomerID);
+
+  return {
+    status: 200,
+    data: {
+      token: startSession(customerId),
+      customer: await findCustomer(customerId),
+    },
+  };
+}
+
+async function logoutCustomer(params, body, customerId) {
+  endSessions(customerId);
+
+  return {
+    status: 200,
+    data: { message: "Logged out" },
+  };
+}
+
+async function findMembership(customerId) {
   const [rows] = await pool.query(
     `SELECT
        m.MembershipID,
-       m.FirstName,
-       m.LastName,
-       m.Email,
-       m.Phone,
        term.TermID,
        term.MembershipType,
        DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
@@ -79,9 +241,8 @@ async function findMembership(customer) {
      FROM membership m
      ${joinCurrentTerm("m")}
      WHERE m.IsDeleted = 0
-       AND (LOWER(m.Email) = LOWER(?) OR m.Phone = ?)
-     LIMIT 1`,
-    [customer.Email, phone.length >= 10 ? phone : null]
+       AND m.CustomerID = ?`,
+    [customerId]
   );
 
   if (rows.length === 0) {
@@ -140,13 +301,34 @@ function getActiveMembershipID(membership) {
   return null;
 }
 
-async function getAccount(params, body, staffId) {
-  const customer = await findCustomer(staffId);
-  const membership = await findMembership(customer);
+const openExhibition = `
+  e.IsDeleted = 0
+  AND e.CancelledAt IS NULL
+  AND e.StartDate <= CURDATE()
+  AND e.EndDate >= CURDATE()
+`;
+
+async function countSold(connection, exhibitionId) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS Total
+     FROM ticket
+     WHERE ExhibitionID = ?
+       AND IsDeleted = 0
+       AND RefundStatus <> 'Refunded'`,
+    [exhibitionId]
+  );
+
+  return Number(rows[0].Total);
+}
+
+async function getAccount(params, body, customerId) {
+  const customer = await findCustomer(customerId);
+  const membership = await findMembership(customerId);
 
   return {
     status: 200,
     data: {
+      customer: customer,
       membership: membership,
       terms: membership === null ? [] : await findTerms(membership.MembershipID),
       plans: membershipTypes.map((type) => ({
@@ -157,9 +339,9 @@ async function getAccount(params, body, staffId) {
   };
 }
 
-async function cancelMembership(params, body, staffId) {
-  const customer = await findCustomer(staffId);
-  const membership = await findMembership(customer);
+async function cancelMembership(params, body, customerId) {
+  await findCustomer(customerId);
+  const membership = await findMembership(customerId);
 
   if (membership === null) {
     throw makeError(404, "You do not have a membership to cancel");
@@ -197,16 +379,13 @@ function checkRenewal(body) {
   };
 }
 
-async function renewMembership(params, body, staffId) {
-  const customer = await findCustomer(staffId);
+async function renewMembership(params, body, customerId) {
+  await findCustomer(customerId);
   const renewal = checkRenewal(body);
-  const membership = await findMembership(customer);
-
-  if (membership === null) {
-    throw makeError(404, "You do not have a membership to renew");
-  }
+  const membership = await findMembership(customerId);
 
   if (
+    membership !== null &&
     membership.Status === "active" &&
     membership.MembershipType === renewal.MembershipType
   ) {
@@ -219,13 +398,43 @@ async function renewMembership(params, body, staffId) {
   try {
     await connection.beginTransaction();
 
+    const [existing] = await connection.query(
+      `SELECT MembershipID
+       FROM membership
+       WHERE CustomerID = ?
+       FOR UPDATE`,
+      [customerId]
+    );
+
+    let membershipId = 0;
+
+    if (existing.length === 0) {
+      const [result] = await connection.query(
+        `INSERT INTO membership
+          (CustomerID, CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+         VALUES (?, NOW(), NOW(), NULL, 0)`,
+        [customerId]
+      );
+
+      membershipId = result.insertId;
+    } else {
+      membershipId = Number(existing[0].MembershipID);
+
+      await connection.query(
+        `UPDATE membership
+         SET IsDeleted = 0, UpdatedAt = NOW()
+         WHERE MembershipID = ?`,
+        [membershipId]
+      );
+    }
+
     await connection.query(
       `UPDATE membershipterm
        SET CancelledAt = NOW()
        WHERE MembershipID = ?
          AND CancelledAt IS NULL
          AND EndDate >= CURDATE()`,
-      [membership.MembershipID]
+      [membershipId]
     );
 
     await connection.query(
@@ -233,14 +442,13 @@ async function renewMembership(params, body, staffId) {
         (MembershipID, MembershipType, StartDate, EndDate, Price,
          DiscountPercent, PaymentMethod, CreatedAt, CreatedBy)
        VALUES (?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR),
-               ?, ?, ?, NOW(), ?)`,
+               ?, ?, ?, NOW(), NULL)`,
       [
-        membership.MembershipID,
+        membershipId,
         renewal.MembershipType,
         plan.Price,
         plan.DiscountPercent,
         renewal.PaymentMethod,
-        staffId,
       ]
     );
 
@@ -258,23 +466,26 @@ async function renewMembership(params, body, staffId) {
   }
 }
 
-async function getPurchases(params, body, staffId) {
-  await findCustomer(staffId);
+async function getPurchases(params, body, customerId) {
+  await findCustomer(customerId);
 
   const [tickets] = await pool.query(
     `SELECT
        t.TicketID,
        e.Name AS ExhibitionName,
+       e.CancellationReason,
        t.TicketType,
        t.Price,
+       t.RefundStatus,
+       t.NotificationStatus,
        DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
      WHERE t.IsDeleted = 0
-       AND t.CreatedBy = ?
+       AND t.CustomerID = ?
      ORDER BY t.SaleDate DESC, t.TicketID DESC`,
-    [staffId]
+    [customerId]
   );
 
   const [orders] = await pool.query(
@@ -289,9 +500,9 @@ async function getPurchases(params, body, staffId) {
      JOIN giftshop i
        ON i.ItemID = s.ItemID
      WHERE s.IsDeleted = 0
-       AND s.CreatedBy = ?
+       AND s.CustomerID = ?
      ORDER BY s.SaleDate DESC, s.SaleID DESC`,
-    [staffId]
+    [customerId]
   );
 
   return {
@@ -312,9 +523,9 @@ async function getPurchases(params, body, staffId) {
   };
 }
 
-async function getExhibitions(params, body, staffId) {
-  const customer = await findCustomer(staffId);
-  const membership = await findMembership(customer);
+async function getExhibitions(params, body, customerId) {
+  await findCustomer(customerId);
+  const membership = await findMembership(customerId);
 
   const [rows] = await pool.query(
     `SELECT
@@ -328,14 +539,29 @@ async function getExhibitions(params, body, staffId) {
            FROM ticket t
            WHERE t.ExhibitionID = e.ExhibitionID
              AND t.IsDeleted = 0
+             AND t.RefundStatus <> 'Refunded'
          ),
          0
        ) AS Remaining
      FROM exhibition e
-     WHERE e.IsDeleted = 0
-       AND e.StartDate <= CURDATE()
-       AND e.EndDate >= CURDATE()
+     WHERE ${openExhibition}
      ORDER BY e.EndDate, e.Name`
+  );
+
+  const [waitlist] = await pool.query(
+    `SELECT
+       w.WaitlistID,
+       w.ExhibitionID,
+       e.Name AS ExhibitionName,
+       w.TicketType,
+       w.Status
+     FROM waitlist w
+     JOIN exhibition e
+       ON e.ExhibitionID = w.ExhibitionID
+     WHERE w.CustomerID = ?
+       AND w.Status IN ('Waiting', 'Notified')
+     ORDER BY w.WaitlistID`,
+    [customerId]
   );
 
   return {
@@ -345,6 +571,11 @@ async function getExhibitions(params, body, staffId) {
         ...exhibition,
         ExhibitionID: Number(exhibition.ExhibitionID),
         Remaining: Number(exhibition.Remaining),
+      })),
+      waitlist: waitlist.map((entry) => ({
+        ...entry,
+        WaitlistID: Number(entry.WaitlistID),
+        ExhibitionID: Number(entry.ExhibitionID),
       })),
       prices: ticketPrices,
       discount: getDiscount(membership),
@@ -401,10 +632,10 @@ function checkTicketOrder(body) {
   };
 }
 
-async function addTickets(params, body, staffId) {
-  const customer = await findCustomer(staffId);
+async function addTickets(params, body, customerId) {
+  await findCustomer(customerId);
   const order = checkTicketOrder(body);
-  const membership = await findMembership(customer);
+  const membership = await findMembership(customerId);
   const discount = getDiscount(membership);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
@@ -413,12 +644,10 @@ async function addTickets(params, body, staffId) {
     await connection.beginTransaction();
 
     const [exhibitions] = await connection.query(
-      `SELECT ExhibitionID, Capacity
-       FROM exhibition
-       WHERE ExhibitionID = ?
-         AND IsDeleted = 0
-         AND StartDate <= CURDATE()
-         AND EndDate >= CURDATE()
+      `SELECT e.ExhibitionID, e.Capacity
+       FROM exhibition e
+       WHERE e.ExhibitionID = ?
+         AND ${openExhibition}
        FOR UPDATE`,
       [order.ExhibitionID]
     );
@@ -427,14 +656,8 @@ async function addTickets(params, body, staffId) {
       throw makeError(400, "That exhibition is not open for tickets");
     }
 
-    const [sold] = await connection.query(
-      `SELECT COUNT(*) AS Total
-       FROM ticket
-       WHERE ExhibitionID = ? AND IsDeleted = 0`,
-      [order.ExhibitionID]
-    );
-
-    const remaining = Number(exhibitions[0].Capacity) - Number(sold[0].Total);
+    const sold = await countSold(connection, order.ExhibitionID);
+    const remaining = Number(exhibitions[0].Capacity) - sold;
 
     if (order.Count > remaining) {
       throw makeError(400, "Not enough tickets left for this exhibition");
@@ -449,14 +672,23 @@ async function addTickets(params, body, staffId) {
         await connection.query(
           `INSERT INTO ticket
             (TicketType, Price, SaleDate, ExhibitionID, MembershipID,
-             CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-           VALUES (?, ?, CURDATE(), ?, ?, NOW(), NOW(), ?, 0)`,
-          [type, price, order.ExhibitionID, membershipID, staffId]
+             CustomerID, CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+           VALUES (?, ?, CURDATE(), ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+          [type, price, order.ExhibitionID, membershipID, customerId]
         );
 
         total = total + price;
       }
     }
+
+    await connection.query(
+      `UPDATE waitlist
+       SET Status = 'Claimed'
+       WHERE CustomerID = ?
+         AND ExhibitionID = ?
+         AND Status IN ('Waiting', 'Notified')`,
+      [customerId, order.ExhibitionID]
+    );
 
     await connection.commit();
 
@@ -473,6 +705,95 @@ async function addTickets(params, body, staffId) {
   } finally {
     connection.release();
   }
+}
+
+async function joinWaitlist(params, body, customerId) {
+  await findCustomer(customerId);
+  const exhibitionID = checkPositiveId(body.ExhibitionID, "exhibition");
+
+  if (!ticketTypes.includes(body.TicketType)) {
+    throw makeError(400, "Please select a valid ticket type");
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [exhibitions] = await connection.query(
+      `SELECT e.ExhibitionID, e.Capacity
+       FROM exhibition e
+       WHERE e.ExhibitionID = ?
+         AND ${openExhibition}
+       FOR UPDATE`,
+      [exhibitionID]
+    );
+
+    if (exhibitions.length === 0) {
+      throw makeError(400, "That exhibition is not open for tickets");
+    }
+
+    const sold = await countSold(connection, exhibitionID);
+
+    if (sold < Number(exhibitions[0].Capacity)) {
+      throw makeError(400, "Tickets are still available for this exhibition");
+    }
+
+    const [waiting] = await connection.query(
+      `SELECT WaitlistID
+       FROM waitlist
+       WHERE CustomerID = ?
+         AND ExhibitionID = ?
+         AND Status IN ('Waiting', 'Notified')`,
+      [customerId, exhibitionID]
+    );
+
+    if (waiting.length > 0) {
+      throw makeError(409, "You are already on the waitlist for this exhibition");
+    }
+
+    await connection.query(
+      `INSERT INTO waitlist
+        (ExhibitionID, CustomerID, TicketType, CreatedAt, CreatedBy)
+       VALUES (?, ?, ?, NOW(), NULL)`,
+      [exhibitionID, customerId, body.TicketType]
+    );
+
+    await connection.commit();
+
+    return {
+      status: 201,
+      data: { message: "You are on the waitlist" },
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function leaveWaitlist(params, body, customerId) {
+  await findCustomer(customerId);
+  const waitlistID = checkPositiveId(body.WaitlistID, "waitlist entry");
+
+  const [result] = await pool.query(
+    `UPDATE waitlist
+     SET Status = 'Cancelled'
+     WHERE WaitlistID = ?
+       AND CustomerID = ?
+       AND Status IN ('Waiting', 'Notified')`,
+    [waitlistID, customerId]
+  );
+
+  if (result.affectedRows === 0) {
+    throw makeError(404, "Waitlist entry not found");
+  }
+
+  return {
+    status: 200,
+    data: { message: "You left the waitlist" },
+  };
 }
 
 async function getShop() {
@@ -542,10 +863,10 @@ function checkShopOrder(body) {
   };
 }
 
-async function addShopOrder(params, body, staffId) {
-  const customer = await findCustomer(staffId);
+async function addShopOrder(params, body, customerId) {
+  await findCustomer(customerId);
   const order = checkShopOrder(body);
-  const membership = await findMembership(customer);
+  const membership = await findMembership(customerId);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
 
@@ -556,7 +877,7 @@ async function addShopOrder(params, body, staffId) {
 
     for (const line of order.Items) {
       const [items] = await connection.query(
-        `SELECT ItemID, ItemName, Price, Stock
+        `SELECT ItemID, ItemName, Price, Stock, StaffID
          FROM giftshop
          WHERE ItemID = ? AND IsDeleted = 0
          FOR UPDATE`,
@@ -577,16 +898,16 @@ async function addShopOrder(params, body, staffId) {
         `INSERT INTO giftshopsale
           (ItemID, SalePrice, Quantity, StaffID, SaleDate,
            PaymentMethod, CreatedAt, UpdatedAt, CreatedBy,
-           IsDeleted, MembershipID)
-         VALUES (?, ?, ?, ?, CURDATE(), ?, NOW(), NOW(), ?, 0, ?)`,
+           IsDeleted, MembershipID, CustomerID)
+         VALUES (?, ?, ?, ?, CURDATE(), ?, NOW(), NOW(), NULL, 0, ?, ?)`,
         [
           line.ItemID,
           Number(item.Price),
           line.Quantity,
-          staffId,
+          item.StaffID,
           order.PaymentMethod,
-          staffId,
           membershipID,
+          customerId,
         ]
       );
 
@@ -609,51 +930,79 @@ async function addShopOrder(params, body, staffId) {
 
 module.exports = [
   {
+    method: "POST",
+    path: "/api/customer/register",
+    handler: registerCustomer,
+  },
+  {
+    method: "POST",
+    path: "/api/customer/login",
+    handler: loginCustomer,
+  },
+  {
+    method: "POST",
+    path: "/api/customer/logout",
+    handler: logoutCustomer,
+    needsCustomer: true,
+  },
+  {
     method: "GET",
     path: "/api/customer/account",
     handler: getAccount,
-    needsActor: true,
+    needsCustomer: true,
   },
   {
     method: "POST",
     path: "/api/customer/membership/cancel",
     handler: cancelMembership,
-    needsActor: true,
+    needsCustomer: true,
   },
   {
     method: "POST",
     path: "/api/customer/membership/renew",
     handler: renewMembership,
-    needsActor: true,
+    needsCustomer: true,
   },
   {
     method: "GET",
     path: "/api/customer/purchases",
     handler: getPurchases,
-    needsActor: true,
+    needsCustomer: true,
   },
   {
     method: "GET",
     path: "/api/customer/exhibitions",
     handler: getExhibitions,
-    needsActor: true,
+    needsCustomer: true,
   },
   {
     method: "POST",
     path: "/api/customer/tickets",
     handler: addTickets,
-    needsActor: true,
+    needsCustomer: true,
+  },
+  {
+    method: "POST",
+    path: "/api/customer/waitlist",
+    handler: joinWaitlist,
+    needsCustomer: true,
+  },
+  {
+    method: "POST",
+    path: "/api/customer/waitlist/leave",
+    handler: leaveWaitlist,
+    needsCustomer: true,
   },
   {
     method: "GET",
     path: "/api/customer/shop",
     handler: getShop,
-    needsActor: true,
+    needsCustomer: true,
   },
   {
     method: "POST",
     path: "/api/customer/shop/orders",
     handler: addShopOrder,
-    needsActor: true,
+    needsCustomer: true,
   },
 ];

@@ -120,8 +120,8 @@ async function getMembershipReport(params, body, staffId) {
   const [rows] = await pool.query(
     `SELECT
        membership.MembershipID,
-       CONCAT(membership.FirstName, ' ', membership.LastName) AS MemberName,
-       membership.Email,
+       CONCAT(customer.FirstName, ' ', customer.LastName) AS MemberName,
+       customer.Email,
        term.MembershipType,
        DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
@@ -130,6 +130,7 @@ async function getMembershipReport(params, body, staffId) {
        term.PaymentMethod
      FROM membershipterm term
      JOIN membership ON membership.MembershipID = term.MembershipID
+     JOIN customer ON customer.CustomerID = membership.CustomerID
      WHERE membership.IsDeleted = 0` + joinConditions(conditions) + `
      ORDER BY term.StartDate`,
     values
@@ -197,7 +198,7 @@ async function getRevenueReport(params, body, staffId) {
   const [rows] = await pool.query(
     `SELECT 'Tickets' AS Source, COALESCE(SUM(Price), 0) AS Revenue
      FROM ticket
-     WHERE IsDeleted = 0` + tickets.where + `
+     WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'` + tickets.where + `
      UNION ALL
      SELECT 'Gift Shop' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
      FROM giftshopsale
@@ -254,7 +255,8 @@ async function getTicketSalesReport(params, body, staffId) {
      FROM exhibition
      LEFT JOIN ticket
        ON ticket.ExhibitionID = exhibition.ExhibitionID
-       AND ticket.IsDeleted = 0` + tickets.where + `
+       AND ticket.IsDeleted = 0
+       AND ticket.RefundStatus <> 'Refunded'` + tickets.where + `
      WHERE exhibition.IsDeleted = 0
      GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
      ORDER BY TicketsSold DESC, exhibition.Name`,

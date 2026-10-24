@@ -33,6 +33,7 @@ function Tickets() {
   const today = new Date().toISOString().split('T')[0]
 
   const [tickets, setTickets] = useState([])
+  const [refunds, setRefunds] = useState([])
   const [exhibitions, setExhibitions] = useState([])
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
@@ -50,9 +51,10 @@ function Tickets() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [ticketsData, exhibitionsData] = await Promise.all([
+        const [ticketsData, exhibitionsData, refundsData] = await Promise.all([
           callApi('/api/tickets', 'GET'),
           callApi('/api/exhibitions', 'GET'),
+          callApi('/api/tickets/refunds', 'GET'),
         ])
 
         setTickets(
@@ -63,6 +65,7 @@ function Tickets() {
         )
 
         setExhibitions(exhibitionsData)
+        setRefunds(refundsData)
         setLoadError('')
       } catch (err) {
         setLoadError('Could not load tickets: ' + err.message)
@@ -76,11 +79,45 @@ function Tickets() {
     setReloadCount((count) => count + 1)
   }
 
-  const revenue = tickets.reduce((sum, ticket) => sum + ticket.Price, 0)
+  const soldTickets = tickets.filter(
+    (ticket) => ticket.RefundStatus !== 'Refunded'
+  )
 
-  const memberTickets = tickets.filter(
+  const revenue = soldTickets.reduce((sum, ticket) => sum + ticket.Price, 0)
+
+  const memberTickets = soldTickets.filter(
     (ticket) => ticket.MembershipID !== null
   ).length
+
+  const handleNotify = async (item) => {
+    const confirmed = window.confirm(
+      `Notify ${item.PendingNotices} visitors that ${item.ExhibitionName} was cancelled?`
+    )
+
+    if (!confirmed) return
+
+    try {
+      await callApi(`/api/tickets/exhibition/${item.ExhibitionID}/notify`, 'POST')
+      refetchTickets()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleRefund = async (item) => {
+    const confirmed = window.confirm(
+      `Refund ${item.PendingRefunds} tickets ($${item.RefundTotal.toFixed(2)}) for ${item.ExhibitionName}?`
+    )
+
+    if (!confirmed) return
+
+    try {
+      await callApi(`/api/tickets/exhibition/${item.ExhibitionID}/refund`, 'POST')
+      refetchTickets()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
 
   const filtered = tickets.filter((ticket) => {
     const searchText = search.toLowerCase()
@@ -323,7 +360,7 @@ function Tickets() {
       <div className="grid-4 section-gap-sm">
         <Panel className="summary-card">
           <div className="summary-value">
-            {tickets.length.toLocaleString()}
+            {soldTickets.length.toLocaleString()}
           </div>
           <div className="summary-label">Tickets Sold</div>
         </Panel>
@@ -340,11 +377,70 @@ function Tickets() {
 
         <Panel className="summary-card">
           <div className="summary-value">
-            ${(tickets.length ? revenue / tickets.length : 0).toFixed(2)}
+            ${(soldTickets.length ? revenue / soldTickets.length : 0).toFixed(2)}
           </div>
           <div className="summary-label">Avg. Ticket Price</div>
         </Panel>
       </div>
+
+      {refunds.length > 0 && (
+        <div className="card table-wrap section-gap-sm">
+          <h2 style={{ fontSize: '16px', margin: '16px 16px 4px' }}>
+            Cancelled exhibitions
+          </h2>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Exhibition</th>
+                <th scope="col">Reason</th>
+                <th scope="col">To Notify</th>
+                <th scope="col">Refunds Pending</th>
+                <th scope="col">Refund Total</th>
+                {allowEdit && <th scope="col">Actions</th>}
+              </tr>
+            </thead>
+
+            <tbody>
+              {refunds.map((item) => (
+                <tr key={item.ExhibitionID}>
+                  <td>
+                    <div className="strong">{item.ExhibitionName}</div>
+                    <div className="cell-sub">Cancelled {item.CancelledAt}</div>
+                  </td>
+                  <td>{item.CancellationReason || '-'}</td>
+                  <td>{item.PendingNotices}</td>
+                  <td>{item.PendingRefunds}</td>
+                  <td className="mono">${item.RefundTotal.toFixed(2)}</td>
+                  {allowEdit && (
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => handleNotify(item)}
+                          disabled={item.PendingNotices === 0}
+                        >
+                          Notify Visitors
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={() => handleRefund(item)}
+                          disabled={item.PendingRefunds === 0}
+                        >
+                          Mark Refunded
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
@@ -447,7 +543,10 @@ function Tickets() {
               <th scope="col">Type</th>
               <th scope="col">Price</th>
               <th scope="col">Sale Date</th>
+              <th scope="col">Customer</th>
               <th scope="col">Membership</th>
+              <th scope="col">Refund</th>
+              <th scope="col">Notice</th>
             </tr>
           </thead>
 
@@ -489,6 +588,17 @@ function Tickets() {
                   </td>
 
                   <td>
+                    {ticket.CustomerName ? (
+                      <>
+                        <div className="strong">{ticket.CustomerName}</div>
+                        <div className="cell-sub">{ticket.CustomerEmail}</div>
+                      </>
+                    ) : (
+                      <span className="cell-sub">Walk-in</span>
+                    )}
+                  </td>
+
+                  <td>
                     {ticket.MembershipName ? (
                       <span className="chip chip-primary">
                         {ticket.MembershipName}
@@ -497,13 +607,35 @@ function Tickets() {
                       <span className="muted">-</span>
                     )}
                   </td>
+
+                  <td>
+                    {ticket.RefundStatus === 'None' ? (
+                      <span className="muted">-</span>
+                    ) : (
+                      <Badge
+                        variant={ticket.RefundStatus === 'Pending' ? 'upcoming' : 'completed'}
+                        label={ticket.RefundStatus}
+                      />
+                    )}
+                  </td>
+
+                  <td>
+                    {ticket.NotificationStatus === 'None' ? (
+                      <span className="muted">-</span>
+                    ) : (
+                      <Badge
+                        variant={ticket.NotificationStatus === 'Pending' ? 'upcoming' : 'active'}
+                        label={ticket.NotificationStatus}
+                      />
+                    )}
+                  </td>
                 </tr>
               )
             })}
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={allowEdit ? 7 : 6} className="empty">
+                <td colSpan={allowEdit ? 10 : 9} className="empty">
                   No tickets found matching this filter.
                 </td>
               </tr>

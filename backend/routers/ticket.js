@@ -11,17 +11,22 @@ const selectTickets = `
     t.ExhibitionID,
     e.Name AS ExhibitionName,
     t.MembershipID,
+    t.CustomerID,
+    t.RefundStatus,
+    t.NotificationStatus,
     term.DiscountPercent AS MemberDiscount,
-    CASE
-      WHEN m.MembershipID IS NOT NULL
-      THEN CONCAT(m.FirstName, ' ', m.LastName)
-      ELSE NULL
-    END AS MembershipName
+    CONCAT(member.FirstName, ' ', member.LastName) AS MembershipName,
+    CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName,
+    buyer.Email AS CustomerEmail
   FROM ticket t
   JOIN exhibition e
     ON e.ExhibitionID = t.ExhibitionID
   LEFT JOIN membership m
     ON m.MembershipID = t.MembershipID
+  LEFT JOIN customer member
+    ON member.CustomerID = m.CustomerID
+  LEFT JOIN customer buyer
+    ON buyer.CustomerID = t.CustomerID
   ${joinCurrentTerm("m", "LEFT JOIN")}
   WHERE t.IsDeleted = 0
 `;
@@ -102,6 +107,7 @@ function checkTicket(body) {
     Price: ticketPrices[body.TicketType],
     SaleDate: body.SaleDate,
     MembershipID: membershipID,
+    CustomerID: null,
   };
 }
 
@@ -121,7 +127,7 @@ async function checkReferences(ticket) {
 
   if (ticket.MembershipID !== null) {
     const [memberships] = await pool.query(
-      `SELECT m.MembershipID, term.DiscountPercent
+      `SELECT m.MembershipID, m.CustomerID, term.DiscountPercent
        FROM membership m
        ${joinCurrentTerm("m")}
        WHERE m.MembershipID = ?
@@ -138,6 +144,8 @@ async function checkReferences(ticket) {
     }
 
     const discount = Number(memberships[0].DiscountPercent);
+
+    ticket.CustomerID = Number(memberships[0].CustomerID);
 
     ticket.Price = Number(
       (ticket.Price * (1 - discount / 100)).toFixed(2)
@@ -169,6 +177,9 @@ async function getTickets() {
       MembershipID: ticket.MembershipID === null
         ? null
         : Number(ticket.MembershipID),
+      CustomerID: ticket.CustomerID === null
+        ? null
+        : Number(ticket.CustomerID),
       MemberDiscount: ticket.MemberDiscount === null
         ? null
         : Number(ticket.MemberDiscount),
@@ -183,15 +194,16 @@ async function addTicket(params, body) {
 
   const [result] = await pool.query(
     `INSERT INTO ticket
-      (TicketType, Price, SaleDate, ExhibitionID, MembershipID,
+      (TicketType, Price, SaleDate, ExhibitionID, MembershipID, CustomerID,
        CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-     VALUES (?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
     [
       ticket.TicketType,
       ticket.Price,
       ticket.SaleDate,
       ticket.ExhibitionID,
       ticket.MembershipID,
+      ticket.CustomerID,
     ]
   );
 
@@ -218,6 +230,7 @@ async function updateTicket(params, body) {
          SaleDate = ?,
          ExhibitionID = ?,
          MembershipID = ?,
+         CustomerID = COALESCE(?, CustomerID),
          UpdatedAt = NOW()
      WHERE TicketID = ? AND IsDeleted = 0`,
     [
@@ -226,6 +239,7 @@ async function updateTicket(params, body) {
       ticket.SaleDate,
       ticket.ExhibitionID,
       ticket.MembershipID,
+      ticket.CustomerID,
       id,
     ]
   );
@@ -256,11 +270,115 @@ async function deleteTicket(params) {
   };
 }
 
+function checkExhibitionId(params) {
+  const id = Number(params.id);
+
+  if (!Number.isSafeInteger(id) || id < 1) {
+    throw makeError(400, "Exhibition id must be a positive integer");
+  }
+
+  return id;
+}
+
+async function getRefunds() {
+  const [rows] = await pool.query(
+    `SELECT
+       e.ExhibitionID,
+       e.Name AS ExhibitionName,
+       e.CancellationReason,
+       DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
+       COUNT(t.TicketID) AS Tickets,
+       SUM(t.NotificationStatus = 'Pending') AS PendingNotices,
+       SUM(t.RefundStatus = 'Pending') AS PendingRefunds,
+       COALESCE(SUM(CASE WHEN t.RefundStatus = 'Pending' THEN t.Price END), 0) AS RefundTotal
+     FROM exhibition e
+     JOIN ticket t
+       ON t.ExhibitionID = e.ExhibitionID
+      AND t.IsDeleted = 0
+     WHERE e.IsDeleted = 0
+       AND e.CancelledAt IS NOT NULL
+     GROUP BY e.ExhibitionID, e.Name, e.CancellationReason, e.CancelledAt
+     HAVING PendingNotices > 0 OR PendingRefunds > 0
+     ORDER BY e.CancelledAt DESC, e.ExhibitionID DESC`
+  );
+
+  return {
+    status: 200,
+    data: rows.map((row) => ({
+      ...row,
+      ExhibitionID: Number(row.ExhibitionID),
+      Tickets: Number(row.Tickets),
+      PendingNotices: Number(row.PendingNotices),
+      PendingRefunds: Number(row.PendingRefunds),
+      RefundTotal: Number(row.RefundTotal),
+    })),
+  };
+}
+
+async function sendNotices(params) {
+  const id = checkExhibitionId(params);
+
+  const [result] = await pool.query(
+    `UPDATE ticket
+     SET NotificationStatus = 'Sent', UpdatedAt = NOW()
+     WHERE ExhibitionID = ?
+       AND IsDeleted = 0
+       AND NotificationStatus = 'Pending'`,
+    [id]
+  );
+
+  if (result.affectedRows === 0) {
+    throw makeError(404, "No visitors are waiting to be notified");
+  }
+
+  return {
+    status: 200,
+    data: { message: "Visitors notified", count: result.affectedRows },
+  };
+}
+
+async function refundTickets(params) {
+  const id = checkExhibitionId(params);
+
+  const [result] = await pool.query(
+    `UPDATE ticket
+     SET RefundStatus = 'Refunded', UpdatedAt = NOW()
+     WHERE ExhibitionID = ?
+       AND IsDeleted = 0
+       AND RefundStatus = 'Pending'`,
+    [id]
+  );
+
+  if (result.affectedRows === 0) {
+    throw makeError(404, "No tickets are waiting for a refund");
+  }
+
+  return {
+    status: 200,
+    data: { message: "Tickets refunded", count: result.affectedRows },
+  };
+}
+
 module.exports = [
   {
     method: "GET",
     path: "/api/tickets",
     handler: getTickets,
+  },
+  {
+    method: "GET",
+    path: "/api/tickets/refunds",
+    handler: getRefunds,
+  },
+  {
+    method: "POST",
+    path: "/api/tickets/exhibition/:id/notify",
+    handler: sendNotices,
+  },
+  {
+    method: "POST",
+    path: "/api/tickets/exhibition/:id/refund",
+    handler: refundTickets,
   },
   {
     method: "POST",

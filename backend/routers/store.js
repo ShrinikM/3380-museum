@@ -7,11 +7,13 @@ const storeTypes = {
     itemTable: "giftshop",
     saleTable: "giftshopsale",
     role: "Gift Shop",
+    buyer: "COALESCE(sale.CustomerID, member.CustomerID)",
   },
   cafe: {
     itemTable: "cafe",
     saleTable: "cafesale",
     role: "Cafe",
+    buyer: "member.CustomerID",
   },
 };
 
@@ -188,10 +190,10 @@ async function checkStaff(connection, staffID, kind) {
 }
 
 async function checkMembership(connection, membershipID) {
-  if (membershipID === null) return;
+  if (membershipID === null) return null;
 
   const [rows] = await connection.query(
-    `SELECT m.MembershipID
+    `SELECT m.MembershipID, m.CustomerID
      FROM membership m
      ${joinCurrentTerm("m")}
      WHERE m.MembershipID = ?
@@ -206,6 +208,8 @@ async function checkMembership(connection, membershipID) {
       "The selected membership is not active or does not exist"
     );
   }
+
+  return Number(rows[0].CustomerID);
 }
 
 async function findItem(id, kind) {
@@ -251,16 +255,14 @@ async function findSale(id, kind) {
        sale.StaffID,
        CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName,
        sale.MembershipID,
-       CASE
-         WHEN member.MembershipID IS NOT NULL
-         THEN CONCAT(member.FirstName, ' ', member.LastName)
-         ELSE NULL
-       END AS MemberName
+       CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName
      FROM ${store.saleTable} sale
      JOIN ${store.itemTable} item ON item.ItemID = sale.ItemID
      JOIN staff ON staff.StaffID = sale.StaffID
      LEFT JOIN membership member
        ON member.MembershipID = sale.MembershipID
+     LEFT JOIN customer buyer
+       ON buyer.CustomerID = ${store.buyer}
      WHERE sale.SaleID = ? AND sale.IsDeleted = 0`,
     [id]
   );
@@ -321,16 +323,14 @@ async function getSales(params, body, kind) {
        sale.PaymentMethod, sale.StaffID,
        CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName,
        sale.MembershipID,
-       CASE
-         WHEN member.MembershipID IS NOT NULL
-         THEN CONCAT(member.FirstName, ' ', member.LastName)
-         ELSE NULL
-       END AS MemberName
+       CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName
      FROM ${store.saleTable} sale
      JOIN ${store.itemTable} item ON item.ItemID = sale.ItemID
      JOIN staff ON staff.StaffID = sale.StaffID
      LEFT JOIN membership member
        ON member.MembershipID = sale.MembershipID
+     LEFT JOIN customer buyer
+       ON buyer.CustomerID = ${store.buyer}
      WHERE sale.IsDeleted = 0
      ORDER BY sale.SaleDate DESC, sale.SaleID DESC`
   );
@@ -485,7 +485,7 @@ async function addSale(params, body, kind) {
     await connection.beginTransaction();
 
     await checkStaff(connection, sale.StaffID, kind);
-    await checkMembership(connection, sale.MembershipID);
+    const customerID = await checkMembership(connection, sale.MembershipID);
 
     const [items] = await connection.query(
       `SELECT ItemID, Price
@@ -511,8 +511,10 @@ async function addSale(params, body, kind) {
       `INSERT INTO ${store.saleTable}
        (ItemID, SalePrice, Quantity, StaffID, SaleDate,
         PaymentMethod, CreatedAt, UpdatedAt, CreatedBy,
-        IsDeleted, MembershipID)
-       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0, ?)`,
+        IsDeleted, MembershipID
+        ${kind === "giftshop" ? ", CustomerID" : ""})
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0, ?
+        ${kind === "giftshop" ? ", ?" : ""})`,
       [
         sale.ItemID,
         Number(item.Price),
@@ -521,6 +523,7 @@ async function addSale(params, body, kind) {
         sale.SaleDate,
         sale.PaymentMethod,
         sale.MembershipID,
+        ...(kind === "giftshop" ? [customerID] : []),
       ]
     );
 
@@ -567,7 +570,7 @@ async function updateSale(params, body, kind) {
     const oldSale = oldRows[0];
 
     await checkStaff(connection, sale.StaffID, kind);
-    await checkMembership(connection, sale.MembershipID);
+    const customerID = await checkMembership(connection, sale.MembershipID);
 
     // Lock the old and new item rows in consistent ID order.
     const itemIDs = [...new Set([Number(oldSale.ItemID), sale.ItemID])]
@@ -630,6 +633,7 @@ async function updateSale(params, body, kind) {
        SET ItemID = ?, SalePrice = ?, Quantity = ?,
            StaffID = ?, SaleDate = ?, PaymentMethod = ?,
            MembershipID = ?, UpdatedAt = NOW()
+           ${kind === "giftshop" ? ", CustomerID = COALESCE(?, CustomerID)" : ""}
        WHERE SaleID = ? AND IsDeleted = 0`,
       [
         sale.ItemID,
@@ -639,6 +643,7 @@ async function updateSale(params, body, kind) {
         sale.SaleDate,
         sale.PaymentMethod,
         sale.MembershipID,
+        ...(kind === "giftshop" ? [customerID] : []),
         id,
       ]
     );

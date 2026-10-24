@@ -50,7 +50,7 @@ async function getRevenue(start, end) {
   const [rows] = await pool.query(
     `SELECT 'Tickets' AS Source, COALESCE(SUM(Price), 0) AS Revenue
      FROM ticket
-     WHERE IsDeleted = 0 AND SaleDate >= ? AND SaleDate <= ?
+     WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded' AND SaleDate >= ? AND SaleDate <= ?
      UNION ALL
      SELECT 'Gift Shop' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
      FROM giftshopsale
@@ -82,7 +82,8 @@ async function getCounts(start, end) {
   const [rows] = await pool.query(
     `SELECT
        (SELECT COUNT(*) FROM ticket
-        WHERE IsDeleted = 0 AND SaleDate >= ? AND SaleDate <= ?) AS Tickets,
+        WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'
+          AND SaleDate >= ? AND SaleDate <= ?) AS Tickets,
        (SELECT COUNT(*) FROM membershipterm term
         JOIN membership ON membership.MembershipID = term.MembershipID
         WHERE membership.IsDeleted = 0
@@ -123,7 +124,9 @@ async function getCurrentExhibitions() {
      LEFT JOIN ticket
        ON ticket.ExhibitionID = exhibition.ExhibitionID
        AND ticket.IsDeleted = 0
+       AND ticket.RefundStatus <> 'Refunded'
      WHERE exhibition.IsDeleted = 0
+       AND exhibition.CancelledAt IS NULL
        AND exhibition.StartDate <= CURDATE()
        AND exhibition.EndDate >= CURDATE()
      GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.EndDate, exhibition.Capacity
@@ -157,6 +160,7 @@ async function getTopExhibitions(start, end) {
      FROM ticket
      JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
      WHERE ticket.IsDeleted = 0
+       AND ticket.RefundStatus <> 'Refunded'
        AND exhibition.IsDeleted = 0
        AND ticket.SaleDate >= ?
        AND ticket.SaleDate <= ?
@@ -236,10 +240,11 @@ async function getRecentActivity(kinds) {
        SELECT
          term.CreatedAt,
          'Membership',
-         CONCAT(term.MembershipType, ' membership for ', membership.FirstName, ' ', membership.LastName),
+         CONCAT(term.MembershipType, ' membership for ', customer.FirstName, ' ', customer.LastName),
          term.CreatedBy
        FROM membershipterm term
        JOIN membership ON membership.MembershipID = term.MembershipID
+       JOIN customer ON customer.CustomerID = membership.CustomerID
        WHERE membership.IsDeleted = 0
        UNION ALL
        SELECT

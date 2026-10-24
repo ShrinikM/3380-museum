@@ -18,6 +18,26 @@ async function getSmallCollections() {
   return rows;
 }
 
+async function getCancelledExhibitions() {
+  const [rows] = await pool.query(
+    `SELECT
+       e.Name,
+       SUM(t.NotificationStatus = 'Pending') AS PendingNotices,
+       SUM(t.RefundStatus = 'Pending') AS PendingRefunds
+     FROM exhibition e
+     JOIN ticket t
+       ON t.ExhibitionID = e.ExhibitionID
+      AND t.IsDeleted = 0
+     WHERE e.IsDeleted = 0
+       AND e.CancelledAt IS NOT NULL
+     GROUP BY e.ExhibitionID, e.Name
+     HAVING PendingNotices > 0 OR PendingRefunds > 0
+     ORDER BY e.Name`
+  );
+
+  return rows;
+}
+
 async function getAlerts() {
   const alerts = [];
 
@@ -26,6 +46,20 @@ async function getAlerts() {
     alerts.push({
       Path: "/collections",
       Message: collection.Name + " needs at least 2 artworks",
+    });
+  }
+
+  const cancelledExhibitions = await getCancelledExhibitions();
+  for (const exhibition of cancelledExhibitions) {
+    alerts.push({
+      Path: "/tickets",
+      Message:
+        exhibition.Name +
+        " was cancelled: " +
+        Number(exhibition.PendingNotices) +
+        " to notify, " +
+        Number(exhibition.PendingRefunds) +
+        " refunds pending",
     });
   }
 

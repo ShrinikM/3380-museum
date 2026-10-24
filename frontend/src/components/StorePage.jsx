@@ -474,7 +474,7 @@ function StorePage({ kind }){
                 <th scope="col">Total</th>
                 <th scope="col">Sale Date</th>
                 <th scope="col">Payment</th>
-                <th scope="col">Member</th>
+                <th scope="col">Customer</th>
                 <th scope="col">Staff</th>
               </tr>
             </thead>
@@ -499,7 +499,7 @@ function StorePage({ kind }){
                   <td className="mono">${saleTotal(sale).toFixed(2)}</td>
                   <td className="mono">{sale.SaleDate}</td>
                   <td>{sale.PaymentMethod}</td>
-                  <td>{sale.MemberName || <span className="cell-sub">Walk-in</span>}</td>
+                  <td>{sale.CustomerName || <span className="cell-sub">Walk-in</span>}</td>
                   <td>{sale.StaffName}</td>
                 </tr>
               ))}

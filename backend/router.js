@@ -12,6 +12,7 @@ const dashboardRoutes = require("./routers/dashboard");
 const donationRoutes = require("./routers/donation");
 const alertRoutes = require("./routers/alert");
 const customerRoutes = require("./routers/customer");
+const { findSession } = require("./sessions");
 
 const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes, reportRoutes, dashboardRoutes, donationRoutes, alertRoutes, customerRoutes);
 
@@ -97,6 +98,17 @@ async function getActor(req) {
   return rows[0].StaffID;
 }
 
+function getCustomer(req) {
+  const token = req.headers["x-customer-token"];
+  const customerId = typeof token === "string" ? findSession(token) : null;
+
+  if (customerId === null) {
+    throw makeError(401, "Please log in to continue");
+  }
+
+  return customerId;
+}
+
 function matchPath(routePath, requestPath) {
   const routeParts = routePath.split("/");
   const requestParts = requestPath.split("/");
@@ -154,12 +166,16 @@ async function handleRequest(req, res) {
       }
     }
 
-    let staffId = null;
+    let actorId = null;
     if (found.route.needsActor) {
-      staffId = await getActor(req);
+      actorId = await getActor(req);
     }
 
-    const result = await found.route.handler(found.params, body, staffId);
+    if (found.route.needsCustomer) {
+      actorId = getCustomer(req);
+    }
+
+    const result = await found.route.handler(found.params, body, actorId);
     sendJson(res, result.status, result.data);
   } catch (error) {
     sendError(res, error);

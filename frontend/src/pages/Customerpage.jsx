@@ -20,6 +20,12 @@ const STATUS_TEXT = {
   cancelled: 'Cancelled',
 }
 
+const TICKET_STATUS = {
+  None: { label: 'Valid', variant: 'active' },
+  Pending: { label: 'Refund pending', variant: 'upcoming' },
+  Refunded: { label: 'Refunded', variant: 'completed' },
+}
+
 function money(value){
   return `$${Number(value).toFixed(2)}`
 }
@@ -63,7 +69,7 @@ function Stepper({ value, max, onChange, label }){
 
 
 function MembershipTab({ account, onChanged }){
-  const { membership, terms, plans } = account
+  const { customer, membership, terms, plans } = account
   const [renewing, setRenewing] = useState(false)
   const [plan, setPlan] = useState('')
   const [payment, setPayment] = useState('')
@@ -135,17 +141,86 @@ function MembershipTab({ account, onChanged }){
     }
   }
 
-  if(membership === null){
+  const hasMembership = membership !== null
+  const isActive = hasMembership && membership.Status === 'active'
+  const canCancel = isActive || (hasMembership && membership.Status === 'upcoming')
+  const selectedPlan = plans.find((item)=>item.MembershipType === plan)
+
+  const picker = (
+    <section className="cp-card">
+      <div className="cp-label">
+        {!hasMembership ? 'Join' : canCancel ? 'Change plan' : 'Renew'}
+      </div>
+      <h2>{hasMembership ? 'Choose a plan' : 'Become a member'}</h2>
+
+      <div className="cp-plans">
+        {plans.map((item)=>{
+          const isCurrent = isActive && item.MembershipType === membership.MembershipType
+
+          return (
+            <button
+              key={item.MembershipType}
+              type="button"
+              className={`cp-option${item.MembershipType === plan ? ' is-selected' : ''}`}
+              onClick={()=>{
+                setPlan(item.MembershipType)
+                setError('')
+              }}
+              disabled={isCurrent}
+            >
+              <span className="cp-option-name">{item.MembershipType}</span>
+              <span className="cp-option-text">{money(item.Price)} for one year</span>
+              <span className="cp-option-meta">
+                {isCurrent ? 'Your current plan' : `${item.DiscountPercent}% off tickets`}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="form-group cp-renew-payment">
+        <label htmlFor="cp-membership-payment">Payment</label>
+        <select
+          id="cp-membership-payment"
+          value={payment}
+          onChange={(e)=>{
+            setPayment(e.target.value)
+            setError('')
+          }}
+        >
+          <option value="">Choose a payment method</option>
+          {MEMBERSHIP_PAYMENTS.map((method)=>(
+            <option key={method} value={method}>{method}</option>
+          ))}
+        </select>
+      </div>
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+
+      <div className="cp-member-actions">
+        {hasMembership && (
+          <button type="button" className="btn secondary" onClick={closeRenew} disabled={saving}>
+            Back
+          </button>
+        )}
+        <button type="button" className="btn primary" onClick={handleRenew} disabled={saving}>
+          {saving ? 'Processing...' : selectedPlan ? `Pay ${money(selectedPlan.Price)}` : 'Pay'}
+        </button>
+      </div>
+    </section>
+  )
+
+  if(!hasMembership){
     return (
-      <section className="cp-card">
-        <p className="cp-empty">You don't have a membership right now. You can sign up at the front desk.</p>
-      </section>
+      <div className="cp-stack">
+        <section className="cp-card">
+          <p className="cp-empty">You don't have a membership yet. Join to save on every ticket.</p>
+        </section>
+
+        {picker}
+      </div>
     )
   }
-
-  const isActive = membership.Status === 'active'
-  const canCancel = isActive || membership.Status === 'upcoming'
-  const selectedPlan = plans.find((item)=>item.MembershipType === plan)
 
   return (
     <div className="cp-stack">
@@ -163,7 +238,7 @@ function MembershipTab({ account, onChanged }){
         <dl className="cp-details">
           <div>
             <dt>Member</dt>
-            <dd>{membership.FirstName} {membership.LastName}</dd>
+            <dd>{customer.FirstName} {customer.LastName}</dd>
           </div>
           <div>
             <dt>Member ID</dt>
@@ -179,12 +254,12 @@ function MembershipTab({ account, onChanged }){
           </div>
           <div>
             <dt>Email</dt>
-            <dd>{membership.Email}</dd>
+            <dd>{customer.Email}</dd>
           </div>
-          {membership.Phone && (
+          {customer.Phone && (
             <div>
               <dt>Phone</dt>
-              <dd>{membership.Phone}</dd>
+              <dd>{customer.Phone}</dd>
             </div>
           )}
         </dl>
@@ -215,65 +290,7 @@ function MembershipTab({ account, onChanged }){
         )}
       </section>
 
-      {renewing && (
-        <section className="cp-card">
-          <div className="cp-label">{canCancel ? 'Change plan' : 'Renew'}</div>
-          <h2>Choose a plan</h2>
-
-          <div className="cp-plans">
-            {plans.map((item)=>{
-              const isCurrent = isActive && item.MembershipType === membership.MembershipType
-
-              return (
-                <button
-                  key={item.MembershipType}
-                  type="button"
-                  className={`cp-option${item.MembershipType === plan ? ' is-selected' : ''}`}
-                  onClick={()=>{
-                    setPlan(item.MembershipType)
-                    setError('')
-                  }}
-                  disabled={isCurrent}
-                >
-                  <span className="cp-option-name">{item.MembershipType}</span>
-                  <span className="cp-option-text">{money(item.Price)} for one year</span>
-                  <span className="cp-option-meta">
-                    {isCurrent ? 'Your current plan' : `${item.DiscountPercent}% off tickets`}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="form-group cp-renew-payment">
-            <label htmlFor="cp-membership-payment">Payment</label>
-            <select
-              id="cp-membership-payment"
-              value={payment}
-              onChange={(e)=>{
-                setPayment(e.target.value)
-                setError('')
-              }}
-            >
-              <option value="">Choose a payment method</option>
-              {MEMBERSHIP_PAYMENTS.map((method)=>(
-                <option key={method} value={method}>{method}</option>
-              ))}
-            </select>
-          </div>
-
-          {error && <p className="form-error" role="alert">{error}</p>}
-
-          <div className="cp-member-actions">
-            <button type="button" className="btn secondary" onClick={closeRenew} disabled={saving}>
-              Back
-            </button>
-            <button type="button" className="btn primary" onClick={handleRenew} disabled={saving}>
-              {saving ? 'Processing...' : selectedPlan ? `Pay ${money(selectedPlan.Price)}` : 'Pay'}
-            </button>
-          </div>
-        </section>
-      )}
+      {renewing && picker}
 
       {!renewing && error && <p className="form-error" role="alert">{error}</p>}
 
@@ -355,6 +372,7 @@ function PurchasesTab({ purchases }){
                   <th scope="col">Type</th>
                   <th scope="col">Price</th>
                   <th scope="col">Bought</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -364,6 +382,11 @@ function PurchasesTab({ purchases }){
                     <td>{ticket.TicketType}</td>
                     <td>{money(ticket.Price)}</td>
                     <td>{formatDate(ticket.SaleDate)}</td>
+                    <td>
+                      <span className={`badge badge-${TICKET_STATUS[ticket.RefundStatus].variant}`}>
+                        {TICKET_STATUS[ticket.RefundStatus].label}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -413,8 +436,10 @@ function TicketsTab({ data, onBought }){
   const [counts, setCounts] = useState({})
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
+  const [waitTypes, setWaitTypes] = useState({})
+  const [waiting, setWaiting] = useState(false)
 
-  const { exhibitions, prices, discount } = data
+  const { exhibitions, waitlist, prices, discount } = data
   const types = Object.keys(prices)
   const selected = exhibitions.find((item)=>item.ExhibitionID === exhibitionId)
 
@@ -456,6 +481,42 @@ function TicketsTab({ data, onBought }){
     }
   }
 
+  const handleJoin = async (id)=>{
+    setWaiting(true)
+    setError('')
+
+    try{
+      await callApi('/api/customer/waitlist', 'POST', {
+        ExhibitionID: id,
+        TicketType: waitTypes[id] || types[0],
+      })
+
+      onBought('You are on the waitlist. We will let you know when a spot opens up.')
+    }
+    catch(waitError){
+      setError(waitError.message)
+    }
+    finally{
+      setWaiting(false)
+    }
+  }
+
+  const handleLeave = async (id)=>{
+    setWaiting(true)
+    setError('')
+
+    try{
+      await callApi('/api/customer/waitlist/leave', 'POST', { WaitlistID: id })
+      onBought('You left the waitlist.')
+    }
+    catch(waitError){
+      setError(waitError.message)
+    }
+    finally{
+      setWaiting(false)
+    }
+  }
+
   if(exhibitions.length === 0){
     return (
       <section className="cp-card">
@@ -473,6 +534,55 @@ function TicketsTab({ data, onBought }){
         <div className="cp-options">
           {exhibitions.map((item)=>{
             const soldOut = item.Remaining === 0
+            const entry = waitlist.find((spot)=>spot.ExhibitionID === item.ExhibitionID)
+
+            if(soldOut){
+              return (
+                <div key={item.ExhibitionID} className="cp-option is-soldout">
+                  <span className="cp-option-name">{item.Name}</span>
+                  {item.Description && <span className="cp-option-text">{item.Description}</span>}
+                  <span className="cp-option-meta">
+                    Until {formatDate(item.EndDate)} · Sold out
+                  </span>
+
+                  <div className="cp-waitlist">
+                    {entry ? (
+                      <>
+                        <span>You are on the waitlist ({entry.TicketType})</span>
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={()=>handleLeave(entry.WaitlistID)}
+                          disabled={waiting}
+                        >
+                          Leave
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <select
+                          aria-label={`Ticket type for ${item.Name}`}
+                          value={waitTypes[item.ExhibitionID] || types[0]}
+                          onChange={(e)=>setWaitTypes((current)=>({ ...current, [item.ExhibitionID]: e.target.value }))}
+                        >
+                          {types.map((type)=>(
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={()=>handleJoin(item.ExhibitionID)}
+                          disabled={waiting}
+                        >
+                          Join Waitlist
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            }
 
             return (
               <button
@@ -480,19 +590,21 @@ function TicketsTab({ data, onBought }){
                 type="button"
                 className={`cp-option${item.ExhibitionID === exhibitionId ? ' is-selected' : ''}`}
                 onClick={()=>chooseExhibition(item.ExhibitionID)}
-                disabled={soldOut}
               >
                 <span className="cp-option-name">{item.Name}</span>
                 {item.Description && <span className="cp-option-text">{item.Description}</span>}
                 <span className="cp-option-meta">
                   Until {formatDate(item.EndDate)}
                   {' · '}
-                  {soldOut ? 'Sold out' : `${item.Remaining} left`}
+                  {`${item.Remaining} left`}
+                  {entry && entry.Status === 'Notified' && ' · A spot opened for you'}
                 </span>
               </button>
             )
           })}
         </div>
+
+        {error && !selected && <p className="form-error" role="alert">{error}</p>}
       </section>
 
       <section className="cp-card cp-summary">
@@ -696,6 +808,61 @@ function ShopTab({ items, onBought }){
 
 
 
+function Notices({ purchases, waitlist, onLeave, onGo }){
+  const cancelled = []
+
+  for(const ticket of purchases.tickets){
+    if(ticket.RefundStatus !== 'Pending' || ticket.NotificationStatus !== 'Sent'){
+      continue
+    }
+
+    const existing = cancelled.find((item)=>item.name === ticket.ExhibitionName)
+
+    if(existing){
+      existing.count = existing.count + 1
+    }
+    else{
+      cancelled.push({
+        name: ticket.ExhibitionName,
+        reason: ticket.CancellationReason,
+        count: 1,
+      })
+    }
+  }
+
+  const openSpots = waitlist.filter((entry)=>entry.Status === 'Notified')
+
+  if(cancelled.length === 0 && openSpots.length === 0){
+    return null
+  }
+
+  return (
+    <div className="cp-notices">
+      {cancelled.map((item)=>(
+        <p key={item.name} className="cp-notice" role="status">
+          <strong>{item.name}</strong> was cancelled
+          {item.reason ? ` (${item.reason})` : ''}.
+          {' '}
+          Your {item.count} {item.count === 1 ? 'ticket is' : 'tickets are'} being refunded.
+        </p>
+      ))}
+
+      {openSpots.map((entry)=>(
+        <p key={entry.WaitlistID} className="cp-notice" role="status">
+          <span>
+            A spot opened up for <strong>{entry.ExhibitionName}</strong>. Buy your ticket before it is gone.
+          </span>
+          <span className="cp-notice-actions">
+            <button type="button" className="btn secondary" onClick={onGo}>Buy Tickets</button>
+            <button type="button" className="btn secondary" onClick={()=>onLeave(entry.WaitlistID)}>Leave Waitlist</button>
+          </span>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+
 function CustomerPage(){
   const [tab, setTab] = useState('membership')
   const [account, setAccount] = useState(null)
@@ -739,7 +906,17 @@ function CustomerPage(){
     loadAll()
   }
 
-  const firstName = account && account.membership ? account.membership.FirstName : ''
+  const handleLeave = async (waitlistId)=>{
+    try{
+      await callApi('/api/customer/waitlist/leave', 'POST', { WaitlistID: waitlistId })
+      handleBought('You left the waitlist.')
+    }
+    catch(leaveError){
+      setMessage(leaveError.message)
+    }
+  }
+
+  const firstName = account ? account.customer.FirstName : ''
 
   return (
     <div className="cp-page">
@@ -763,6 +940,15 @@ function CustomerPage(){
       </div>
 
       {message && <p className="cp-success" role="status">{message}</p>}
+
+      {purchases && ticketData && (
+        <Notices
+          purchases={purchases}
+          waitlist={ticketData.waitlist}
+          onLeave={handleLeave}
+          onGo={()=>switchTab('tickets')}
+        />
+      )}
 
       {loadError && (
         <p className="form-error" role="alert">Could not load your account: {loadError}</p>

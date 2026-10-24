@@ -11,11 +11,14 @@ const selectExhibitions = `
     e.Capacity,
     e.CollectionID,
     c.Name AS CollectionName,
+    e.CancellationReason,
+    DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
 
     (SELECT COUNT(*)
      FROM ticket t
      WHERE t.ExhibitionID = e.ExhibitionID
-       AND t.IsDeleted = 0) AS Tickets,
+       AND t.IsDeleted = 0
+       AND t.RefundStatus <> 'Refunded') AS Tickets,
 
     (SELECT COUNT(*)
      FROM artwork a
@@ -39,6 +42,7 @@ const selectExhibitions = `
        AND s.IsDeleted = 0) AS StaffNames,
 
     CASE
+      WHEN e.CancelledAt IS NOT NULL THEN 'cancelled'
       WHEN e.EndDate < CURDATE() THEN 'completed'
       WHEN e.StartDate <= CURDATE()
         AND e.EndDate >= CURDATE() THEN 'active'
@@ -344,6 +348,10 @@ async function updateExhibition(params, body, staffId) {
     throw makeError(404, "Exhibition not found");
   }
 
+  if (existing.Status === "cancelled") {
+    throw makeError(400, "A cancelled exhibition cannot be edited");
+  }
+
   await checkDuplicateName(exhibition.Name, id);
 
   if (Number(existing.CollectionID) !== exhibition.CollectionID) {
@@ -381,6 +389,37 @@ async function updateExhibition(params, body, staffId) {
   return {
     status: 200,
     data: updatedExhibition,
+  };
+}
+
+async function cancelExhibition(params, body, staffId) {
+  const id = checkId(params);
+  const reason = checkText(body.Reason, "Reason");
+
+  const existing = await findExhibition(id);
+
+  if (existing === null) {
+    throw makeError(404, "Exhibition not found");
+  }
+
+  if (existing.Status === "cancelled") {
+    throw makeError(409, "This exhibition is already cancelled");
+  }
+
+  await pool.query(
+    `UPDATE exhibition
+     SET CancelledBy = ?,
+         CancellationReason = ?,
+         UpdatedAt = NOW()
+     WHERE ExhibitionID = ?
+       AND IsDeleted = 0
+       AND CancelledAt IS NULL`,
+    [staffId, reason, id]
+  );
+
+  return {
+    status: 200,
+    data: await findExhibition(id),
   };
 }
 
@@ -422,6 +461,12 @@ module.exports = [
     method: "PUT",
     path: "/api/exhibitions/:id",
     handler: updateExhibition,
+    needsActor: true,
+  },
+  {
+    method: "POST",
+    path: "/api/exhibitions/:id/cancel",
+    handler: cancelExhibition,
     needsActor: true,
   },
   {
