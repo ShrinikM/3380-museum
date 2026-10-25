@@ -6,8 +6,8 @@ const selectArtists = `
     artist.FirstName,
     artist.LastName,
     artist.Nationality,
-    DATE_FORMAT(artist.BirthYear, '%Y-%m-%d') AS BirthYear,
-    DATE_FORMAT(artist.DeathYear, '%Y-%m-%d') AS DeathYear,
+    artist.BirthYear,
+    artist.DeathYear,
     artist.CreatedAt,
     artist.UpdatedAt,
     artist.CreatedBy,
@@ -37,25 +37,25 @@ function checkText(value, fieldName) {
   return value.trim();
 }
 
-function checkDate(value, fieldName) {
-  if (typeof value !== "string") {
-    throw makeError(400, fieldName + " must be a date like 1900-01-31");
+function checkYear(value, fieldName) {
+  const year = Number(value);
+  const currentYear = new Date().getFullYear();
+
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    !Number.isInteger(year) ||
+    year < 1 ||
+    year > currentYear
+  ) {
+    throw makeError(
+      400,
+      fieldName + " must be a valid year between 1 and " + currentYear
+    );
   }
 
-  const date = new Date(value);
-  if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw makeError(400, fieldName + " must be a real date like 1900-01-31");
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  if (value > today) {
-    throw makeError(400, fieldName + " cannot be in the future");
-  }
-  if (value < "1000-01-01") {
-    throw makeError(400, fieldName + " cannot be before 1000-01-01");
-  }
-
-  return value;
+  return year;
 }
 
 function checkArtist(body) {
@@ -65,14 +65,17 @@ function checkArtist(body) {
   artist.LastName = checkText(body.LastName, "LastName");
   artist.Nationality = checkText(body.Nationality, "Nationality");
 
-  if (body.BirthYear === undefined || body.BirthYear === null || body.BirthYear === "") {
-    throw makeError(400, "BirthYear is required");
-  }
-  artist.BirthYear = checkDate(body.BirthYear, "BirthYear");
+  artist.BirthYear = checkYear(body.BirthYear, "BirthYear");
 
   artist.DeathYear = null;
-  if (body.DeathYear !== undefined && body.DeathYear !== null && body.DeathYear !== "") {
-    artist.DeathYear = checkDate(body.DeathYear, "DeathYear");
+
+  if (
+    body.DeathYear !== undefined &&
+    body.DeathYear !== null &&
+    body.DeathYear !== ""
+  ) {
+    artist.DeathYear = checkYear(body.DeathYear, "DeathYear");
+
     if (artist.DeathYear < artist.BirthYear) {
       throw makeError(400, "DeathYear cannot be before BirthYear");
     }

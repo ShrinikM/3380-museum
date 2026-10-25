@@ -8,7 +8,7 @@ function Artists() {
   const { user, canEdit } = useRole()
   const allowEdit = canEdit('/artists')
   const showAudit = user.role === 'Admin'
-  const today = new Date().toISOString().split('T')[0]
+  const currentYear = new Date().getFullYear()
 
   const [artists, setArtists] = useState([])
   const [loadError, setLoadError] = useState('')
@@ -69,11 +69,11 @@ function Artists() {
     setFormData({
       FirstName: artist.FirstName || '',
       LastName: artist.LastName || '',
-      BirthYear: artist.BirthYear
-        ? artist.BirthYear.split('T')[0]
+      BirthYear: artist.BirthYear != null
+        ? String(artist.BirthYear)
         : '',
-      DeathYear: artist.DeathYear
-        ? artist.DeathYear.split('T')[0]
+      DeathYear: artist.DeathYear != null
+        ? String(artist.DeathYear)
         : '',
       Nationality: artist.Nationality || '',
     })
@@ -85,21 +85,24 @@ function Artists() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (formData.BirthYear > today) {
-      alert('Birth Date cannot be in the future.')
-      return
-    }
-
-    if (formData.DeathYear && formData.DeathYear > today) {
-      alert('Death Date cannot be in the future.')
+    if (
+      !Number.isInteger(Number(formData.BirthYear)) ||
+      Number(formData.BirthYear) < 1 ||
+      Number(formData.BirthYear) > currentYear
+    ) {
+      alert(`Birth Year must be between 1 and ${currentYear}.`)
       return
     }
 
     if (
-      formData.DeathYear &&
-      formData.DeathYear < formData.BirthYear
+      formData.DeathYear !== '' &&
+      (
+        !Number.isInteger(Number(formData.DeathYear)) ||
+        Number(formData.DeathYear) < Number(formData.BirthYear) ||
+        Number(formData.DeathYear) > currentYear
+      )
     ) {
-      alert('Death Date cannot be before Birth Date.')
+      alert('Death Year must be a valid year between Birth Year and the current year.')
       return
     }
 
@@ -252,8 +255,8 @@ function Artists() {
                 </th>
               )}
               <th scope="col">Artist</th>
-              <th scope="col">Birth Date</th>
-              <th scope="col">Death Date</th>
+              <th scope="col">Birth Year</th>
+              <th scope="col">Death Year</th>
               <th scope="col">Nationality</th>
               <th scope="col">Artworks</th>
               {showAudit && <th scope="col">Created By</th>}
@@ -284,13 +287,13 @@ function Artists() {
 
                 <td className="mono">
                   {item.BirthYear
-                    ? item.BirthYear.split('T')[0]
+                    ? String(item.BirthYear)
                     : '-'}
                 </td>
 
                 <td className="mono">
                   {item.DeathYear
-                    ? item.DeathYear.split('T')[0]
+                    ? String(item.DeathYear)
                     : 'Living'}
                 </td>
 
@@ -356,12 +359,13 @@ function Artists() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="artist-birth-date">Birth Date</label>
+            <label htmlFor="artist-birth-date">Birth Year</label>
             <input
               id="artist-birth-date"
               name="BirthYear"
-              type="date"
-              max={today}
+              type="number"
+              min={1}
+              max={currentYear}
               value={formData.BirthYear}
               onChange={handleChange}
               required
@@ -369,13 +373,13 @@ function Artists() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="artist-death-date">Death Date</label>
+            <label htmlFor="artist-death-date">Death Year</label>
             <input
               id="artist-death-date"
               name="DeathYear"
-              type="date"
+              type="number"
               min={formData.BirthYear || undefined}
-              max={today}
+              max={currentYear}
               value={formData.DeathYear}
               onChange={handleChange}
             />
