@@ -37,6 +37,10 @@ function PublicNavbar({ alerts, onMarkAllRead }){
           Gallery
         </NavLink>
 
+        <NavLink to="/donate" className="navbar-link">
+          Donate
+        </NavLink>
+
         {user === null ? (
           <NavLink to="/login" className="btn secondary">
             Log In

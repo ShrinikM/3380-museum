@@ -173,8 +173,45 @@ async function deleteDonation(params, body, staffId) {
   return { status: 200, data: { message: "Donation deleted" } };
 }
 
+const onlinePaymentMethods = ["Credit Card", "Debit Card", "Bank Transfer"];
+
+function localToday() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+async function addPublicDonation(params, body) {
+  if (!onlinePaymentMethods.includes(body.PaymentMethod)) {
+    throw makeError(400, "Please choose a payment method");
+  }
+
+  const donation = checkDonation({
+    ...body,
+    DonationDate: localToday(),
+  });
+
+  const [result] = await pool.query(
+    `INSERT INTO donations
+      (FirstName, LastName, PaymentMethod, AmountDonated, DonationDate, CreatedAt, UpdatedAt, CreatedBy)
+     VALUES (?, ?, ?, ?, ?, NOW(), NOW(), NULL)`,
+    [
+      donation.FirstName,
+      donation.LastName,
+      donation.PaymentMethod,
+      donation.AmountDonated,
+      donation.DonationDate,
+    ]
+  );
+
+  const newDonation = await findDonation(result.insertId);
+  return { status: 201, data: newDonation };
+}
+
 module.exports = [
   { method: "GET", path: "/api/donations", handler: getDonations },
+  { method: "POST", path: "/api/public/donations", handler: addPublicDonation },
   { method: "POST", path: "/api/donations", handler: addDonation, needsActor: true },
   { method: "PUT", path: "/api/donations/:id", handler: updateDonation, needsActor: true },
   { method: "DELETE", path: "/api/donations/:id", handler: deleteDonation, needsActor: true },

@@ -1,0 +1,100 @@
+.ab-plans {
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+
+.ab-plans-head {
+  margin-bottom: 24px;
+}
+
+.ab-plans-head h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.ab-plans-head p {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 15px;
+}
+
+.ab-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ab-plan {
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--background);
+}
+
+.ab-plan-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ab-plan-top h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.ab-plan-price {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ab-plan-intro {
+  margin: 10px 0 16px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ab-plan-perks {
+  margin: 0 0 20px;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ab-plan-perks li + li {
+  margin-top: 6px;
+}
+
+.ab-plan-perks li::marker {
+  color: var(--primary);
+}
+
+.ab-plan-btn {
+  width: 100%;
+  margin-top: auto;
+}
+
+@media (max-width: 960px) {
+  .ab-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ab-plans {
+    padding: 24px;
+  }
+
+  .ab-plan-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

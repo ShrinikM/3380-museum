@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import PublicNavbar from './components/PublicNavbar'
 import Sidebar from './components/Sidebar'
@@ -20,6 +20,7 @@ import HomePage from './pages/HomePage'
 import AboutPage from './pages/AboutPage'
 import GalleryPage from './pages/GalleryPage'
 import CustomerPage from './pages/Customerpage'
+import DonatePage from './pages/DonatePage'
 import { useRole } from './context/role'
 import { callApi } from './api'
 import './App.css'
@@ -50,7 +51,45 @@ function getReadAlerts(user) {
   }
 }
 
+function SiteFooter() {
+  const { user } = useRole()
+  const isCustomer = user !== null && user.role === 'Customer'
+  const account = (tab)=>(isCustomer ? `/account?tab=${tab}` : `/login?tab=${tab}`)
+
+  return (
+    <footer className="site-footer">
+      <div className="site-footer-inner">
+        <div>
+          <strong className="site-footer-name">CoogMuseum</strong>
+          <p>4800 Calhoun Rd<br />Houston, TX 77004</p>
+        </div>
+
+        <div>
+          <h3>Visit</h3>
+          <Link to="/about">Hours and prices</Link>
+          <Link to="/gallery">Gallery</Link>
+          <Link to={account('tickets')}>Buy tickets</Link>
+        </div>
+
+        <div>
+          <h3>Support</h3>
+          <Link to={account('membership')}>Membership</Link>
+          <Link to="/donate">Donate</Link>
+        </div>
+
+        <div>
+          <h3>Contact</h3>
+          <a href="tel:7135550142">(713) 555-0142</a>
+          <a href="mailto:info@coogmuseum.org">info@coogmuseum.org</a>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
 function PublicLayout({ alerts, onMarkAllRead }) {
+  const { pathname } = useLocation()
+
   return (
     <>
       <PublicNavbar alerts={alerts} onMarkAllRead={onMarkAllRead} />
@@ -58,6 +97,8 @@ function PublicLayout({ alerts, onMarkAllRead }) {
       <main className="public-main">
         <Outlet />
       </main>
+
+      {pathname !== '/donate' && <SiteFooter />}
     </>
   )
 }
@@ -130,6 +171,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/donate" element={<DonatePage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -140,12 +182,13 @@ function App() {
   if (isCustomer) {
     return (
       <Routes>
-        <Route path="/login" element={<Navigate to="/account" replace />} />
+        <Route path="/login" element={<Navigate to={`/account${location.search}`} replace />} />
 
         <Route element={<PublicLayout alerts={visibleAlerts} onMarkAllRead={markAllRead} />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/donate" element={<DonatePage />} />
           <Route path="/account" element={<CustomerPage />} />
         </Route>
 

@@ -199,49 +199,6 @@
 }
 
 
-.ab-contact {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
-  padding: 32px 36px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(150deg, var(--primary) 0%, var(--primary-dark) 100%);
-  color: #fff;
-}
-
-.ab-contact h3 {
-  margin: 0 0 8px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ab-contact p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.ab-contact a {
-  color: #fff;
-  font-size: 14px;
-  text-decoration: underline;
-  text-decoration-color: rgba(255, 255, 255, 0.35);
-  text-underline-offset: 3px;
-  overflow-wrap: anywhere;
-}
-
-.ab-contact a:hover {
-  text-decoration-color: #fff;
-}
-
-.ab-contact a:focus-visible {
-  outline-color: #fff;
-}
-
-
 @media (max-width: 960px) {
   .ab-hero {
     grid-template-columns: minmax(0, 1fr);
@@ -256,9 +213,9 @@
     height: 140px;
   }
 
-  .ab-info,
-  .ab-contact {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ab-info {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
 
   .ab-info .ab-card:first-child {
@@ -282,13 +239,20 @@
     font-size: 30px;
   }
 
-  .ab-info,
-  .ab-contact {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+  .ab-info {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ab-contact {
     padding: 24px;
   }
+}
+
+.ab-action {
+  width: 100%;
+  margin-top: auto;
+}
+
+.ab-note + .ab-action {
+  margin-top: 16px;
 }

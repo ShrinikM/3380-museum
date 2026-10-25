@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { callApi } from '../api'
 import './Customerpage.css'
 
@@ -922,7 +923,17 @@ function Notices({ purchases, waitlist, onLeave, onGo }){
 
 
 function CustomerPage(){
-  const [tab, setTab] = useState('membership')
+  const [searchParams] = useSearchParams()
+  const linkedTab = searchParams.get('tab')
+  const [tab, setTab] = useState(
+    TABS.some((item)=>item.id === linkedTab) ? linkedTab : 'membership'
+  )
+
+  useEffect(()=>{
+    if(TABS.some((item)=>item.id === linkedTab)){
+      setTab(linkedTab)
+    }
+  }, [linkedTab])
   const [account, setAccount] = useState(null)
   const [ticketData, setTicketData] = useState(null)
   const [shopItems, setShopItems] = useState(null)
