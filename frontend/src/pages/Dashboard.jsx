@@ -13,6 +13,9 @@ import {
 } from 'recharts'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
+import { LOW_STOCK, STOCK_TARGET } from '../data/constants'
+import { Badge } from '../components/ui'
+
 
 const colors = ['#1a3c6e', '#c8962e', '#1a7b4e', '#b0271a', '#6b6a78']
 
@@ -48,6 +51,21 @@ function formatDateTime(value) {
   })
 }
 
+function daysUntil(dateString) {
+  const target = new Date(dateString + 'T00:00:00')
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  return Math.round((target - now) / 86400000)
+}
+
+function isLowStock(stock) {
+  return stock < LOW_STOCK
+}
+
+function stockPercent(stock) {
+  return Math.min((stock / STOCK_TARGET) * 100, 100)
+}
+
 function Panel({ title, action, children }) {
   return (
     <section className="dash-panel">
@@ -77,6 +95,10 @@ function Dashboard() {
   const [endDate, setEndDate] = useState(today)
   const [dashboard, setDashboard] = useState(null)
   const [loadError, setLoadError] = useState('')
+  const [giftItems, setGiftItems] = useState([])
+  const [giftLoading, setGiftLoading] = useState(true)
+  const [giftError, setGiftError] = useState('')
+  const [staffByExhibition, setStaffByExhibition] = useState({})
 
   const showDates = user?.role !== 'Staff'
 
@@ -108,6 +130,78 @@ function Dashboard() {
 
     loadDashboard()
   }, [startDate, endDate])
+
+  useEffect(() => {
+    if (user?.role !== 'Staff') {
+      return
+    }
+    let cancelled = false
+    async function loadGiftShop() {
+      try {
+        const data = await callApi('/api/store/giftshop/items', 'GET')
+
+        if (!Array.isArray(data)) {
+          throw new Error('The server returned an invalid gift shop response.')
+        }
+        if (!cancelled) {
+          setGiftItems(
+            data.map((item) => ({ ...item, Stock: Number(item.Stock) }))
+          )
+          setGiftError('')
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setGiftError('Could not load gift shop stock: ' + err.message)
+        }
+      } finally {
+        if (!cancelled) {
+          setGiftLoading(false)
+        }
+      }
+    }
+
+    loadGiftShop()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (user?.role !== 'Staff') {
+      return
+    }
+    let cancelled = false
+    async function loadExhibitionStaff() {
+      try {
+        const data = await callApi('/api/exhibitions', 'GET')
+
+        if (!Array.isArray(data)) {
+          throw new Error('The server returned an invalid exhibitions response.')
+        }
+
+        if (!cancelled) {
+          const lookup = {}
+
+          for (const exhibition of data) {
+            lookup[exhibition.ExhibitionID] = Array.isArray(exhibition.StaffNames)
+              ? exhibition.StaffNames
+              : []
+          }
+
+          setStaffByExhibition(lookup)
+        }
+      } catch {
+        if (!cancelled) {
+          setStaffByExhibition({})
+        }
+      }
+    }
+    loadExhibitionStaff()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   function renderRevenuePanel() {
     let total = 0
@@ -288,6 +382,11 @@ function Dashboard() {
     )
   }
 
+  function getStaffNames(exhibitionId) {
+    const names = staffByExhibition[exhibitionId]
+    return names && names.length > 0 ? names.join(', ') : '-'
+  }
+
   function renderAssignedExhibitionsPanel() {
     return (
       <Panel title="Current Exhibitions">
@@ -300,13 +399,21 @@ function Dashboard() {
             <div className="dash-row" key={item.ExhibitionID}>
               <div>
                 <strong>{item.Name}</strong>
-                <p>{item.CollectionName}</p>
+                <p>
+                  {item.CollectionName} ·{' '}
+                  {item.Status === 'active'
+                    ? daysUntil(item.EndDate) + ' days left'
+                    : 'opens in ' + daysUntil(item.StartDate) + ' days'}
+                </p>
               </div>
               <div className="dash-row-value">
                 {item.Status === 'active'
                   ? 'Ends ' + item.EndDate
                   : 'Opens ' + item.StartDate}
-                <span>{item.Status === 'active' ? 'Active' : 'Upcoming'}</span>
+                <Badge
+                  variant={item.Status === 'active' ? 'active' : 'upcoming'}
+                  label={item.Status === 'active' ? 'Active' : 'Upcoming'}
+                />
               </div>
             </div>
           ))}
@@ -315,6 +422,61 @@ function Dashboard() {
     )
   }
 
+  function renderGiftShopPanel() {
+    const sorted = [...giftItems].sort((a, b) => a.Stock - b.Stock)
+    const lowCount = giftItems.filter((item) => isLowStock(item.Stock)).length
+    return (
+      <Panel
+        title="Gift Shop Status"
+        action={<div className="dash-panel-total">{lowCount} low stock</div>}
+      >
+        {giftLoading && <p className="dash-empty">Loading gift shop...</p>}
+
+        {giftError && (
+          <p className="dash-empty" role="alert">
+            {giftError}
+          </p>
+        )}
+        {!giftLoading && !giftError && giftItems.length === 0 && (
+          <p className="dash-empty">No gift shop items.</p>
+        )}
+        <div className="dash-activity-scroll">
+          <div className="dash-list">
+                        {sorted.map((item) => (
+              <div key={item.ItemID}>
+                <div className="dash-row">
+                  <div>
+                    <strong>{item.ItemName}</strong>
+                    <p>{item.Category}</p>
+                  </div>
+                  <div className="dash-row-value">
+                    {formatNumber(item.Stock)} in stock
+                    <Badge
+                      variant={isLowStock(item.Stock) ? 'low' : 'active'}
+                      label={isLowStock(item.Stock) ? 'Low stock' : 'In stock'}
+                    />
+                  </div>
+                </div>
+
+                <div className="dash-progress">
+                  <div
+                    className="dash-progress-fill"
+                    style={{
+                      width: stockPercent(item.Stock) + '%',
+                      background: isLowStock(item.Stock)
+                        ? 'var(--danger)'
+                        : 'var(--success)',
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Panel>
+    )
+  }
+  
   function renderActivityPanel() {
     return (
       <Panel title="Recent Activity">
@@ -345,7 +507,25 @@ function Dashboard() {
 
   function renderPanels() {
     if (dashboard.role === 'Staff') {
-      return renderAssignedExhibitionsPanel()
+  return (
+    <>
+      {renderAssignedExhibitionsPanel()}
+      {renderGiftShopPanel()}
+    </>
+  )
+}
+
+    if (dashboard.role === 'Operator') {
+      return (
+        <>
+          <div className="dash-main-grid">
+            {renderRevenuePanel()}
+            {renderCurrentExhibitionsPanel()}
+          </div>
+
+          {renderTopExhibitionsPanel()}
+        </>
+      )
     }
 
     return (

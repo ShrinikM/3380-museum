@@ -36,6 +36,8 @@ export const ROLES = {
       '/artworks',
       '/collections',
       '/exhibitions',
+      '/gift-shop',
+      '/cafe',
     ],
     edit: [
       '/artists',
