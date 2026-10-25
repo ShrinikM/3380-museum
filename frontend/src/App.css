@@ -1856,6 +1856,20 @@ input[type='radio'] {
   font-size: 12px;
 }
 
+.dash-row-staff {
+  flex: 1;
+  min-width: 0;
+  padding: 0 16px;
+}
+
+.dash-row-staff span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .dash-row-value {
   display: flex;
   flex-shrink: 0;
@@ -1870,6 +1884,20 @@ input[type='radio'] {
   color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 400;
+}
+
+.dash-row-value .badge {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.dash-row-value .badge-active {
+  color: var(--success);
+}
+
+.dash-row-value .badge-low {
+  color: var(--danger);
 }
 
 .dash-progress {
