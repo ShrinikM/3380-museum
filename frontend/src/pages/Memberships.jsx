@@ -20,17 +20,51 @@ const membershipDiscounts = {
   Senior: 15,
 }
 
+const emptyFamilyMember = {
+  FirstName: '',
+  LastName: '',
+  DateOfBirth: '',
+}
+
 const emptyForm = {
   firstName: '',
   lastName: '',
   email: '',
   phone: '',
+  schoolEmail: '',
+  dateOfBirth: '',
   type: '',
   startDate: '',
   endDate: '',
   price: '',
   discount: '',
   payment: '',
+  familyMembers: [],
+}
+
+function calculateAge(dateOfBirth, onDate) {
+  if (!dateOfBirth || !onDate) return null
+
+  const dob = new Date(`${dateOfBirth}T00:00:00Z`)
+  const date = new Date(`${onDate}T00:00:00Z`)
+
+  if (Number.isNaN(dob.getTime()) || Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  let age = date.getUTCFullYear() - dob.getUTCFullYear()
+
+  if (
+    date.getUTCMonth() < dob.getUTCMonth() ||
+    (
+      date.getUTCMonth() === dob.getUTCMonth() &&
+      date.getUTCDate() < dob.getUTCDate()
+    )
+  ) {
+    age--
+  }
+
+  return age
 }
 
 function Memberships() {
@@ -42,7 +76,7 @@ function Memberships() {
   const [reloadCount, setReloadCount] = useState(0)
 
   const [search, setSearch] = useState('')
-  const [selectedType, setSelectedType] = useState('All') 
+  const [selectedType, setSelectedType] = useState('All')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
@@ -59,6 +93,8 @@ function Memberships() {
             lastName: member.LastName,
             email: member.Email,
             phone: member.Phone || '',
+            schoolEmail: member.SchoolEmail || '',
+            dateOfBirth: member.DateOfBirth || '',
             type: member.MembershipType,
             startDate: member.StartDate
               ? member.StartDate.split('T')[0]
@@ -70,6 +106,14 @@ function Memberships() {
             discount: Number(member.DiscountPercent),
             payment: member.PaymentMethod,
             status: member.Status,
+            familyMembers: Array.isArray(member.FamilyMembers)
+              ? member.FamilyMembers.map((familyMember) => ({
+                  FamilyMemberID: familyMember.FamilyMemberID,
+                  FirstName: familyMember.FirstName || '',
+                  LastName: familyMember.LastName || '',
+                  DateOfBirth: familyMember.DateOfBirth || '',
+                }))
+              : [],
           }))
         )
 
@@ -88,20 +132,20 @@ function Memberships() {
 
   const maxEndDate = formData.startDate
     ? new Date(
-        new Date(formData.startDate).setFullYear(
-          new Date(formData.startDate).getFullYear() + 1
+        new Date(`${formData.startDate}T00:00:00Z`).setUTCFullYear(
+          new Date(`${formData.startDate}T00:00:00Z`).getUTCFullYear() + 1
         )
-      )
-        .toISOString()
-        .split('T')[0]
+      ).toISOString().split('T')[0]
     : undefined
 
   const active = memberships.filter(
     (member) => member.status === 'active'
   )
+
   const upcoming = memberships.filter(
     (member) => member.status === 'upcoming'
   )
+
   const expired = memberships.filter(
     (member) => member.status === 'expired' || member.status === 'cancelled'
   )
@@ -111,13 +155,13 @@ function Memberships() {
     0
   )
 
-  
   const filtered = memberships.filter((member) => {
     const name = `${member.firstName} ${member.lastName}`.toLowerCase()
     const searchText = search.toLowerCase()
 
     const matchesSearch =
-      name.includes(searchText) || member.email.toLowerCase().includes(searchText)
+      name.includes(searchText) ||
+      member.email.toLowerCase().includes(searchText)
 
     const matchesType =
       selectedType === 'All' || member.type === selectedType
@@ -129,20 +173,63 @@ function Memberships() {
     const { name, value } = e.target
 
     if (name === 'type') {
-      setFormData({
-        ...formData,
+      setFormData((current) => ({
+        ...current,
         type: value,
         price: value ? membershipPrices[value] : '',
         discount: value ? membershipDiscounts[value] : '',
-      })
+        familyMembers:
+          value === 'Family'
+            ? current.familyMembers
+            : [],
+      }))
       return
     }
 
-    setFormData({ ...formData, [name]: value })
+    setFormData((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  const handleFamilyMemberChange = (index, field, value) => {
+    setFormData((current) => ({
+      ...current,
+      familyMembers: current.familyMembers.map((member, i) =>
+        i === index ? { ...member, [field]: value } : member
+      ),
+    }))
+  }
+
+  const addFamilyMember = () => {
+    if (formData.familyMembers.length >= 7) {
+      alert(
+        'A Family membership can have at most 7 additional members, including no more than 1 additional adult and 6 children.'
+      )
+      return
+    }
+
+    setFormData((current) => ({
+      ...current,
+      familyMembers: [
+        ...current.familyMembers,
+        { ...emptyFamilyMember },
+      ],
+    }))
+  }
+
+  const removeFamilyMember = (index) => {
+    setFormData((current) => ({
+      ...current,
+      familyMembers: current.familyMembers.filter((_, i) => i !== index),
+    }))
   }
 
   const resetForm = () => {
-    setFormData(emptyForm)
+    setFormData({
+      ...emptyForm,
+      familyMembers: [],
+    })
   }
 
   const openAddModal = () => {
@@ -157,12 +244,20 @@ function Memberships() {
       lastName: member.lastName,
       email: member.email,
       phone: member.phone,
+      schoolEmail: member.schoolEmail || '',
+      dateOfBirth: member.dateOfBirth || '',
       type: member.type,
       startDate: member.startDate,
       endDate: member.endDate,
       price: String(member.price),
       discount: String(member.discount),
       payment: member.payment,
+      familyMembers: (member.familyMembers || []).map((familyMember) => ({
+        FamilyMemberID: familyMember.FamilyMemberID,
+        FirstName: familyMember.FirstName || '',
+        LastName: familyMember.LastName || '',
+        DateOfBirth: familyMember.DateOfBirth || '',
+      })),
     })
 
     setEditingId(member.id)
@@ -216,8 +311,8 @@ function Memberships() {
       return
     }
 
-    if (formData.endDate < formData.startDate) {
-      alert('End Date cannot be before Start Date.')
+    if (formData.endDate <= formData.startDate) {
+      alert('End Date must be after Start Date.')
       return
     }
 
@@ -236,17 +331,135 @@ function Memberships() {
       return
     }
 
+    if (
+      (formData.type === 'Senior' || formData.type === 'Family') &&
+      !formData.dateOfBirth
+    ) {
+      alert('Date of birth is required for Senior and Family memberships.')
+      return
+    }
+
+    if (formData.dateOfBirth) {
+      const age = calculateAge(formData.dateOfBirth, formData.startDate)
+
+      if (age === null || age < 0) {
+        alert('Please provide a valid date of birth before the membership start date.')
+        return
+      }
+
+      if (formData.type === 'Senior' && age < 65) {
+        alert('Senior memberships require the customer to be at least 65 years old when the membership starts.')
+        return
+      }
+
+      if (formData.type === 'Family' && age < 18) {
+        alert('The primary account holder must be at least 18 years old when the Family membership starts.')
+        return
+      }
+    }
+
+    if (
+      formData.type === 'Student' &&
+      !formData.schoolEmail.trim()
+    ) {
+      alert('School email is required for Student memberships.')
+      return
+    }
+
+    if (
+      formData.type === 'Student' &&
+      !/^[^\s@]+@cougarnet\.uh\.edu$/i.test(formData.schoolEmail.trim())
+    ) {
+      alert('Student memberships require an approved school email ending in @cougarnet.uh.edu.')
+      return
+    }
+
+    const validatedFamilyMembers = []
+
+    if (formData.type === 'Family') {
+      if (!Array.isArray(formData.familyMembers)) {
+        alert('Please check the family member list.')
+        return
+      }
+
+      let adults = 1
+      let children = 0
+
+      for (let i = 0; i < formData.familyMembers.length; i++) {
+        const member = formData.familyMembers[i]
+        const memberFirstName = member.FirstName.trim()
+        const memberLastName = member.LastName.trim()
+        const memberDob = member.DateOfBirth
+
+        if (
+          !textPattern.test(memberFirstName) ||
+          !textPattern.test(memberLastName)
+        ) {
+          alert(`Please enter a valid first and last name for family member ${i + 1}.`)
+          return
+        }
+
+        if (!memberDob) {
+          alert(`Please enter a date of birth for family member ${i + 1}.`)
+          return
+        }
+
+        const memberAge = calculateAge(memberDob, formData.startDate)
+
+        if (memberAge === null || memberAge < 0 || memberDob >= formData.startDate) {
+          alert(`Please enter a valid date of birth before the membership start date for family member ${i + 1}.`)
+          return
+        }
+
+        if (memberAge >= 18) {
+          adults++
+        } else {
+          children++
+        }
+
+        validatedFamilyMembers.push({
+          FirstName: memberFirstName,
+          LastName: memberLastName,
+          DateOfBirth: memberDob,
+        })
+      }
+
+      if (adults > 2) {
+        alert('Family memberships allow a maximum of 2 adults, including the primary account holder.')
+        return
+      }
+
+      if (children > 6) {
+        alert('Family memberships allow a maximum of 6 children under 18.')
+        return
+      }
+
+      if (1 + validatedFamilyMembers.length > 8) {
+        alert('Family memberships allow a maximum of 8 family members, including the primary account holder.')
+        return
+      }
+    }
+
     const membershipData = {
       FirstName: firstName,
       LastName: lastName,
       Email: email,
       Phone: formData.phone.trim(),
+      SchoolEmail:
+        formData.type === 'Student'
+          ? formData.schoolEmail.trim()
+          : null,
+      DateOfBirth: formData.dateOfBirth || null,
       MembershipType: formData.type,
       StartDate: formData.startDate,
       EndDate: formData.endDate,
       Price: price,
       PaymentMethod: formData.payment,
       DiscountPercent: discount,
+      FamilyMembers:
+        formData.type === 'Family'
+          ? validatedFamilyMembers
+          : [],
     }
 
     try {
@@ -362,7 +575,10 @@ function Memberships() {
         ))}
       </div>
 
-      <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div
+        className="toolbar"
+        style={{ display: 'flex', gap: '12px', alignItems: 'center' }}
+      >
         <div style={{ flex: 1 }}>
           <label htmlFor="membership-search" className="sr-only">
             Search memberships
@@ -465,6 +681,11 @@ function Memberships() {
                   {member.phone && (
                     <div className="cell-sub mono">{member.phone}</div>
                   )}
+                  {member.type === 'Family' && member.familyMembers.length > 0 && (
+                    <div className="cell-sub">
+                      {member.familyMembers.length + 1} family members
+                    </div>
+                  )}
                 </td>
 
                 <td>
@@ -562,6 +783,36 @@ function Memberships() {
           </div>
 
           <div className="form-group">
+            <label htmlFor="membership-dob">Date of Birth</label>
+            <input
+              id="membership-dob"
+              name="dateOfBirth"
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={handleChange}
+              max={formData.startDate || undefined}
+              required={formData.type === 'Family' || formData.type === 'Senior'}
+            />
+          </div>
+
+          {formData.type === 'Student' && (
+            <div className="form-group">
+              <label htmlFor="membership-school-email">UH School Email</label>
+              <input
+                id="membership-school-email"
+                name="schoolEmail"
+                type="email"
+                maxLength={255}
+                placeholder="yourname@cougarnet.uh.edu"
+                value={formData.schoolEmail}
+                onChange={handleChange}
+                required
+              />
+              <small>Use your approved @cougarnet.uh.edu email address.</small>
+            </div>
+          )}
+
+          <div className="form-group">
             <label htmlFor="membership-type">Type</label>
             <select
               id="membership-type"
@@ -649,6 +900,102 @@ function Memberships() {
               <option value="Bank Transfer">Bank Transfer</option>
             </select>
           </div>
+
+          {formData.type === 'Family' && (
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <h3>Additional Family Members</h3>
+              <p>
+                The primary account holder must be at least 18. You can add
+                at most one additional adult and six children under 18.
+                Eight family members total are allowed, including the primary
+                account holder.
+              </p>
+
+              {formData.familyMembers.map((member, index) => (
+                <div
+                  key={member.FamilyMemberID || `new-${index}`}
+                  className="form-grid"
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div className="form-group">
+                    <label htmlFor={`family-first-${index}`}>
+                      Family Member {index + 1} First Name
+                    </label>
+                    <input
+                      id={`family-first-${index}`}
+                      type="text"
+                      maxLength={100}
+                      value={member.FirstName}
+                      onChange={(e) =>
+                        handleFamilyMemberChange(index, 'FirstName', e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor={`family-last-${index}`}>
+                      Last Name
+                    </label>
+                    <input
+                      id={`family-last-${index}`}
+                      type="text"
+                      maxLength={100}
+                      value={member.LastName}
+                      onChange={(e) =>
+                        handleFamilyMemberChange(index, 'LastName', e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor={`family-dob-${index}`}>
+                      Date of Birth
+                    </label>
+                    <input
+                      id={`family-dob-${index}`}
+                      type="date"
+                      value={member.DateOfBirth}
+                      max={formData.startDate || undefined}
+                      onChange={(e) =>
+                        handleFamilyMemberChange(index, 'DateOfBirth', e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ alignSelf: 'end' }}>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => removeFamilyMember(index)}
+                    >
+                      Remove Member
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={addFamilyMember}
+                disabled={formData.familyMembers.length >= 7}
+              >
+                Add Family Member
+              </button>
+
+              <p>
+                Total family members: {1 + formData.familyMembers.length} / 8
+              </p>
+            </div>
+          )}
 
           <div className="form-actions">
             <button
