@@ -195,7 +195,7 @@ function AboutPage(){
               <span>{type}</span>
               <span className="ab-price">
                 {formatPrice(price)}
-                <span className="ab-suffix">/ year</span>
+                <span className="ab-suffix">/ </span>
               </span>
             </li>
           ))}
