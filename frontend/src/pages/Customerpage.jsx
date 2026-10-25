@@ -26,6 +26,21 @@ const TICKET_STATUS = {
   Refunded: { label: 'Refunded', variant: 'completed' },
 }
 
+const WAITLIST_STATUS = {
+  Waiting: { label: 'Waiting', variant: 'upcoming' },
+  Notified: { label: 'Spot opened', variant: 'active' },
+  Claimed: { label: 'Ticket bought', variant: 'completed' },
+  Cancelled: { label: 'Left waitlist', variant: 'expired' },
+}
+
+function waitlistStatus(entry){
+  if(entry.Status === 'Cancelled' && entry.ExhibitionCancelled){
+    return { label: 'Exhibition cancelled', variant: 'cancelled' }
+  }
+
+  return WAITLIST_STATUS[entry.Status]
+}
+
 function money(value){
   return `$${Number(value).toFixed(2)}`
 }
@@ -333,7 +348,7 @@ function MembershipTab({ account, onChanged }){
 
 function PurchasesTab({ purchases }){
   const [view, setView] = useState('tickets')
-  const { tickets, orders } = purchases
+  const { tickets, orders, waitlist } = purchases
 
   return (
     <section className="cp-card">
@@ -356,6 +371,14 @@ function PurchasesTab({ purchases }){
             onClick={()=>setView('orders')}
           >
             Gift Shop
+          </button>
+          <button
+            type="button"
+            className={view === 'waitlist' ? 'is-active' : ''}
+            aria-pressed={view === 'waitlist'}
+            onClick={()=>setView('waitlist')}
+          >
+            Waitlist
           </button>
         </div>
       </div>
@@ -425,6 +448,39 @@ function PurchasesTab({ purchases }){
           </div>
         )
       )}
+
+      {view === 'waitlist' && (
+        waitlist.length === 0 ? (
+          <p className="cp-empty">You haven't joined any waitlists yet.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Exhibition</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Joined</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waitlist.map((entry)=>(
+                  <tr key={entry.WaitlistID}>
+                    <td className="strong">{entry.ExhibitionName}</td>
+                    <td>{entry.TicketType}</td>
+                    <td>{formatDate(entry.JoinedAt)}</td>
+                    <td>
+                      <span className={`badge badge-${waitlistStatus(entry).variant}`}>
+                        {waitlistStatus(entry).label}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
     </section>
   )
 }
@@ -439,7 +495,7 @@ function TicketsTab({ data, onBought }){
   const [waitTypes, setWaitTypes] = useState({})
   const [waiting, setWaiting] = useState(false)
 
-  const { exhibitions, waitlist, prices, discount } = data
+  const { exhibitions, waitlist, prices, discount, waitlistLimit } = data
   const types = Object.keys(prices)
   const selected = exhibitions.find((item)=>item.ExhibitionID === exhibitionId)
 
@@ -542,7 +598,7 @@ function TicketsTab({ data, onBought }){
                   <span className="cp-option-name">{item.Name}</span>
                   {item.Description && <span className="cp-option-text">{item.Description}</span>}
                   <span className="cp-option-meta">
-                    Until {formatDate(item.EndDate)} · Sold out
+                    Until {formatDate(item.EndDate)} · Sold out · Waitlist {item.WaitlistCount} of {waitlistLimit}
                   </span>
 
                   <div className="cp-waitlist">
@@ -558,6 +614,8 @@ function TicketsTab({ data, onBought }){
                           Leave
                         </button>
                       </>
+                    ) : item.WaitlistFull ? (
+                      <span>The waitlist is full</span>
                     ) : (
                       <>
                         <select

@@ -5,7 +5,7 @@ const selectArtworks = `
     artwork.ArtworkID,
     artwork.Title,
     artwork.Type,
-    DATE_FORMAT(artwork.DateCreated, '%Y-%m-%d') AS DateCreated,
+    artwork.YearCreated,
     artwork.ArtistID,
     CONCAT(artist.FirstName, ' ', artist.LastName) AS ArtistName,
     artwork.CollectionID,
@@ -39,22 +39,16 @@ function checkText(value, fieldName) {
   return value.trim();
 }
 
-function checkDate(value, fieldName) {
-  if (typeof value !== "string") {
-    throw makeError(400, fieldName + " must be a date like 1900-01-31");
+function checkYear(value, fieldName) {
+  if (!Number.isInteger(value)) {
+    throw makeError(400, fieldName + " must be a whole year like 1900");
   }
 
-  const date = new Date(value);
-  if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw makeError(400, fieldName + " must be a real date like 1900-01-31");
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  if (value > today) {
+  if (value > new Date().getFullYear()) {
     throw makeError(400, fieldName + " cannot be in the future");
   }
-  if (value < "1000-01-01") {
-    throw makeError(400, fieldName + " cannot be before 1000-01-01");
+  if (value < 1000) {
+    throw makeError(400, fieldName + " cannot be before 1000");
   }
 
   return value;
@@ -81,10 +75,10 @@ async function checkArtwork(body) {
   artwork.Title = checkText(body.Title, "Title");
   artwork.Type = checkText(body.Type, "Type");
 
-  if (body.DateCreated === undefined || body.DateCreated === null || body.DateCreated === "") {
-    throw makeError(400, "DateCreated is required");
+  if (body.YearCreated === undefined || body.YearCreated === null || body.YearCreated === "") {
+    throw makeError(400, "YearCreated is required");
   }
-  artwork.DateCreated = checkDate(body.DateCreated, "DateCreated");
+  artwork.YearCreated = checkYear(body.YearCreated, "YearCreated");
 
   artwork.ArtistID = checkWholeNumber(body.ArtistID, "ArtistID");
   const [artists] = await pool.query(
@@ -125,12 +119,12 @@ async function addArtwork(params, body, staffId) {
 
   const [result] = await pool.query(
     `INSERT INTO artwork
-      (Title, Type, DateCreated, ArtistID, CollectionID, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
+      (Title, Type, YearCreated, ArtistID, CollectionID, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
      VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?, ?)`,
     [
       artwork.Title,
       artwork.Type,
-      artwork.DateCreated,
+      artwork.YearCreated,
       artwork.ArtistID,
       artwork.CollectionID,
       staffId,
@@ -153,9 +147,9 @@ async function updateArtwork(params, body, staffId) {
 
   await pool.query(
     `UPDATE artwork
-     SET Title = ?, Type = ?, DateCreated = ?, ArtistID = ?, CollectionID = ?, UpdatedAt = NOW(), UpdatedBy = ?
+     SET Title = ?, Type = ?, YearCreated = ?, ArtistID = ?, CollectionID = ?, UpdatedAt = NOW(), UpdatedBy = ?
      WHERE ArtworkID = ?`,
-    [artwork.Title, artwork.Type, artwork.DateCreated, artwork.ArtistID, artwork.CollectionID, staffId, id]
+    [artwork.Title, artwork.Type, artwork.YearCreated, artwork.ArtistID, artwork.CollectionID, staffId, id]
   );
 
   const updatedArtwork = await findArtwork(id);

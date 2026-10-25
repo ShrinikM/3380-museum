@@ -24,14 +24,11 @@ cd frontend && npm run dev
 
 Demo Logins:
 
-Username: admin 
+Username: admin@demo.test 
 Password: admin123 
 
-Username: staff 
-Password: staff123 
+Username: staff@demo.test 
+Password: staff123  
 
-Username: operator 
-Password: operator123 
-
-Username: customer
-Password: customer123
+Username: customer@demo.test 
+Password: customer123 

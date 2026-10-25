@@ -1022,6 +1022,27 @@ textarea.input {
   }
 }
 
+.data-table th.center-cell,
+.data-table td.center-cell {
+  text-align: center;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.status-dot.is-on {
+  background: var(--success);
+}
+
+.status-dot.is-off {
+  background: var(--danger);
+}
+
 .cell-sub {
   max-width: 320px;
   overflow: hidden;

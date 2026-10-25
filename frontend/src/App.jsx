@@ -42,10 +42,10 @@ function NotFound() {
   )
 }
 
-function PublicLayout() {
+function PublicLayout({ alerts }) {
   return (
     <>
-      <PublicNavbar />
+      <PublicNavbar alerts={alerts} />
 
       <main className="public-main">
         <Outlet />
@@ -63,13 +63,15 @@ function App() {
   const isCustomer = user !== null && user.role === 'Customer'
 
   useEffect(() => {
-    if (user === null || user.role === 'Customer') {
+    if (user === null) {
       return
     }
 
+    const url = user.role === 'Customer' ? '/api/customer/alerts' : '/api/alerts'
+
     async function loadAlerts() {
       try {
-        const data = await callApi('/api/alerts', 'GET')
+        const data = await callApi(url, 'GET')
         setAlerts(data)
       } catch {
         setAlerts([])
@@ -77,7 +79,25 @@ function App() {
     }
 
     loadAlerts()
+
+    const timer = setInterval(loadAlerts, 30000)
+    window.addEventListener('refresh-alerts', loadAlerts)
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('refresh-alerts', loadAlerts)
+    }
   }, [user, location.pathname])
+
+  const visibleAlerts = []
+
+  for (const alert of alerts) {
+    const path = alert.Paths.find((item) => canView(item))
+
+    if (path !== undefined) {
+      visibleAlerts.push({ Path: path, Message: alert.Message })
+    }
+  }
 
   if (user === null) {
     return (
@@ -100,7 +120,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Navigate to="/account" replace />} />
 
-        <Route element={<PublicLayout />}>
+        <Route element={<PublicLayout alerts={visibleAlerts} />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
@@ -111,8 +131,6 @@ function App() {
       </Routes>
     )
   }
-
-  const visibleAlerts = alerts.filter((alert) => canView(alert.Path))
 
   const protect = (path, page) => {
     return canView(path) ? page : <NoAccess />

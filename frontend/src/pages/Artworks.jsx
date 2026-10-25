@@ -9,7 +9,7 @@ function Artworks() {
   const { user, canEdit } = useRole()
   const allowEdit = canEdit('/artworks')
   const showAudit = user.role === 'Admin'
-  const today = new Date().toISOString().split('T')[0]
+  const currentYear = new Date().getFullYear()
 
   const [artworks, setArtworks] = useState([])
   const [artists, setArtists] = useState([])
@@ -26,7 +26,7 @@ function Artworks() {
     Type: '',
     ArtistID: '',
     CollectionID: '',
-    DateCreated: '',
+    YearCreated: '',
   })
 
   useEffect(() => {
@@ -65,7 +65,7 @@ function Artworks() {
       Type: '',
       ArtistID: '',
       CollectionID: '',
-      DateCreated: '',
+      YearCreated: '',
     })
   }
 
@@ -81,9 +81,7 @@ function Artworks() {
       Type: artwork.Type || '',
       ArtistID: String(artwork.ArtistID ?? ''),
       CollectionID: String(artwork.CollectionID ?? ''),
-      DateCreated: artwork.DateCreated
-        ? artwork.DateCreated.split('T')[0]
-        : '',
+      YearCreated: String(artwork.YearCreated ?? ''),
     })
 
     setEditingId(artwork.ArtworkID)
@@ -93,8 +91,8 @@ function Artworks() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (formData.DateCreated > today) {
-      alert('Date Created cannot be in the future.')
+    if (Number(formData.YearCreated) > currentYear) {
+      alert('Year Created cannot be in the future.')
       return
     }
 
@@ -103,7 +101,7 @@ function Artworks() {
       Type: formData.Type,
       ArtistID: Number(formData.ArtistID),
       CollectionID: Number(formData.CollectionID),
-      DateCreated: formData.DateCreated,
+      YearCreated: Number(formData.YearCreated),
     }
 
     try {
@@ -261,7 +259,7 @@ function Artworks() {
               <th scope="col">Artist</th>
               <th scope="col">Collection</th>
               <th scope="col">Type</th>
-              <th scope="col">Date Created</th>
+              <th scope="col">Year Created</th>
               {showAudit && <th scope="col">Created By</th>}
               {showAudit && <th scope="col">Last Updated By</th>}
             </tr>
@@ -297,9 +295,7 @@ function Artworks() {
                 </td>
 
                 <td className="mono">
-                  {item.DateCreated
-                    ? item.DateCreated.split('T')[0]
-                    : '-'}
+                  {item.YearCreated ?? '-'}
                 </td>
 
                 {showAudit && <td>{item.CreatedByName || '-'}</td>}
@@ -404,13 +400,15 @@ function Artworks() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="artwork-date-created">Date Created</label>
+            <label htmlFor="artwork-year-created">Year Created</label>
             <input
-              id="artwork-date-created"
-              name="DateCreated"
-              type="date"
-              max={today}
-              value={formData.DateCreated}
+              id="artwork-year-created"
+              name="YearCreated"
+              type="number"
+              min="1000"
+              max={currentYear}
+              step="1"
+              value={formData.YearCreated}
               onChange={handleChange}
               required
             />

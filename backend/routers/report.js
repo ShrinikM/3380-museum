@@ -65,7 +65,7 @@ async function getCollectionReport(params, body, staffId) {
        artwork.ArtworkID,
        artwork.Title,
        artwork.Type,
-       DATE_FORMAT(artwork.DateCreated, '%Y-%m-%d') AS DateCreated,
+       artwork.YearCreated,
        CONCAT(artist.FirstName, ' ', artist.LastName) AS ArtistName,
        collection.Name AS CollectionName,
        DATE_FORMAT(artwork.CreatedAt, '%Y-%m-%d') AS DateAdded

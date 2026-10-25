@@ -32,5 +32,9 @@ export async function callApi(url, method, body) {
     throw new Error(data.error || 'Could not reach the server')
   }
 
+  if (method !== 'GET') {
+    window.dispatchEvent(new Event('refresh-alerts'))
+  }
+
   return data
 }

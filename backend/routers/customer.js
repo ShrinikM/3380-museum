@@ -15,6 +15,8 @@ const membershipPayments = ["Credit Card", "Debit Card"];
 
 const maxPerOrder = 20;
 
+const waitlistLimit = 10;
+
 function makeError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -478,7 +480,9 @@ async function getPurchases(params, body, customerId) {
        t.Price,
        t.RefundStatus,
        t.NotificationStatus,
-       DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate
+       DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate,
+       DATE_FORMAT(t.UpdatedAt, '%Y-%m-%d') AS UpdatedAt,
+       DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
@@ -505,6 +509,23 @@ async function getPurchases(params, body, customerId) {
     [customerId]
   );
 
+  const [waitlist] = await pool.query(
+    `SELECT
+       w.WaitlistID,
+       e.Name AS ExhibitionName,
+       w.TicketType,
+       w.Status,
+       e.CancelledAt IS NOT NULL AS ExhibitionCancelled,
+       DATE_FORMAT(w.CreatedAt, '%Y-%m-%d') AS JoinedAt,
+       DATE_FORMAT(w.NotifiedAt, '%Y-%m-%d') AS NotifiedAt
+     FROM waitlist w
+     JOIN exhibition e
+       ON e.ExhibitionID = w.ExhibitionID
+     WHERE w.CustomerID = ?
+     ORDER BY w.WaitlistID DESC`,
+    [customerId]
+  );
+
   return {
     status: 200,
     data: {
@@ -519,8 +540,73 @@ async function getPurchases(params, body, customerId) {
         Quantity: Number(order.Quantity),
         Total: money(order.Total),
       })),
+      waitlist: waitlist.map((entry) => ({
+        ...entry,
+        WaitlistID: Number(entry.WaitlistID),
+        ExhibitionCancelled: Number(entry.ExhibitionCancelled) === 1,
+      })),
     },
   };
+}
+
+async function getMyAlerts(params, body, customerId) {
+  await findCustomer(customerId);
+  const alerts = [];
+
+  const [cancelled] = await pool.query(
+    `SELECT
+       e.Name,
+       SUM(t.RefundStatus = 'Pending') AS Pending,
+       SUM(t.RefundStatus = 'Refunded') AS Refunded
+     FROM ticket t
+     JOIN exhibition e
+       ON e.ExhibitionID = t.ExhibitionID
+     WHERE t.IsDeleted = 0
+       AND t.CustomerID = ?
+       AND t.NotificationStatus = 'Sent'
+       AND e.CancelledAt IS NOT NULL
+       AND t.UpdatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+     GROUP BY e.ExhibitionID, e.Name
+     ORDER BY e.Name`,
+    [customerId]
+  );
+
+  for (const item of cancelled) {
+    const parts = [];
+
+    if (Number(item.Pending) > 0) {
+      parts.push(Number(item.Pending) + " refund pending");
+    }
+
+    if (Number(item.Refunded) > 0) {
+      parts.push(Number(item.Refunded) + " refunded");
+    }
+
+    alerts.push({
+      Paths: ["/account"],
+      Message: item.Name + " was cancelled: " + parts.join(", "),
+    });
+  }
+
+  const [spots] = await pool.query(
+    `SELECT e.Name
+     FROM waitlist w
+     JOIN exhibition e
+       ON e.ExhibitionID = w.ExhibitionID
+     WHERE w.CustomerID = ?
+       AND w.Status = 'Notified'
+     ORDER BY w.WaitlistID`,
+    [customerId]
+  );
+
+  for (const spot of spots) {
+    alerts.push({
+      Paths: ["/account"],
+      Message: "A spot opened up for " + spot.Name,
+    });
+  }
+
+  return { status: 200, data: alerts };
 }
 
 async function getExhibitions(params, body, customerId) {
@@ -542,7 +628,13 @@ async function getExhibitions(params, body, customerId) {
              AND t.RefundStatus <> 'Refunded'
          ),
          0
-       ) AS Remaining
+       ) AS Remaining,
+       (
+         SELECT COUNT(*)
+         FROM waitlist w
+         WHERE w.ExhibitionID = e.ExhibitionID
+           AND w.Status IN ('Waiting', 'Notified')
+       ) AS WaitlistCount
      FROM exhibition e
      WHERE ${openExhibition}
      ORDER BY e.EndDate, e.Name`
@@ -571,6 +663,8 @@ async function getExhibitions(params, body, customerId) {
         ...exhibition,
         ExhibitionID: Number(exhibition.ExhibitionID),
         Remaining: Number(exhibition.Remaining),
+        WaitlistCount: Number(exhibition.WaitlistCount),
+        WaitlistFull: Number(exhibition.WaitlistCount) >= waitlistLimit,
       })),
       waitlist: waitlist.map((entry) => ({
         ...entry,
@@ -579,6 +673,7 @@ async function getExhibitions(params, body, customerId) {
       })),
       prices: ticketPrices,
       discount: getDiscount(membership),
+      waitlistLimit: waitlistLimit,
     },
   };
 }
@@ -967,6 +1062,12 @@ module.exports = [
     method: "GET",
     path: "/api/customer/purchases",
     handler: getPurchases,
+    needsCustomer: true,
+  },
+  {
+    method: "GET",
+    path: "/api/customer/alerts",
+    handler: getMyAlerts,
     needsCustomer: true,
   },
   {

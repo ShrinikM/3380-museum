@@ -1,9 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useRole } from '../context/role'
+import AlertBell from './AlertBell'
 
 const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
 
-function PublicNavbar(){
+function PublicNavbar({ alerts }){
   const { user, logout } = useRole()
   const navigate = useNavigate()
 
@@ -42,6 +43,8 @@ function PublicNavbar(){
           </NavLink>
         ) : (
           <>
+            {user.role === 'Customer' && <AlertBell alerts={alerts} />}
+
             <NavLink to="/account" className="navbar-link">
               My Account
             </NavLink>

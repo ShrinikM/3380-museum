@@ -45,25 +45,19 @@ function Login() {
       return
     }
 
-    const name = username.trim()
+    const email = username.trim().toLowerCase()
 
-    if (name.includes('@')) {
-      setBusy(true)
-
-      try {
-        await loginCustomer(name, password)
-      } catch (err) {
-        setError(err.message)
-        setBusy(false)
-      }
-
+    if (login(email, password)) {
       return
     }
 
-    const success = login(name, password)
+    setBusy(true)
 
-    if (!success) {
-      setError('Wrong username or password.')
+    try {
+      await loginCustomer(email, password)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
     }
   }
 
@@ -127,10 +121,11 @@ function Login() {
 
             {mode === 'login' && (
               <div className="form-group">
-                <label htmlFor="login-username">Username or email</label>
+                <label htmlFor="login-username">Email</label>
                 <input
                   id="login-username"
-                  autoComplete="username"
+                  type="email"
+                  autoComplete="email"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
@@ -175,7 +170,7 @@ function Login() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="register-phone">Phone (optional)</label>
+                  <label htmlFor="register-phone">Phone</label>
                   <input
                     id="register-phone"
                     type="tel"

@@ -315,6 +315,34 @@ async function getRefunds() {
   };
 }
 
+async function getWaitlists() {
+  const [rows] = await pool.query(
+    `SELECT
+       e.ExhibitionID,
+       e.Name AS ExhibitionName,
+       SUM(w.Status = 'Waiting') AS Waiting,
+       SUM(w.Status = 'Notified') AS Notified
+     FROM exhibition e
+     JOIN waitlist w
+       ON w.ExhibitionID = e.ExhibitionID
+     WHERE e.IsDeleted = 0
+       AND e.CancelledAt IS NULL
+       AND w.Status IN ('Waiting', 'Notified')
+     GROUP BY e.ExhibitionID, e.Name
+     ORDER BY e.Name`
+  );
+
+  return {
+    status: 200,
+    data: rows.map((row) => ({
+      ...row,
+      ExhibitionID: Number(row.ExhibitionID),
+      Waiting: Number(row.Waiting),
+      Notified: Number(row.Notified),
+    })),
+  };
+}
+
 async function sendNotices(params) {
   const id = checkExhibitionId(params);
 
@@ -369,6 +397,11 @@ module.exports = [
     method: "GET",
     path: "/api/tickets/refunds",
     handler: getRefunds,
+  },
+  {
+    method: "GET",
+    path: "/api/tickets/waitlist",
+    handler: getWaitlists,
   },
   {
     method: "POST",

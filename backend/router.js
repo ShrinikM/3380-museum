@@ -75,26 +75,33 @@ function readBody(req) {
 const knownStaff = new Map();
 
 async function getActor(req) {
-  const username = req.headers["x-username"];
+  const header = req.headers["x-username"];
 
-  if (typeof username !== "string" || username.trim() === "") {
+  if (typeof header !== "string" || header.trim() === "") {
     throw makeError(401, "You must be logged in to make changes");
   }
 
-  if (knownStaff.has(username)) {
-    return knownStaff.get(username);
+  const email = header.trim().toLowerCase();
+
+  if (knownStaff.has(email)) {
+    return knownStaff.get(email);
   }
 
   const [rows] = await pool.query(
-    "SELECT StaffID FROM staffcredentials WHERE Username = ?",
-    [username]
+    `SELECT sc.StaffID
+     FROM staffcredentials sc
+     JOIN staff s
+       ON s.StaffID = sc.StaffID
+     WHERE s.Email = ?
+       AND s.IsDeleted = 0`,
+    [email]
   );
 
   if (rows.length === 0) {
     throw makeError(401, "Unknown user");
   }
 
-  knownStaff.set(username, rows[0].StaffID);
+  knownStaff.set(email, rows[0].StaffID);
   return rows[0].StaffID;
 }
 

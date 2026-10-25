@@ -67,7 +67,7 @@ export const ROLES = {
 }
 
 export const DEMO_LOGINS = [
-  { username: 'admin', password: 'admin123', role: 'Admin' },
-  { username: 'staff', password: 'staff123', role: 'Staff' },
-  { username: 'operator', password: 'operator123', role: 'Operator' }
+  { username: 'admin@demo.test', password: 'admin123', role: 'Admin' },
+  { username: 'staff@demo.test', password: 'staff123', role: 'Staff' },
+  { username: 'operator@demo.test', password: 'operator123', role: 'Operator' }
 ]

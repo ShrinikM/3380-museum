@@ -1,14 +1,12 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Bell } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useRole } from '../context/role'
+import AlertBell from './AlertBell'
 
 const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
 
 function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
   const { user, logout } = useRole()
   const navigate = useNavigate()
-  const [alertsOpen, setAlertsOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -36,39 +34,7 @@ function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
       </div>
 
       <div className="navbar-right">
-        <div className="bell-wrap">
-          <button
-            type="button"
-            className="bell-btn"
-            onClick={() => setAlertsOpen(!alertsOpen)}
-            aria-label="Alerts"
-          >
-            <Bell size={20} />
-
-            {alerts.length > 0 && (
-              <span className="bell-count">{alerts.length}</span>
-            )}
-          </button>
-
-          {alertsOpen && (
-            <div className="bell-menu">
-              {alerts.length === 0 && (
-                <div className="bell-empty">No alerts</div>
-              )}
-
-              {alerts.map((alert, index) => (
-                <Link
-                  key={index}
-                  to={alert.Path}
-                  className="bell-item"
-                  onClick={() => setAlertsOpen(false)}
-                >
-                  {alert.Message}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        <AlertBell alerts={alerts} />
 
         <div className="user">
           <span className="avatar">

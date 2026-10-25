@@ -34,6 +34,7 @@ function Tickets() {
 
   const [tickets, setTickets] = useState([])
   const [refunds, setRefunds] = useState([])
+  const [waitlists, setWaitlists] = useState([])
   const [exhibitions, setExhibitions] = useState([])
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
@@ -51,10 +52,11 @@ function Tickets() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [ticketsData, exhibitionsData, refundsData] = await Promise.all([
+        const [ticketsData, exhibitionsData, refundsData, waitlistData] = await Promise.all([
           callApi('/api/tickets', 'GET'),
           callApi('/api/exhibitions', 'GET'),
           callApi('/api/tickets/refunds', 'GET'),
+          callApi('/api/tickets/waitlist', 'GET'),
         ])
 
         setTickets(
@@ -66,6 +68,7 @@ function Tickets() {
 
         setExhibitions(exhibitionsData)
         setRefunds(refundsData)
+        setWaitlists(waitlistData)
         setLoadError('')
       } catch (err) {
         setLoadError('Could not load tickets: ' + err.message)
@@ -442,6 +445,34 @@ function Tickets() {
         </div>
       )}
 
+      {waitlists.length > 0 && (
+        <div className="card table-wrap section-gap-sm">
+          <h2 style={{ fontSize: '16px', margin: '16px 16px 4px' }}>
+            Waitlists
+          </h2>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Exhibition</th>
+                <th scope="col">Waiting</th>
+                <th scope="col">Spot Opened</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {waitlists.map((item) => (
+                <tr key={item.ExhibitionID}>
+                  <td className="strong">{item.ExhibitionName}</td>
+                  <td>{item.Waiting}</td>
+                  <td>{item.Notified}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <label htmlFor="ticket-search" className="sr-only">
@@ -544,9 +575,9 @@ function Tickets() {
               <th scope="col">Price</th>
               <th scope="col">Sale Date</th>
               <th scope="col">Customer</th>
-              <th scope="col">Membership</th>
-              <th scope="col">Refund</th>
-              <th scope="col">Notice</th>
+              <th scope="col" className="center-cell">Membership</th>
+              <th scope="col" className="center-cell">Refund</th>
+              <th scope="col" className="center-cell">Notice</th>
             </tr>
           </thead>
 
@@ -598,34 +629,53 @@ function Tickets() {
                     )}
                   </td>
 
-                  <td>
+                  <td className="center-cell">
                     {ticket.MembershipName ? (
                       <span className="chip chip-primary">
                         {ticket.MembershipName}
                       </span>
                     ) : (
-                      <span className="muted">-</span>
-                    )}
-                  </td>
-
-                  <td>
-                    {ticket.RefundStatus === 'None' ? (
-                      <span className="muted">-</span>
-                    ) : (
-                      <Badge
-                        variant={ticket.RefundStatus === 'Pending' ? 'upcoming' : 'completed'}
-                        label={ticket.RefundStatus}
+                      <span
+                        className="status-dot is-off"
+                        role="img"
+                        aria-label="No membership"
+                        title="No membership"
                       />
                     )}
                   </td>
 
-                  <td>
-                    {ticket.NotificationStatus === 'None' ? (
-                      <span className="muted">-</span>
+                  <td className="center-cell">
+                    {ticket.RefundStatus === 'None' ? (
+                      <span
+                        className="status-dot is-off"
+                        role="img"
+                        aria-label="No refund"
+                        title="No refund"
+                      />
                     ) : (
-                      <Badge
-                        variant={ticket.NotificationStatus === 'Pending' ? 'upcoming' : 'active'}
-                        label={ticket.NotificationStatus}
+                      <span
+                        className="status-dot is-on"
+                        role="img"
+                        aria-label={ticket.RefundStatus}
+                        title={ticket.RefundStatus}
+                      />
+                    )}
+                  </td>
+
+                  <td className="center-cell">
+                    {ticket.NotificationStatus === 'None' ? (
+                      <span
+                        className="status-dot is-off"
+                        role="img"
+                        aria-label="No notice"
+                        title="No notice"
+                      />
+                    ) : (
+                      <span
+                        className="status-dot is-on"
+                        role="img"
+                        aria-label={ticket.NotificationStatus}
+                        title={ticket.NotificationStatus}
                       />
                     )}
                   </td>

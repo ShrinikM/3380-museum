@@ -553,9 +553,6 @@ function Exhibitions() {
                       variant={exhibition.Status || 'unknown'}
                       label={exhibition.Status || 'Unknown'}
                     />
-                    {exhibition.Status === 'cancelled' && exhibition.CancellationReason && (
-                      <div className="cell-sub">{exhibition.CancellationReason}</div>
-                    )}
                   </td>
                 </tr>
               ))}

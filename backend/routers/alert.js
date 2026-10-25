@@ -1,23 +1,5 @@
 const pool = require("../db");
 
-async function getSmallCollections() {
-  const [rows] = await pool.query(
-    `SELECT
-       collection.Name,
-       COUNT(artwork.ArtworkID) AS ArtworkCount
-     FROM collection
-     LEFT JOIN artwork
-       ON artwork.CollectionID = collection.CollectionID
-       AND artwork.IsDeleted = 0
-     WHERE collection.IsDeleted = 0
-     GROUP BY collection.CollectionID, collection.Name
-     HAVING COUNT(artwork.ArtworkID) < 2
-     ORDER BY collection.Name`
-  );
-
-  return rows;
-}
-
 async function getCancelledExhibitions() {
   const [rows] = await pool.query(
     `SELECT
@@ -38,21 +20,32 @@ async function getCancelledExhibitions() {
   return rows;
 }
 
+async function getWaitlists() {
+  const [rows] = await pool.query(
+    `SELECT
+       e.Name,
+       SUM(w.Status = 'Waiting') AS Waiting,
+       SUM(w.Status = 'Notified') AS Notified
+     FROM exhibition e
+     JOIN waitlist w
+       ON w.ExhibitionID = e.ExhibitionID
+     WHERE e.IsDeleted = 0
+       AND e.CancelledAt IS NULL
+       AND w.Status IN ('Waiting', 'Notified')
+     GROUP BY e.ExhibitionID, e.Name
+     ORDER BY e.Name`
+  );
+
+  return rows;
+}
+
 async function getAlerts() {
   const alerts = [];
-
-  const smallCollections = await getSmallCollections();
-  for (const collection of smallCollections) {
-    alerts.push({
-      Path: "/collections",
-      Message: collection.Name + " needs at least 2 artworks",
-    });
-  }
 
   const cancelledExhibitions = await getCancelledExhibitions();
   for (const exhibition of cancelledExhibitions) {
     alerts.push({
-      Path: "/tickets",
+      Paths: ["/tickets", "/exhibitions"],
       Message:
         exhibition.Name +
         " was cancelled: " +
@@ -60,6 +53,20 @@ async function getAlerts() {
         " to notify, " +
         Number(exhibition.PendingRefunds) +
         " refunds pending",
+    });
+  }
+
+  const waitlists = await getWaitlists();
+  for (const waitlist of waitlists) {
+    alerts.push({
+      Paths: ["/tickets"],
+      Message:
+        waitlist.Name +
+        " waitlist: " +
+        Number(waitlist.Waiting) +
+        " waiting, " +
+        Number(waitlist.Notified) +
+        " notified",
     });
   }
 
