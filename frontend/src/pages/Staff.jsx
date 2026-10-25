@@ -4,7 +4,7 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 
-const ROLE_OPTIONS = ['Admin', 'Staff', 'Operator']
+const ROLE_OPTIONS = ['Admin', 'Staff']
 
 const DEPARTMENT_OPTIONS = [
   'Administration',
@@ -208,7 +208,7 @@ function Staff() {
   }
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <div className="page-header">
         <div>
           <h1 className="page-title">Staff</h1>

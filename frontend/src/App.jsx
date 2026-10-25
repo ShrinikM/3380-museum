@@ -42,10 +42,18 @@ function NotFound() {
   )
 }
 
-function PublicLayout({ alerts }) {
+function getReadAlerts(user) {
+  try {
+    return JSON.parse(localStorage.getItem('readAlerts-' + user.username)) || []
+  } catch {
+    return []
+  }
+}
+
+function PublicLayout({ alerts, onMarkAllRead }) {
   return (
     <>
-      <PublicNavbar alerts={alerts} />
+      <PublicNavbar alerts={alerts} onMarkAllRead={onMarkAllRead} />
 
       <main className="public-main">
         <Outlet />
@@ -58,6 +66,7 @@ function App() {
   const { user, canView } = useRole()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [alerts, setAlerts] = useState([])
+  const [, setReadCount] = useState(0)
   const location = useLocation()
 
   const isCustomer = user !== null && user.role === 'Customer'
@@ -89,14 +98,27 @@ function App() {
     }
   }, [user, location.pathname])
 
-  const visibleAlerts = []
+  const viewableAlerts = []
 
   for (const alert of alerts) {
     const path = alert.Paths.find((item) => canView(item))
 
     if (path !== undefined) {
-      visibleAlerts.push({ Path: path, Message: alert.Message })
+      viewableAlerts.push({ Path: path, Message: alert.Message })
     }
+  }
+
+  const readAlerts = user === null ? [] : getReadAlerts(user)
+
+  const visibleAlerts = viewableAlerts.filter(
+    (alert) => !readAlerts.includes(alert.Message)
+  )
+
+  const markAllRead = () => {
+    const messages = viewableAlerts.map((alert) => alert.Message)
+
+    localStorage.setItem('readAlerts-' + user.username, JSON.stringify(messages))
+    setReadCount((count) => count + 1)
   }
 
   if (user === null) {
@@ -120,7 +142,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Navigate to="/account" replace />} />
 
-        <Route element={<PublicLayout alerts={visibleAlerts} />}>
+        <Route element={<PublicLayout alerts={visibleAlerts} onMarkAllRead={markAllRead} />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
@@ -140,6 +162,7 @@ function App() {
     <>
       <Navbar
         alerts={visibleAlerts}
+        onMarkAllRead={markAllRead}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
       />

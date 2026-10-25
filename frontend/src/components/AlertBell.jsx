@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 
-function AlertBell({ alerts }) {
+function AlertBell({ alerts, onMarkAllRead }) {
   const [alertsOpen, setAlertsOpen] = useState(false)
 
   return (
@@ -23,7 +23,20 @@ function AlertBell({ alerts }) {
       {alertsOpen && (
         <div className="bell-menu">
           {alerts.length === 0 && (
-            <div className="bell-empty">No alerts</div>
+            <div className="bell-empty">No new alerts</div>
+          )}
+
+          {alerts.length > 0 && (
+            <button
+              type="button"
+              className="bell-read"
+              onClick={() => {
+                onMarkAllRead()
+                setAlertsOpen(false)
+              }}
+            >
+              Mark all as read
+            </button>
           )}
 
           {alerts.map((alert, index) => (

@@ -325,7 +325,7 @@ function StorePage({ kind }){
   const submitLabel = isNew ? modalTitle : 'Save Changes'
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <div className="page-header">
         <h1 className="page-title">{store.title}</h1>
 

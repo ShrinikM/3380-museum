@@ -390,6 +390,11 @@ textarea:focus-visible {
   padding: 32px;
 }
 
+.page.page-wide {
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
 .page-header {
   display: flex;
   align-items: flex-start;
@@ -2035,6 +2040,20 @@ input[type='radio'] {
   display: block;
   padding: 10px 14px;
   font-size: 13px;
+}
+
+.bell-read {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  cursor: pointer;
 }
 
 .bell-item {

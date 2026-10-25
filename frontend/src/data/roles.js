@@ -44,22 +44,6 @@ export const ROLES = {
     ],
   },
 
-  Operator: {
-    pages: [
-      '/dashboard',
-      '/exhibitions',
-      '/tickets',
-      '/memberships',
-      '/gift-shop',
-      '/cafe',
-    ],
-    edit: [
-      '/tickets',
-      '/gift-shop',
-      '/cafe',
-    ],
-  },
-
   Customer: {
     pages: ['/account'],
     edit: [],
@@ -69,5 +53,4 @@ export const ROLES = {
 export const DEMO_LOGINS = [
   { username: 'admin@demo.test', password: 'admin123', role: 'Admin' },
   { username: 'staff@demo.test', password: 'staff123', role: 'Staff' },
-  { username: 'operator@demo.test', password: 'operator123', role: 'Operator' }
 ]

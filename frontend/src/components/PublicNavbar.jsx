@@ -4,7 +4,7 @@ import AlertBell from './AlertBell'
 
 const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
 
-function PublicNavbar({ alerts }){
+function PublicNavbar({ alerts, onMarkAllRead }){
   const { user, logout } = useRole()
   const navigate = useNavigate()
 
@@ -43,7 +43,7 @@ function PublicNavbar({ alerts }){
           </NavLink>
         ) : (
           <>
-            {user.role === 'Customer' && <AlertBell alerts={alerts} />}
+            {user.role === 'Customer' && <AlertBell alerts={alerts} onMarkAllRead={onMarkAllRead} />}
 
             <NavLink to="/account" className="navbar-link">
               My Account

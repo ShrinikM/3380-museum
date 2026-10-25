@@ -363,7 +363,7 @@ function Reports() {
     : null
 
   return (
-    <div className="page reports-page">
+    <div className="page page-wide reports-page">
       <div className="page-header">
         <h1 className="page-title">Reports</h1>
       </div>

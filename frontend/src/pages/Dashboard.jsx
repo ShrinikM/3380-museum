@@ -348,19 +348,6 @@ function Dashboard() {
       return renderAssignedExhibitionsPanel()
     }
 
-    if (dashboard.role === 'Operator') {
-      return (
-        <>
-          <div className="dash-main-grid">
-            {renderRevenuePanel()}
-            {renderCurrentExhibitionsPanel()}
-          </div>
-
-          {renderTopExhibitionsPanel()}
-        </>
-      )
-    }
-
     return (
       <>
         <div className="dash-main-grid">

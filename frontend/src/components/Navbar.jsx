@@ -4,7 +4,7 @@ import AlertBell from './AlertBell'
 
 const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
 
-function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
+function Navbar({ alerts, onMarkAllRead, onToggleSidebar, sidebarOpen }) {
   const { user, logout } = useRole()
   const navigate = useNavigate()
 
@@ -34,7 +34,7 @@ function Navbar({ alerts, onToggleSidebar, sidebarOpen }) {
       </div>
 
       <div className="navbar-right">
-        <AlertBell alerts={alerts} />
+        <AlertBell alerts={alerts} onMarkAllRead={onMarkAllRead} />
 
         <div className="user">
           <span className="avatar">

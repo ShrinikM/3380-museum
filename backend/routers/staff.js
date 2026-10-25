@@ -1,6 +1,6 @@
 const pool = require("../db");
 
-const roles = ["Admin", "Staff", "Operator"];
+const roles = ["Admin", "Staff"];
 
 const selectStaff = `
   SELECT
@@ -77,7 +77,7 @@ function checkStaff(body) {
 
   staff.Role = checkText(body.Role, "Role");
   if (!roles.includes(staff.Role)) {
-    throw makeError(400, "Role must be Admin, Staff or Operator");
+    throw makeError(400, "Role must be Admin or Staff");
   }
 
   if (body.StartDate === undefined || body.StartDate === null || body.StartDate === "") {

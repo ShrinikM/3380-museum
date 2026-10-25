@@ -335,7 +335,7 @@ function Tickets() {
   }
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <div className="page-header">
         <div>
           <h1 className="page-title">Tickets</h1>

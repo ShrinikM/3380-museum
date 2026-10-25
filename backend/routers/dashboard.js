@@ -310,10 +310,6 @@ async function getCount(table, extraWhere) {
   return Number(rows[0].Total);
 }
 
-async function getActiveExhibitionCount() {
-  return getCount("exhibition", " AND StartDate <= CURDATE() AND EndDate >= CURDATE()");
-}
-
 async function getAssignedExhibitions(staffId) {
   const [rows] = await pool.query(
     `SELECT
@@ -385,41 +381,6 @@ async function getStaffDashboard(staffId) {
   return { status: 200, data: data };
 }
 
-async function getOperatorDashboard(params) {
-  const ranges = getRanges(params);
-
-  const revenue = await getRevenue(ranges.start, ranges.end);
-  const counts = await getCounts(ranges.start, ranges.end);
-
-  let storeSales = 0;
-  const sources = [];
-  for (const row of revenue) {
-    if (row.Source === "Gift Shop" || row.Source === "Cafe") {
-      storeSales = storeSales + row.Revenue;
-    }
-    if (row.Source !== "Donations") {
-      sources.push(row);
-    }
-  }
-
-  const data = {
-    role: "Operator",
-    start: ranges.start,
-    end: ranges.end,
-    tiles: [
-      { label: "Tickets Sold", value: counts.Tickets, format: "number" },
-      { label: "Store Sales", value: Math.round(storeSales * 100) / 100, format: "money" },
-      { label: "New Memberships", value: counts.NewMembers, format: "number" },
-      { label: "Active Exhibitions", value: await getActiveExhibitionCount(), format: "number" },
-    ],
-    revenueBySource: sources,
-    topExhibitions: await getTopExhibitions(ranges.start, ranges.end),
-    currentExhibitions: await getCurrentExhibitions(),
-  };
-
-  return { status: 200, data: data };
-}
-
 async function getDashboard(params, body, staffId) {
   const role = await getRole(staffId);
 
@@ -428,9 +389,6 @@ async function getDashboard(params, body, staffId) {
   }
   if (role === "Staff") {
     return getStaffDashboard(staffId);
-  }
-  if (role === "Operator") {
-    return getOperatorDashboard(params);
   }
 
   throw makeError(403, "Your role cannot view the dashboard");
