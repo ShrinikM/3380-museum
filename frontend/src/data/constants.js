@@ -13,7 +13,7 @@ export const PAYMENT_METHODS = {
 export const MAX_CAPACITY = 1400
 export const MAX_MONEY = 999999.99
 export const STOCK_TARGET = 100
-export const LOW_STOCK = 5
+export const LOW_STOCK = 20
 
 export const DEFAULT_TICKET_PRICES = { Adult: 25, Senior: 18, Student: 15, Child: 10 }
 export const DEFAULT_MEMBERSHIP_PRICES = { Individual: 85, Family: 150, Student: 45, Senior: 65 }

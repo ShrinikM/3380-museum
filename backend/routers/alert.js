@@ -39,6 +39,23 @@ async function getWaitlists() {
   return rows;
 }
 
+async function getLowStock() {
+  const [rows] = await pool.query(
+    `SELECT a.Message,
+            CONCAT(s.FirstName, ' ', s.LastName) AS StaffName
+     FROM staffalert a
+     JOIN giftshop g
+       ON g.ItemID = a.ItemID AND g.IsDeleted = 0
+     JOIN staff s
+       ON s.StaffID = a.StaffID
+     WHERE a.AlertType = 'LowStock'
+       AND a.Status = 'Pending'
+     ORDER BY a.CreatedAt DESC`
+  );
+
+  return rows;
+}
+
 async function getAlerts() {
   const alerts = [];
 
@@ -69,6 +86,14 @@ async function getAlerts() {
         " notified",
     });
   }
+
+  const lowStock = await getLowStock();
+  for (const alert of lowStock) {
+    alerts.push({
+      Paths: ["/dashboard"],
+      Message: alert.Message + " (" + alert.StaffName + ")",
+    });
+  }  
 
   return { status: 200, data: alerts };
 }

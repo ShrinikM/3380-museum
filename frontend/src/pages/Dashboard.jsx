@@ -59,7 +59,7 @@ function daysUntil(dateString) {
 }
 
 function isLowStock(stock) {
-  return stock < LOW_STOCK
+  return stock <= LOW_STOCK
 }
 
 function stockPercent(stock) {
