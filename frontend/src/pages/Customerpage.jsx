@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { callApi } from '../api'
+import { Modal } from '../components/ui'
 import './Customerpage.css'
 
 const TABS = [
@@ -13,6 +14,24 @@ const TABS = [
 const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
 const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const MAX_PER_ORDER = 20
+const BLOCKED_STUDENT_MEMBERSHIPS = ['Dual', 'Family', 'Senior']
+const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
+
+function canBuyStudentTickets(membership) {
+  if (membership === null || membership.Status?.toLowerCase() !== 'active') {
+    return true
+  }
+
+  return !BLOCKED_STUDENT_MEMBERSHIPS.includes(membership.MembershipType)
+}
+
+function needsStudentEmail(membership) {
+  if (!canBuyStudentTickets(membership)) {
+    return false
+  }
+
+  return !membership || membership.Status?.toLowerCase() !== 'active' || membership.MembershipType !== 'Student'
+}
 
 const STATUS_TEXT = {
   active: 'Active',
@@ -530,15 +549,27 @@ function TicketsTab({ data, account, onBought }) {
   const [buying, setBuying] = useState(false)
   const [waitTypes, setWaitTypes] = useState({})
   const [waiting, setWaiting] = useState(false)
+  const [schoolEmail, setSchoolEmail] = useState('')
+  const [schoolEmailOk, setSchoolEmailOk] = useState(false)
+  const [studentModalOpen, setStudentModalOpen] = useState(false)
+  const [studentModalError, setStudentModalError] = useState('')
+  const [pendingStudentCount, setPendingStudentCount] = useState(null)
+  const [pendingWaitlistId, setPendingWaitlistId] = useState(null)
 
   const { exhibitions, waitlist, prices, discounts, waitlistLimit } = data
-  const types = Object.keys(prices)
+  const membership = account?.membership ?? account?.Membership ?? null
+  const allowStudentTickets = canBuyStudentTickets(membership)
+  const askForStudentEmail = needsStudentEmail(membership)
+  const types = Object.keys(prices).filter((type) => {
+    if (type === 'Student' && !allowStudentTickets) {
+      return false
+    }
+
+    return true
+  })
   const selected = exhibitions.find(
     (item) => item.ExhibitionID === exhibitionId
   )
-
-
-  const membership = account?.membership ?? account?.Membership ?? null
 
   const discountedLimit = {
     Adult: 0,
@@ -604,6 +635,35 @@ function TicketsTab({ data, account, onBought }) {
     setError('')
   }
 
+  const closeStudentModal = () => {
+    setStudentModalOpen(false)
+    setPendingStudentCount(null)
+    setPendingWaitlistId(null)
+    setStudentModalError('')
+  }
+
+  const changeTicketCount = (type, value) => {
+    if (type !== 'Student' || !askForStudentEmail || value <= (counts.Student || 0)) {
+      if (type === 'Student' && value === 0) {
+        setSchoolEmailOk(false)
+        setSchoolEmail('')
+      }
+
+      setCount(type, value)
+      return
+    }
+
+    if (schoolEmailOk) {
+      setCount(type, value)
+      return
+    }
+
+    setPendingStudentCount(value)
+    setPendingWaitlistId(null)
+    setStudentModalError('')
+    setStudentModalOpen(true)
+  }
+
 
   const chooseExhibition = (id) => {
     const item = exhibitions.find(
@@ -645,6 +705,14 @@ function TicketsTab({ data, account, onBought }) {
       return
     }
 
+    if ((counts.Student || 0) > 0 && askForStudentEmail && !schoolEmailOk) {
+      setPendingStudentCount(null)
+      setPendingWaitlistId(null)
+      setStudentModalError('')
+      setStudentModalOpen(true)
+      return
+    }
+
     setBuying(true)
     setError('')
 
@@ -653,11 +721,14 @@ function TicketsTab({ data, account, onBought }) {
         ExhibitionID: exhibitionId,
         VisitDate: visitDate,
         Tickets: counts,
+        SchoolEmail: askForStudentEmail ? schoolEmail : undefined,
       })
 
       setCounts({})
       setVisitDate('')
       setExhibitionId(null)
+      setSchoolEmail('')
+      setSchoolEmailOk(false)
 
       onBought(
         `You bought ${result.count} ${result.count === 1 ? 'ticket' : 'tickets'
@@ -670,14 +741,25 @@ function TicketsTab({ data, account, onBought }) {
     }
   }
 
-  const handleJoin = async (id) => {
+  const handleJoin = async (id, email) => {
+    const ticketType = waitTypes[id] || types[0]
+
+    if (ticketType === 'Student' && askForStudentEmail && !schoolEmailOk && !email) {
+      setPendingWaitlistId(id)
+      setPendingStudentCount(null)
+      setStudentModalError('')
+      setStudentModalOpen(true)
+      return
+    }
+
     setWaiting(true)
     setError('')
 
     try {
       await callApi('/api/customer/waitlist', 'POST', {
         ExhibitionID: id,
-        TicketType: waitTypes[id] || types[0],
+        TicketType: ticketType,
+        SchoolEmail: email || schoolEmail,
       })
 
       onBought(
@@ -687,6 +769,33 @@ function TicketsTab({ data, account, onBought }) {
       setError(waitError.message)
     } finally {
       setWaiting(false)
+    }
+  }
+
+  const confirmStudentEmail = () => {
+    const email = schoolEmail.trim()
+
+    if (!COUGARNET_PATTERN.test(email)) {
+      setStudentModalError(
+        'Student tickets require an approved school email ending in @cougarnet.uh.edu.'
+      )
+      return
+    }
+
+    setSchoolEmail(email)
+    setSchoolEmailOk(true)
+    setStudentModalError('')
+    setStudentModalOpen(false)
+
+    if (pendingStudentCount !== null) {
+      setCount('Student', pendingStudentCount)
+      setPendingStudentCount(null)
+    }
+
+    if (pendingWaitlistId !== null) {
+      const exhibitionIdToJoin = pendingWaitlistId
+      setPendingWaitlistId(null)
+      handleJoin(exhibitionIdToJoin, email)
     }
   }
 
@@ -893,7 +1002,7 @@ function TicketsTab({ data, account, onBought }) {
                       label={`${type} tickets`}
                       value={count}
                       max={count + limit - totalCount}
-                      onChange={(value) => setCount(type, value)}
+                      onChange={(value) => changeTicketCount(type, value)}
                     />
                   </li>
                 )
@@ -923,6 +1032,42 @@ function TicketsTab({ data, account, onBought }) {
           </>
         )}
       </section>
+
+      <Modal
+        open={studentModalOpen}
+        title="UH student email"
+        onClose={closeStudentModal}
+      >
+        <p>Student tickets require your UH CougarNet email.</p>
+
+        <div className="form-group">
+          <label htmlFor="student-ticket-email">CougarNet email</label>
+          <input
+            id="student-ticket-email"
+            type="email"
+            maxLength={255}
+            placeholder="yourname@cougarnet.uh.edu"
+            value={schoolEmail}
+            onChange={(event) => {
+              setSchoolEmail(event.target.value)
+              setStudentModalError('')
+            }}
+          />
+        </div>
+
+        {studentModalError && (
+          <p className="form-error" role="alert">{studentModalError}</p>
+        )}
+
+        <div className="modal-actions">
+          <button type="button" className="btn secondary" onClick={closeStudentModal}>
+            Cancel
+          </button>
+          <button type="button" className="btn primary" onClick={confirmStudentEmail}>
+            Continue
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

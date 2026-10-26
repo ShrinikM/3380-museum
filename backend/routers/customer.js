@@ -18,6 +18,8 @@ const maxPerOrder = 20;
 
 const waitlistLimit = 10;
 
+const blockedStudentMemberships = ["Dual", "Family", "Senior"];
+
 function makeError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -313,6 +315,59 @@ function getDiscount(membership) {
 
 function getMembershipLimits(membershipType) {
   return membershipTicketLimits[membershipType] || {};
+}
+
+function hasActiveMembership(membership, type) {
+  return (
+    membership !== null &&
+    membership.Status === "active" &&
+    membership.MembershipType === type
+  );
+}
+
+function studentTicketsBlocked(membership) {
+  if (membership === null || membership.Status !== "active") {
+    return false;
+  }
+
+  return blockedStudentMemberships.includes(membership.MembershipType);
+}
+
+function checkStudentTicketEmail(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw makeError(
+      400,
+      "A UH CougarNet email is required for Student tickets."
+    );
+  }
+
+  const email = value.trim().toLowerCase();
+
+  if (!/^[^\s@]+@cougarnet\.uh\.edu$/i.test(email)) {
+    throw makeError(
+      400,
+      "Student tickets require an approved school email ending in @cougarnet.uh.edu."
+    );
+  }
+
+  return email;
+}
+
+function checkStudentTicketAccess(membership, counts, schoolEmail) {
+  if (!counts.Student) {
+    return;
+  }
+
+  if (studentTicketsBlocked(membership)) {
+    throw makeError(
+      400,
+      "Student tickets are not available with a Dual, Family, or Senior membership."
+    );
+  }
+
+  if (!hasActiveMembership(membership, "Student")) {
+    checkStudentTicketEmail(schoolEmail);
+  }
 }
 
 function getTicketDiscount(membership, ticketType) {
@@ -827,6 +882,7 @@ async function addTickets(params, body, customerId) {
 
   const order = checkTicketOrder(body);
   const membership = await findMembership(customerId);
+  checkStudentTicketAccess(membership, order.Counts, body.SchoolEmail);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
 
@@ -960,6 +1016,16 @@ async function joinWaitlist(params, body, customerId) {
 
   if (!ticketTypes.includes(body.TicketType)) {
     throw makeError(400, "Please select a valid ticket type");
+  }
+
+  const membership = await findMembership(customerId);
+
+  if (body.TicketType === "Student") {
+    checkStudentTicketAccess(
+      membership,
+      { Student: 1 },
+      body.SchoolEmail
+    );
   }
 
   const connection = await pool.getConnection();
