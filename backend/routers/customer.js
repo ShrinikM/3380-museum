@@ -14,7 +14,7 @@ const onlinePayments = ["Credit Card", "Debit Card", "Mobile Pay"];
 
 const membershipPayments = ["Credit Card", "Debit Card"];
 
-const maxPerOrder = 20;
+const maxShopQuantity = 20;
 
 const waitlistLimit = 10;
 
@@ -860,13 +860,6 @@ function checkTicketOrder(body) {
     throw makeError(400, "Please choose at least one ticket");
   }
 
-  if (total > maxPerOrder) {
-    throw makeError(
-      400,
-      `You can buy up to ${maxPerOrder} tickets at a time`
-    );
-  }
-
   return {
     ExhibitionID: exhibitionID,
     VisitDate: body.VisitDate,
@@ -1153,11 +1146,11 @@ function checkShopOrder(body) {
       line.Quantity === undefined ||
       !Number.isSafeInteger(quantity) ||
       quantity < 1 ||
-      quantity > maxPerOrder
+      quantity > maxShopQuantity
     ) {
       throw makeError(
         400,
-        `Quantity must be between 1 and ${maxPerOrder}`
+        `Quantity must be between 1 and ${maxShopQuantity}`
       );
     }
 

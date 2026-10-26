@@ -614,10 +614,7 @@ function TicketsTab({ data, account, onBought }) {
     0
   )
 
-  const limit = Math.min(
-    MAX_PER_ORDER,
-    selected ? selected.Remaining : 0
-  )
+  const limit = selected ? selected.Remaining : 0
 
   const now = new Date()
   const today = [
