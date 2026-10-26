@@ -11,7 +11,7 @@ const WORKS = [
   { title: 'Girl with a Pearl Earring', artist: 'Johannes Vermeer', year: '1665', medium: 'Oil on canvas', file: 'pearl-earring.jpeg' },
   { title: 'The Kiss', artist: 'Gustav Klimt', year: '1908', medium: 'Oil and gold leaf on canvas', file: 'the-kiss.jpeg' },
   { title: 'Las Meninas', artist: 'Diego Velázquez', year: '1656', medium: 'Oil on canvas', file: 'las-meninas.jpeg' },
-  { title: 'The School of Athens', artist: 'Raphael', year: '1509–1511', medium: 'Fresco', file: 'athens.jpeg' },
+  { title: 'The School of Athens', artist: 'Raphael', year: '1509 - 1511', medium: 'Fresco', file: 'athens.jpeg' },
   { title: 'The Dance Class', artist: 'Edgar Degas', year: '1874', medium: 'Oil on canvas', file: 'dance-class.jpeg' },
   { title: 'Marie Antoinette with a Rose', artist: 'Élisabeth Louise Vigée Le Brun', year: '1783', medium: 'Oil on canvas', file: 'rose.jpeg' },
   { title: 'The Last Supper', artist: 'Leonardo da Vinci', year: '1498', medium: 'Tempera and oil', file: 'last-supper.jpeg' },
@@ -124,7 +124,7 @@ function HomePage(){
                 <h3>{show.Name}</h3>
                 {show.Description && <p>{show.Description}</p>}
                 <div className="hm-show-dates">
-                  {formatDate(show.StartDate)} – {formatDate(show.EndDate)}
+                  {formatDate(show.StartDate)} - {formatDate(show.EndDate)}
                 </div>
               </article>
             ))}
