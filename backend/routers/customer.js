@@ -91,6 +91,106 @@ function checkNewPassword(value) {
   return value;
 }
 
+
+function isValidDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(value + "T00:00:00.000Z");
+
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value
+  );
+}
+
+function getAgeOnDate(dateOfBirth, visitDate) {
+  if (!isValidDate(dateOfBirth) || dateOfBirth > visitDate) {
+    throw makeError(
+      400,
+      "Enter a valid date of birth before or on the visit date"
+    );
+  }
+
+  const birth = new Date(dateOfBirth + "T00:00:00.000Z");
+  const visit = new Date(visitDate + "T00:00:00.000Z");
+
+  let age = visit.getUTCFullYear() - birth.getUTCFullYear();
+
+  const birthdayHasPassed =
+    visit.getUTCMonth() > birth.getUTCMonth() ||
+    (
+      visit.getUTCMonth() === birth.getUTCMonth() &&
+      visit.getUTCDate() >= birth.getUTCDate()
+    );
+
+  if (!birthdayHasPassed) {
+    age--;
+  }
+
+  return age;
+}
+
+function validateVisitor(visitor, visitDate) {
+  if (
+    !visitor ||
+    typeof visitor !== "object" ||
+    Array.isArray(visitor)
+  ) {
+    throw makeError(
+      400,
+      "Visitor details are required for every ticket"
+    );
+  }
+
+  const type = visitor.TicketType;
+
+  if (!ticketTypes.includes(type)) {
+    throw makeError(400, "Please select a valid ticket type");
+  }
+
+  const age = getAgeOnDate(visitor.DateOfBirth, visitDate);
+
+  if (type === "Adult" && age < 18) {
+    throw makeError(
+      400,
+      "Adult tickets require visitors to be at least 18"
+    );
+  }
+
+  if (type === "Senior" && age < 65) {
+    throw makeError(
+      400,
+      "Senior tickets require visitors to be at least 65"
+    );
+  }
+
+  if (type === "Child" && age >= 18) {
+    throw makeError(
+      400,
+      "Child tickets require visitors to be under 18"
+    );
+  }
+
+  if (type === "Student") {
+    const email =
+      typeof visitor.StudentEmail === "string"
+        ? visitor.StudentEmail.trim()
+        : "";
+
+    if (!/^[^\s@]+@cougarnet\.uh\.edu$/i.test(email)) {
+      throw makeError(
+        400,
+        "Student tickets require a cougarnet.uh.edu email address"
+      );
+    }
+  }
+
+  return type;
+}
+
+
 function checkRegistration(body) {
   return {
     FirstName: checkName(body.FirstName, "First name"),
@@ -295,6 +395,29 @@ function getDiscount(membership) {
   return 0;
 }
 
+
+function getTicketDiscount(membership, ticketType) {
+  if (membership === null || membership.Status !== "active") {
+    return 0;
+  }
+
+  const eligibleTypes = {
+    Individual: ["Adult"],
+    Family: ["Adult", "Child"],
+    Student: ["Student"],
+    Senior: ["Senior"],
+  };
+
+  const eligible = eligibleTypes[membership.MembershipType] || [];
+
+  if (!eligible.includes(ticketType)) {
+    return 0;
+  }
+
+  return Number(membership.DiscountPercent);
+}
+
+
 function getActiveMembershipID(membership) {
   if (membership !== null && membership.Status === "active") {
     return membership.MembershipID;
@@ -481,6 +604,7 @@ async function getPurchases(params, body, customerId) {
        t.RefundStatus,
        t.NotificationStatus,
        DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate,
+       DATE_FORMAT(t.VisitDate, '%Y-%m-%d') AS VisitDate,
        DATE_FORMAT(t.UpdatedAt, '%Y-%m-%d') AS UpdatedAt,
        DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt
      FROM ticket t
@@ -609,6 +733,8 @@ async function getMyAlerts(params, body, customerId) {
   return { status: 200, data: alerts };
 }
 
+
+
 async function getExhibitions(params, body, customerId) {
   await findCustomer(customerId);
   const membership = await findMembership(customerId);
@@ -618,6 +744,7 @@ async function getExhibitions(params, body, customerId) {
        e.ExhibitionID,
        e.Name,
        e.Description,
+       DATE_FORMAT(e.StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate,
        GREATEST(
          e.Capacity - (
@@ -636,8 +763,10 @@ async function getExhibitions(params, body, customerId) {
            AND w.Status IN ('Waiting', 'Notified')
        ) AS WaitlistCount
      FROM exhibition e
-     WHERE ${openExhibition}
-     ORDER BY e.EndDate, e.Name`
+     WHERE e.IsDeleted = 0
+       AND e.CancelledAt IS NULL
+       AND e.EndDate >= CURDATE()
+     ORDER BY e.StartDate, e.Name`
   );
 
   const [waitlist] = await pool.query(
@@ -664,7 +793,8 @@ async function getExhibitions(params, body, customerId) {
         ExhibitionID: Number(exhibition.ExhibitionID),
         Remaining: Number(exhibition.Remaining),
         WaitlistCount: Number(exhibition.WaitlistCount),
-        WaitlistFull: Number(exhibition.WaitlistCount) >= waitlistLimit,
+        WaitlistFull:
+          Number(exhibition.WaitlistCount) >= waitlistLimit,
       })),
       waitlist: waitlist.map((entry) => ({
         ...entry,
@@ -673,65 +803,79 @@ async function getExhibitions(params, body, customerId) {
       })),
       prices: ticketPrices,
       discount: getDiscount(membership),
+      discounts: Object.fromEntries(
+        ticketTypes.map((type) => [
+          type,
+          getTicketDiscount(membership, type),
+        ])
+      ),
       waitlistLimit: waitlistLimit,
     },
   };
 }
 
+
+
 function checkTicketOrder(body) {
-  const exhibitionID = checkPositiveId(body.ExhibitionID, "exhibition");
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw makeError(400, "Invalid ticket order");
+  }
+
+  const exhibitionID = checkPositiveId(
+    body.ExhibitionID,
+    "exhibition"
+  );
+
+  if (!isValidDate(body.VisitDate)) {
+    throw makeError(400, "Please select a valid visit date");
+  }
 
   if (
-    typeof body.Tickets !== "object" ||
-    body.Tickets === null ||
-    Array.isArray(body.Tickets)
+    !Array.isArray(body.Visitors) ||
+    body.Visitors.length === 0
   ) {
-    throw makeError(400, "Please choose at least one ticket");
+    throw makeError(
+      400,
+      "Please provide visitor details for every ticket"
+    );
   }
 
-  const counts = {};
-  let total = 0;
-
-  for (const type of Object.keys(body.Tickets)) {
-    if (!ticketTypes.includes(type)) {
-      throw makeError(400, "Please select a valid ticket type");
-    }
-
-    const count = Number(body.Tickets[type]);
-
-    if (!Number.isSafeInteger(count) || count < 0) {
-      throw makeError(400, "Ticket quantities must be whole numbers");
-    }
-
-    if (count > 0) {
-      counts[type] = count;
-      total = total + count;
-    }
-  }
-
-  if (total === 0) {
-    throw makeError(400, "Please choose at least one ticket");
-  }
-
-  if (total > maxPerOrder) {
+  if (body.Visitors.length > maxPerOrder) {
     throw makeError(
       400,
       `You can buy up to ${maxPerOrder} tickets at a time`
     );
   }
 
+  const visitors = [];
+  const counts = {};
+
+  for (const visitor of body.Visitors) {
+    const type = validateVisitor(visitor, body.VisitDate);
+
+    visitors.push({
+      TicketType: type,
+    });
+
+    counts[type] = (counts[type] || 0) + 1;
+  }
+
   return {
     ExhibitionID: exhibitionID,
+    VisitDate: body.VisitDate,
+    Visitors: visitors,
     Counts: counts,
-    Count: total,
+    Count: visitors.length,
   };
 }
 
+
+
 async function addTickets(params, body, customerId) {
   await findCustomer(customerId);
+
   const order = checkTicketOrder(body);
   const membership = await findMembership(customerId);
-  const discount = getDiscount(membership);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
 
@@ -739,41 +883,76 @@ async function addTickets(params, body, customerId) {
     await connection.beginTransaction();
 
     const [exhibitions] = await connection.query(
-      `SELECT e.ExhibitionID, e.Capacity
+      `SELECT
+         e.ExhibitionID,
+         e.Capacity,
+         DATE_FORMAT(e.StartDate, '%Y-%m-%d') AS StartDate,
+         DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate
        FROM exhibition e
        WHERE e.ExhibitionID = ?
-         AND ${openExhibition}
+         AND e.IsDeleted = 0
+         AND e.CancelledAt IS NULL
+         AND e.EndDate >= CURDATE()
        FOR UPDATE`,
       [order.ExhibitionID]
     );
 
     if (exhibitions.length === 0) {
-      throw makeError(400, "That exhibition is not open for tickets");
+      throw makeError(
+        400,
+        "That exhibition is unavailable for ticket purchases"
+      );
+    }
+
+    const exhibition = exhibitions[0];
+
+    if (
+      order.VisitDate < exhibition.StartDate ||
+      order.VisitDate > exhibition.EndDate
+    ) {
+      throw makeError(
+        400,
+        "The visit date must be within the exhibition's start and end dates"
+      );
     }
 
     const sold = await countSold(connection, order.ExhibitionID);
-    const remaining = Number(exhibitions[0].Capacity) - sold;
+    const remaining = Number(exhibition.Capacity) - sold;
 
     if (order.Count > remaining) {
-      throw makeError(400, "Not enough tickets left for this exhibition");
+      throw makeError(
+        400,
+        "Not enough tickets left for this exhibition"
+      );
     }
 
     let total = 0;
 
-    for (const type of Object.keys(order.Counts)) {
-      const price = money(ticketPrices[type] * (1 - discount / 100));
+    for (const visitor of order.Visitors) {
+      const type = visitor.TicketType;
+      const discount = getTicketDiscount(membership, type);
 
-      for (let i = 0; i < order.Counts[type]; i++) {
-        await connection.query(
-          `INSERT INTO ticket
-            (TicketType, Price, SaleDate, ExhibitionID, MembershipID,
-             CustomerID, CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-           VALUES (?, ?, CURDATE(), ?, ?, ?, NOW(), NOW(), NULL, 0)`,
-          [type, price, order.ExhibitionID, membershipID, customerId]
-        );
+      const price = money(
+        ticketPrices[type] * (1 - discount / 100)
+      );
 
-        total = total + price;
-      }
+      await connection.query(
+        `INSERT INTO ticket
+          (TicketType, Price, SaleDate, VisitDate,
+           ExhibitionID, MembershipID, CustomerID,
+           CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+         VALUES (?, ?, CURDATE(), ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+        [
+          type,
+          price,
+          order.VisitDate,
+          order.ExhibitionID,
+          membershipID,
+          customerId,
+        ]
+      );
+
+      total += price;
     }
 
     await connection.query(
@@ -801,6 +980,7 @@ async function addTickets(params, body, customerId) {
     connection.release();
   }
 }
+
 
 async function joinWaitlist(params, body, customerId) {
   await findCustomer(customerId);
