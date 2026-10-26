@@ -175,6 +175,8 @@ async function deleteDonation(params, body, staffId) {
 
 const onlinePaymentMethods = ["Credit Card", "Debit Card", "Bank Transfer"];
 
+const minPublicDonation = 10;
+
 function localToday() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -191,6 +193,10 @@ async function addPublicDonation(params, body) {
     ...body,
     DonationDate: localToday(),
   });
+
+  if (donation.AmountDonated < minPublicDonation) {
+    throw makeError(400, "The minimum donation is $10");
+  }
 
   const [result] = await pool.query(
     `INSERT INTO donations

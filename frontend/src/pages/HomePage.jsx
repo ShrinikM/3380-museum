@@ -23,7 +23,7 @@ const WORK_OF_THE_DAY = WORKS[DAY % WORKS.length]
 function useAccountLink(tab){
   const { user } = useRole()
   const isCustomer = user !== null && user.role === 'Customer'
-  return isCustomer ? `/account?tab=${tab}` : `/login?tab=${tab}`
+  return isCustomer ? `/account?tab=${tab}` : `/login?mode=register&tab=${tab}`
 }
 
 function localToday(){

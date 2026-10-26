@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useRole } from '../context/role'
 
 const HAND = '/images/coog-hand.png'
@@ -7,7 +7,10 @@ const HERO_IMAGE = '/images/rumskib.jpeg'
 
 function Login() {
   const { login, loginCustomer, registerCustomer } = useRole()
-  const [mode, setMode] = useState('login')
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState(
+    searchParams.get('mode') === 'register' ? 'register' : 'login'
+  )
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -45,16 +48,16 @@ function Login() {
       return
     }
 
-    const email = username.trim().toLowerCase()
+    const loginEmail = username.trim().toLowerCase()
 
-    if (login(email, password)) {
+    if (login(loginEmail, password)) {
       return
     }
 
     setBusy(true)
 
     try {
-      await loginCustomer(email, password)
+      await loginCustomer(loginEmail, password)
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -174,9 +177,13 @@ function Login() {
                   <input
                     id="register-phone"
                     type="tel"
+                    inputMode="numeric"
                     autoComplete="tel"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
+                    title="Enter a 10 digit US phone number"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   />
                 </div>
               </>

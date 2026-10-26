@@ -204,7 +204,9 @@ function MembershipTab({ account, onChanged }) {
               <span className="cp-option-name">{item.MembershipType}</span>
               <span className="cp-option-text">{money(item.Price)} for one year</span>
               <span className="cp-option-meta">
-                {isCurrent ? 'Your current plan' : `${item.DiscountPercent}% off tickets`}
+                {isCurrent
+                  ? 'Your current plan'
+                  : `${item.DiscountPercent}% off tickets · ${item.GiftShopDiscount}% off gift shop · ${item.CafeDiscount}% off CoogCafe`}
               </span>
             </button>
           )
@@ -284,6 +286,14 @@ function MembershipTab({ account, onChanged }) {
           <div>
             <dt>Ticket discount</dt>
             <dd>{isActive ? `${membership.DiscountPercent}%` : 'None while inactive'}</dd>
+          </div>
+          <div>
+            <dt>Gift shop</dt>
+            <dd>{isActive ? `${membership.GiftShopDiscount}% off` : 'None while inactive'}</dd>
+          </div>
+          <div>
+            <dt>CoogCafe</dt>
+            <dd>{isActive ? `${membership.CafeDiscount}% off` : 'None while inactive'}</dd>
           </div>
           <div>
             <dt>Email</dt>
@@ -516,7 +526,6 @@ function TicketsTab({ data, account, onBought }) {
   const [exhibitionId, setExhibitionId] = useState(null)
   const [counts, setCounts] = useState({})
   const [visitDate, setVisitDate] = useState('')
-  const [visitors, setVisitors] = useState({})
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
   const [waitTypes, setWaitTypes] = useState({})
@@ -529,6 +538,8 @@ function TicketsTab({ data, account, onBought }) {
   )
 
 
+  const membership = account?.membership ?? account?.Membership ?? null
+
   const discountedLimit = {
     Adult: 0,
     Child: 0,
@@ -536,23 +547,16 @@ function TicketsTab({ data, account, onBought }) {
     Senior: 0,
   }
 
-  const membership = account?.membership ?? account?.Membership ?? null
-
   if (membership?.Status?.toLowerCase() === 'active') {
-    switch (membership.MembershipType) {
-      case 'Individual':
-        discountedLimit.Adult = 1
-        break
-      case 'Family':
-        discountedLimit.Adult = 2
-        discountedLimit.Child = 6
-        break
-      case 'Student':
-        discountedLimit.Student = 1
-        break
-      case 'Senior':
-        discountedLimit.Senior = 1
-        break
+    if (membership.MembershipType === 'Dual') {
+      discountedLimit.Adult = 2
+    } else if (membership.MembershipType === 'Family') {
+      discountedLimit.Adult = 2
+      discountedLimit.Child = 2
+    } else if (membership.MembershipType === 'Student') {
+      discountedLimit.Adult = 2
+    } else if (membership.MembershipType === 'Senior') {
+      discountedLimit.Adult = 2
     }
   }
 
@@ -597,19 +601,6 @@ function TicketsTab({ data, account, onBought }) {
       ...current,
       [type]: value,
     }))
-
-    setVisitors((current) => {
-      const updated = { ...current }
-
-      Object.keys(updated).forEach((key) => {
-        if (key.startsWith(`${type}-`)) {
-          delete updated[key]
-        }
-      })
-
-      return updated
-    })
-
     setError('')
   }
 
@@ -621,19 +612,7 @@ function TicketsTab({ data, account, onBought }) {
 
     setExhibitionId(id)
     setCounts({})
-    setVisitors({})
     setVisitDate(item?.StartDate || '')
-    setError('')
-  }
-
-  const updateVisitor = (key, field, value) => {
-    setVisitors((current) => ({
-      ...current,
-      [key]: {
-        ...current[key],
-        [field]: value,
-      },
-    }))
     setError('')
   }
 
@@ -666,45 +645,6 @@ function TicketsTab({ data, account, onBought }) {
       return
     }
 
-    const visitorList = []
-
-    for (const type of types) {
-      for (let index = 0; index < (counts[type] || 0); index++) {
-        const key = `${type}-${index}`
-        const details = visitors[key] || {}
-
-        if (!details.DateOfBirth) {
-          setError(`Enter the date of birth for ${type} visitor ${index + 1}.`)
-          return
-        }
-
-        if (details.DateOfBirth > visitDate) {
-          setError('A date of birth cannot be after the visit date.')
-          return
-        }
-
-        if (
-          type === 'Student' &&
-          !/^[^\s@]+@cougarnet\.uh\.edu$/i.test(
-            (details.StudentEmail || '').trim()
-          )
-        ) {
-          setError(
-            `Enter a valid cougarnet.uh.edu email for student visitor ${index + 1}.`
-          )
-          return
-        }
-
-        visitorList.push({
-          TicketType: type,
-          DateOfBirth: details.DateOfBirth,
-          ...(type === 'Student'
-            ? { StudentEmail: details.StudentEmail.trim() }
-            : {}),
-        })
-      }
-    }
-
     setBuying(true)
     setError('')
 
@@ -712,11 +652,10 @@ function TicketsTab({ data, account, onBought }) {
       const result = await callApi('/api/customer/tickets', 'POST', {
         ExhibitionID: exhibitionId,
         VisitDate: visitDate,
-        Visitors: visitorList,
+        Tickets: counts,
       })
 
       setCounts({})
-      setVisitors({})
       setVisitDate('')
       setExhibitionId(null)
 
@@ -917,107 +856,49 @@ function TicketsTab({ data, account, onBought }) {
                 }}
                 required
               />
-              <p className="cp-note">
-                Exhibition dates: {formatDate(selected.StartDate)} –{' '}
-                {formatDate(selected.EndDate)}
-              </p>
             </div>
 
             <ul className="cp-lines">
-              {types.map((type) => (
-                <li key={type} className="cp-line">
-                  <div>
-                    <div className="strong">{type}</div>
-                    <div className="cp-price">
-                      {money(priceFor(type))}
-                      {(discounts?.[type] ?? 0) > 0 && <s>{money(prices[type])}</s>}
+              {types.map((type) => {
+                const count = counts[type] || 0
+                const memberLimit = discountedLimit[type] || 0
+                const memberCount = Math.min(count, memberLimit)
+                const regularCount = count - memberCount
+                const memberPrice = priceFor(type, 0)
+                const regularPrice = prices[type]
+
+                return (
+                  <li key={type} className="cp-line">
+                    <div>
+                      <div className="strong">{type}</div>
+                      <div className="cp-price">
+                        {memberCount > 0 && regularCount > 0 ? (
+                          <>
+                            {money(memberPrice)} × {memberCount}
+                            {' · '}
+                            {money(regularPrice)} × {regularCount}
+                          </>
+                        ) : memberLimit > 0 ? (
+                          <>
+                            {money(memberPrice)}
+                            <s>{money(regularPrice)}</s>
+                          </>
+                        ) : (
+                          money(regularPrice)
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <Stepper
-                    label={`${type} tickets`}
-                    value={counts[type] || 0}
-                    max={(counts[type] || 0) + limit - totalCount}
-                    onChange={(value) => setCount(type, value)}
-                  />
-                </li>
-              ))}
+                    <Stepper
+                      label={`${type} tickets`}
+                      value={count}
+                      max={count + limit - totalCount}
+                      onChange={(value) => setCount(type, value)}
+                    />
+                  </li>
+                )
+              })}
             </ul>
-
-            {totalCount > 0 && (
-              <div className="cp-visitor-details">
-                <h3>Visitor details</h3>
-                <p className="cp-note">
-                  Enter the date of birth for each visitor. Student tickets
-                  also require a CougarNet email address. These details are
-                  used to check eligibility and are not saved with the ticket.
-                </p>
-
-                {types.flatMap((type) =>
-                  Array.from(
-                    { length: counts[type] || 0 },
-                    (_, index) => {
-                      const key = `${type}-${index}`
-                      const details = visitors[key] || {}
-
-                      return (
-                        <div className="cp-card" key={key}>
-                          <h4>{type} visitor {index + 1}</h4>
-
-                          <div className="form-group">
-                            <label htmlFor={`dob-${key}`}>
-                              Date of birth
-                            </label>
-                            <input
-                              id={`dob-${key}`}
-                              type="date"
-                              value={details.DateOfBirth || ''}
-                              max={visitDate || today}
-                              onChange={(event) =>
-                                updateVisitor(
-                                  key,
-                                  'DateOfBirth',
-                                  event.target.value
-                                )
-                              }
-                              required
-                            />
-                          </div>
-
-                          {type === 'Student' && (
-                            <div className="form-group">
-                              <label htmlFor={`email-${key}`}>
-                                CougarNet email
-                              </label>
-                              <input
-                                id={`email-${key}`}
-                                type="email"
-                                value={details.StudentEmail || ''}
-                                placeholder="you@cougarnet.uh.edu"
-                                onChange={(event) =>
-                                  updateVisitor(
-                                    key,
-                                    'StudentEmail',
-                                    event.target.value
-                                  )
-                                }
-                                required
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    }
-                  )
-                )}
-              </div>
-            )}
-
-            {types.some((type) => (counts[type] || 0) > 0 && (discounts?.[type] ?? 0) > 0) && (
-              <p className="cp-note">
-                Eligible membership discounts are included in the ticket prices.
-              </p>
-            )}
 
             <div className="cp-total">
               <span>Total</span>
@@ -1049,14 +930,25 @@ function TicketsTab({ data, account, onBought }) {
 
 
 
-function ShopTab({ items, onBought }) {
+function ShopTab({ items, account, onBought }) {
   const [cart, setCart] = useState({})
   const [payment, setPayment] = useState('')
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
 
+  const membership = account?.membership ?? null
+  const shopDiscount =
+    membership?.Status?.toLowerCase() === 'active'
+      ? Number(membership.GiftShopDiscount) || 0
+      : 0
+
+  const priceFor = (item) => item.Price * (1 - shopDiscount / 100)
+
   const lines = items.filter((item) => cart[item.ItemID] > 0)
-  const total = lines.reduce((sum, item) => sum + item.Price * cart[item.ItemID], 0)
+  const total = lines.reduce(
+    (sum, item) => sum + priceFor(item) * cart[item.ItemID],
+    0
+  )
 
   const setQuantity = (itemId, value) => {
     setCart((current) => ({ ...current, [itemId]: value }))
@@ -1109,7 +1001,10 @@ function ShopTab({ items, onBought }) {
             <section key={item.ItemID} className={`cp-card cp-item${soldOut ? ' is-out' : ''}`}>
               <div className="cp-label">{item.Category}</div>
               <h3>{item.ItemName}</h3>
-              <div className="cp-item-price">{money(item.Price)}</div>
+              <div className="cp-item-price">
+                {money(priceFor(item))}
+                {shopDiscount > 0 && <s>{money(item.Price)}</s>}
+              </div>
               <div className={`cp-item-stock${!soldOut && item.Stock > 5 ? ' is-in' : ''}`}>
                 {soldOut ? 'Out of stock' : item.Stock <= 5 ? `Only ${item.Stock} left` : 'In stock'}
               </div>
@@ -1148,7 +1043,7 @@ function ShopTab({ items, onBought }) {
               {lines.map((item) => (
                 <li key={item.ItemID} className="cp-line">
                   <span>{item.ItemName} × {cart[item.ItemID]}</span>
-                  <span>{money(item.Price * cart[item.ItemID])}</span>
+                  <span>{money(priceFor(item) * cart[item.ItemID])}</span>
                 </li>
               ))}
             </ul>
@@ -1359,7 +1254,9 @@ function CustomerPage() {
 
       {account && tab === 'membership' && <MembershipTab account={account} onChanged={handleBought} />}
       {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} account={account} onBought={handleBought} />}
-      {shopItems && tab === 'shop' && <ShopTab items={shopItems} onBought={handleBought} />}
+      {shopItems && tab === 'shop' && (
+        <ShopTab items={shopItems} account={account} onBought={handleBought} />
+      )}
       {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} />}
     </div>
   )

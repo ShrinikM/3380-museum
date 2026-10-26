@@ -144,7 +144,7 @@ function validateMembership(body) {
   } = body;
 
   const allowedTypes = [
-    "Individual",
+    "Dual",
     "Family",
     "Student",
     "Senior",
@@ -227,10 +227,10 @@ function validateMembership(body) {
   ) {
     phone = onlyDigits(Phone);
 
-    if (phone.length < 10 || phone.length > 15) {
+    if (phone.length !== 10) {
       throw makeError(
         400,
-        "Phone number must have 10 to 15 digits."
+        "Phone number must have 10 digits."
       );
     }
   }
@@ -768,8 +768,8 @@ async function lookupMembership(params) {
     value = onlyDigits(search);
     where = "c.Phone = ?";
 
-    if (value.length < 10) {
-      throw makeError(400, "Enter a full phone number.");
+    if (value.length !== 10) {
+      throw makeError(400, "Enter a 10 digit phone number.");
     }
   }
 

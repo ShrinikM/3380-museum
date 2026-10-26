@@ -4,6 +4,7 @@ import './DonatePage.css'
 
 const IMAGE = `${import.meta.env.BASE_URL}images/terrace.jpeg`
 const AMOUNTS = [500, 250, 100, 50, 25, 10]
+const MIN_AMOUNT = 10
 const PAYMENTS = ['Credit Card', 'Debit Card', 'Bank Transfer']
 
 const emptyForm = {
@@ -42,6 +43,11 @@ function DonatePage(){
 
     if(!amount || amount <= 0){
       setError('Please choose or enter an amount.')
+      return
+    }
+
+    if(amount < MIN_AMOUNT){
+      setError('The minimum donation is $10.')
       return
     }
 
@@ -120,9 +126,9 @@ function DonatePage(){
               <span>$</span>
               <input
                 type="number"
-                min="1"
+                min="10"
                 step="0.01"
-                placeholder="Other amount"
+                placeholder="Other amount (min $10)"
                 aria-label="Other amount"
                 value={custom}
                 onChange={(e)=>{

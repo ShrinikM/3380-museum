@@ -1,5 +1,6 @@
 
 const pool = require("../db");
+const { membershipPlans } = require("../prices");
 const { joinCurrentTerm, activeTerm } = require("../terms");
 
 const storeTypes = {
@@ -192,11 +193,28 @@ async function checkStaff(connection, staffID, kind) {
   }
 }
 
+function storeSalePrice(basePrice, membershipType, kind) {
+  const plan = membershipPlans[membershipType];
+
+  if (!plan) {
+    return Number(Number(basePrice).toFixed(2));
+  }
+
+  const percent =
+    kind === "giftshop"
+      ? Number(plan.GiftShopDiscount)
+      : Number(plan.CafeDiscount);
+
+  return Number((Number(basePrice) * (1 - percent / 100)).toFixed(2));
+}
+
 async function checkMembership(connection, membershipID) {
-  if (membershipID === null) return null;
+  if (membershipID === null) {
+    return null;
+  }
 
   const [rows] = await connection.query(
-    `SELECT m.MembershipID, m.CustomerID
+    `SELECT m.MembershipID, m.CustomerID, term.MembershipType
      FROM membership m
      ${joinCurrentTerm("m")}
      WHERE m.MembershipID = ?
@@ -212,7 +230,10 @@ async function checkMembership(connection, membershipID) {
     );
   }
 
-  return Number(rows[0].CustomerID);
+  return {
+    CustomerID: Number(rows[0].CustomerID),
+    MembershipType: rows[0].MembershipType,
+  };
 }
 
 async function findItem(id, kind) {
@@ -488,7 +509,8 @@ async function addSale(params, body, kind) {
     await connection.beginTransaction();
 
     await checkStaff(connection, sale.StaffID, kind);
-    const customerID = await checkMembership(connection, sale.MembershipID);
+    const member = await checkMembership(connection, sale.MembershipID);
+    const customerID = member ? member.CustomerID : null;
 
     const [items] = await connection.query(
       `SELECT ItemID, Price
@@ -520,7 +542,11 @@ async function addSale(params, body, kind) {
         ${kind === "giftshop" ? ", ?" : ""})`,
       [
         sale.ItemID,
-        Number(item.Price),
+        storeSalePrice(
+          item.Price,
+          member ? member.MembershipType : null,
+          kind
+        ),
         sale.Quantity,
         sale.StaffID,
         sale.SaleDate,
@@ -573,7 +599,8 @@ async function updateSale(params, body, kind) {
     const oldSale = oldRows[0];
 
     await checkStaff(connection, sale.StaffID, kind);
-    const customerID = await checkMembership(connection, sale.MembershipID);
+    const member = await checkMembership(connection, sale.MembershipID);
+    const customerID = member ? member.CustomerID : null;
 
     // Lock the old and new item rows in consistent ID order.
     const itemIDs = [...new Set([Number(oldSale.ItemID), sale.ItemID])]
@@ -640,7 +667,11 @@ async function updateSale(params, body, kind) {
        WHERE SaleID = ? AND IsDeleted = 0`,
       [
         sale.ItemID,
-        Number(newItem.Price),
+        storeSalePrice(
+          newItem.Price,
+          member ? member.MembershipType : null,
+          kind
+        ),
         sale.Quantity,
         sale.StaffID,
         sale.SaleDate,

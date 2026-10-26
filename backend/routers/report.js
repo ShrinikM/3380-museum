@@ -292,7 +292,7 @@ async function getMembershipTypesReport(params, body, staffId) {
      JOIN membership ON membership.MembershipID = term.MembershipID
      WHERE membership.IsDeleted = 0` + memberships.where + `
      GROUP BY term.MembershipType
-     ORDER BY FIELD(term.MembershipType, 'Individual', 'Family', 'Student', 'Senior')`,
+     ORDER BY FIELD(term.MembershipType, 'Dual', 'Family', 'Student', 'Senior')`,
     memberships.values
   );
 

@@ -27,28 +27,48 @@ const HOURS = [
 // Same prices and discounts as membershipPlans in backend/prices.js
 const PLANS = [
   {
-    type: 'Individual',
+    type: 'Dual',
     price: 75,
-    discount: 5,
-    perks: ['Free entry to the permanent collection', 'Early booking for new exhibitions'],
+    discount: 25,
+    perks: [
+      '2 Adult tickets at 25% off',
+      '15% off CoogCafe',
+      '15% off gift shop items',
+      'Early booking for new exhibitions',
+    ],
   },
   {
     type: 'Family',
     price: 150,
-    discount: 10,
-    perks: ['Everything in Individual', 'Children always visit free'],
+    discount: 25,
+    perks: [
+      '2 Adult and 2 Child tickets at 25% off',
+      'Children under 5 always visit free',
+      '15% off CoogCafe',
+      '15% off gift shop items',
+    ],
   },
   {
     type: 'Student',
     price: 40,
-    discount: 10,
-    perks: ['Everything in Individual', 'Lowest yearly price'],
+    discount: 35,
+    perks: [
+      '2 Adult tickets at 35% off',
+      '20% off CoogCafe',
+      '20% off gift shop items',
+      'Lowest yearly price',
+    ],
   },
   {
     type: 'Senior',
     price: 60,
-    discount: 15,
-    perks: ['Everything in Individual', 'Our biggest ticket discount'],
+    discount: 30,
+    perks: [
+      '2 Adult tickets at 30% off',
+      '20% off CoogCafe',
+      '20% off gift shop items',
+      'For visitors 65 and older',
+    ],
   },
 ]
 
@@ -62,7 +82,7 @@ function formatPrice(value){
 function useAccountLink(tab){
   const { user } = useRole()
   const isCustomer = user !== null && user.role === 'Customer'
-  return isCustomer ? `/account?tab=${tab}` : `/login?tab=${tab}`
+  return isCustomer ? `/account?tab=${tab}` : `/login?mode=register&tab=${tab}`
 }
 
 function InfoCard({ label, title, children, note, action, tab }){

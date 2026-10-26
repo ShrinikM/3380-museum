@@ -458,6 +458,13 @@
   font-weight: 700;
 }
 
+.cp-item-price s {
+  margin-left: 8px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .cp-item-stock {
   margin: 2px 0 16px;
   color: var(--muted-foreground);

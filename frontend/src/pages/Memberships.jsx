@@ -4,20 +4,20 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 
-const membershipTypes = ['Individual', 'Family', 'Student', 'Senior']
+const membershipTypes = ['Dual', 'Family', 'Student', 'Senior']
 
 const membershipPrices = {
-  Individual: 75,
+  Dual: 75,
   Family: 150,
   Student: 40,
   Senior: 60,
 }
 
 const membershipDiscounts = {
-  Individual: 5,
-  Family: 10,
-  Student: 10,
-  Senior: 15,
+  Dual: 25,
+  Family: 25,
+  Student: 35,
+  Senior: 30,
 }
 
 const emptyFamilyMember = {
@@ -186,6 +186,14 @@ function Memberships() {
       return
     }
 
+    if (name === 'phone') {
+      setFormData((current) => ({
+        ...current,
+        phone: value.replace(/\D/g, '').slice(0, 10),
+      }))
+      return
+    }
+
     setFormData((current) => ({
       ...current,
       [name]: value,
@@ -293,6 +301,13 @@ function Memberships() {
 
     if (!membershipTypes.includes(formData.type)) {
       alert('Please select a valid membership type.')
+      return
+    }
+
+    const phoneDigits = formData.phone.replace(/\D/g, '')
+
+    if (formData.phone.trim() !== '' && phoneDigits.length !== 10) {
+      alert('Phone number must have 10 digits.')
       return
     }
 
@@ -444,7 +459,7 @@ function Memberships() {
       FirstName: firstName,
       LastName: lastName,
       Email: email,
-      Phone: formData.phone.trim(),
+      Phone: phoneDigits,
       SchoolEmail:
         formData.type === 'Student'
           ? formData.schoolEmail.trim()
@@ -775,8 +790,11 @@ function Memberships() {
               id="membership-phone"
               name="phone"
               type="tel"
+              inputMode="numeric"
               autoComplete="tel"
-              maxLength={20}
+              maxLength={10}
+              pattern="[0-9]{10}"
+              title="Enter a 10 digit US phone number"
               value={formData.phone}
               onChange={handleChange}
             />

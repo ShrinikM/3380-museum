@@ -54,7 +54,7 @@ function getReadAlerts(user) {
 function SiteFooter() {
   const { user } = useRole()
   const isCustomer = user !== null && user.role === 'Customer'
-  const account = (tab)=>(isCustomer ? `/account?tab=${tab}` : `/login?tab=${tab}`)
+  const account = (tab)=>(isCustomer ? `/account?tab=${tab}` : `/login?mode=register&tab=${tab}`)
 
   return (
     <footer className="site-footer">

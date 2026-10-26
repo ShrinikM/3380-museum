@@ -98,7 +98,6 @@ function Dashboard() {
   const [giftItems, setGiftItems] = useState([])
   const [giftLoading, setGiftLoading] = useState(true)
   const [giftError, setGiftError] = useState('')
-  const [staffByExhibition, setStaffByExhibition] = useState({})
 
   const showDates = user?.role !== 'Staff'
 
@@ -162,42 +161,6 @@ function Dashboard() {
 
     loadGiftShop()
 
-    return () => {
-      cancelled = true
-    }
-  }, [user])
-
-  useEffect(() => {
-    if (user?.role !== 'Staff') {
-      return
-    }
-    let cancelled = false
-    async function loadExhibitionStaff() {
-      try {
-        const data = await callApi('/api/exhibitions', 'GET')
-
-        if (!Array.isArray(data)) {
-          throw new Error('The server returned an invalid exhibitions response.')
-        }
-
-        if (!cancelled) {
-          const lookup = {}
-
-          for (const exhibition of data) {
-            lookup[exhibition.ExhibitionID] = Array.isArray(exhibition.StaffNames)
-              ? exhibition.StaffNames
-              : []
-          }
-
-          setStaffByExhibition(lookup)
-        }
-      } catch {
-        if (!cancelled) {
-          setStaffByExhibition({})
-        }
-      }
-    }
-    loadExhibitionStaff()
     return () => {
       cancelled = true
     }
@@ -382,11 +345,6 @@ function Dashboard() {
     )
   }
 
-  function getStaffNames(exhibitionId) {
-    const names = staffByExhibition[exhibitionId]
-    return names && names.length > 0 ? names.join(', ') : '-'
-  }
-
   function renderAssignedExhibitionsPanel() {
     return (
       <Panel title="Current Exhibitions">
@@ -507,23 +465,10 @@ function Dashboard() {
 
   function renderPanels() {
     if (dashboard.role === 'Staff') {
-  return (
-    <>
-      {renderAssignedExhibitionsPanel()}
-      {renderGiftShopPanel()}
-    </>
-  )
-}
-
-    if (dashboard.role === 'Operator') {
       return (
         <>
-          <div className="dash-main-grid">
-            {renderRevenuePanel()}
-            {renderCurrentExhibitionsPanel()}
-          </div>
-
-          {renderTopExhibitionsPanel()}
+          {renderAssignedExhibitionsPanel()}
+          {renderGiftShopPanel()}
         </>
       )
     }
