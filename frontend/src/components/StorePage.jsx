@@ -8,7 +8,7 @@ const STORES = {
   giftshop: {
     title: 'Gift Shop',
     name: 'gift shop',
-    staffId: 1,
+    staffId: 4,
     payments: PAYMENT_METHODS.giftshopsale,
     categories: ['Books', 'Accessories', 'Home', 'Stationery', 'Kids', 'Prints'],
   },

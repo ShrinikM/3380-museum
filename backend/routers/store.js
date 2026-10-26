@@ -6,7 +6,7 @@ const storeTypes = {
   giftshop: {
     itemTable: "giftshop",
     saleTable: "giftshopsale",
-    role: "Gift Shop",
+    role: ["Staff", "Admin"],
     buyer: "COALESCE(sale.CustomerID, member.CustomerID)",
   },
   cafe: {
@@ -172,19 +172,22 @@ function checkSale(body) {
 }
 
 async function checkStaff(connection, staffID, kind) {
+  const role = getStore(kind).role;
+  const roles = Array.isArray(role) ? role : [role];
+
   const [rows] = await connection.query(
     `SELECT StaffID
      FROM staff
      WHERE StaffID = ?
        AND IsDeleted = 0
-       AND Role = ?`,
-    [staffID, getStore(kind).role]
+       AND Role IN (?)`,
+    [staffID, roles]
   );
 
   if (rows.length === 0) {
     throw makeError(
       400,
-      `Select an active staff member with the ${getStore(kind).role} role`
+      `Select an active staff member with a valid role.`
     );
   }
 }
