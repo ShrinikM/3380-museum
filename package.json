@@ -2,9 +2,14 @@
   "name": "3380-museum",
   "version": "1.0.0",
   "description": "Team #3:",
-  "main": "index.js",
+  "main": "backend/server.js",
   "scripts": {
+    "build": "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend",
+    "start": "node backend/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
@@ -17,5 +22,5 @@
   "bugs": {
     "url": "https://github.com/ShrinikM/3380-museum/issues"
   },
-  "homepage": "https://github.com/ShrinikM/3380-museum#readme"
+  "homepage": "https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net"
 }

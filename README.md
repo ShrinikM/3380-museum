@@ -2,6 +2,8 @@ Museum Database project for Uma Ramamurthy
 
 Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Madisetty
 
+Live site: https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
+
 Tech Stack
 - Frontend: React
 - Backend: Node.js
