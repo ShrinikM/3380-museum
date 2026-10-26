@@ -65,6 +65,25 @@ function money(value) {
   return `$${Number(value).toFixed(2)}`
 }
 
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) {
+    return 0
+  }
+
+  const dob = new Date(`${dateOfBirth}T00:00:00`)
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+
+  if (
+    today.getMonth() < dob.getMonth() ||
+    (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())
+  ) {
+    age--
+  }
+
+  return age
+}
+
 
 function formatDate(value) {
   if (!value) {
@@ -125,6 +144,8 @@ function MembershipTab({ account, onChanged }) {
   const [renewing, setRenewing] = useState(false)
   const [plan, setPlan] = useState('')
   const [payment, setPayment] = useState('')
+  const [schoolEmail, setSchoolEmail] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -154,6 +175,8 @@ function MembershipTab({ account, onChanged }) {
     setRenewing(true)
     setPlan('')
     setPayment('')
+    setSchoolEmail('')
+    setDateOfBirth('')
     setError('')
   }
 
@@ -162,9 +185,36 @@ function MembershipTab({ account, onChanged }) {
     setError('')
   }
 
+  const validStudentEmail = COUGARNET_PATTERN.test(schoolEmail.trim())
+  const validSeniorDob =
+    dateOfBirth !== '' &&
+    dateOfBirth < new Date().toISOString().slice(0, 10) &&
+    calculateAge(dateOfBirth) >= 65
+
+  const canPay =
+    plan !== '' &&
+    payment !== '' &&
+    (plan !== 'Student' || validStudentEmail) &&
+    (plan !== 'Senior' || validSeniorDob)
+
   const handleRenew = async () => {
     if (!plan) {
       setError('Please choose a plan.')
+      return
+    }
+
+    if (plan === 'Student' && !validStudentEmail) {
+      setError('Student memberships require an approved school email ending in @cougarnet.uh.edu.')
+      return
+    }
+
+    if (plan === 'Senior' && !dateOfBirth) {
+      setError('Date of birth is required for Senior memberships.')
+      return
+    }
+
+    if (plan === 'Senior' && !validSeniorDob) {
+      setError('Senior memberships require you to be at least 65 years old.')
       return
     }
 
@@ -180,6 +230,8 @@ function MembershipTab({ account, onChanged }) {
       const result = await callApi('/api/customer/membership/renew', 'POST', {
         MembershipType: plan,
         PaymentMethod: payment,
+        SchoolEmail: plan === 'Student' ? schoolEmail.trim() : undefined,
+        DateOfBirth: plan === 'Senior' ? dateOfBirth : undefined,
       })
 
       setRenewing(false)
@@ -232,6 +284,39 @@ function MembershipTab({ account, onChanged }) {
         })}
       </div>
 
+      {plan === 'Student' && (
+        <div className="form-group cp-renew-payment">
+          <label htmlFor="cp-membership-school-email">UH school email</label>
+          <input
+            id="cp-membership-school-email"
+            type="email"
+            maxLength={255}
+            placeholder="yourname@cougarnet.uh.edu"
+            value={schoolEmail}
+            onChange={(event) => {
+              setSchoolEmail(event.target.value)
+              setError('')
+            }}
+          />
+        </div>
+      )}
+
+      {plan === 'Senior' && (
+        <div className="form-group cp-renew-payment">
+          <label htmlFor="cp-membership-dob">Date of birth</label>
+          <input
+            id="cp-membership-dob"
+            type="date"
+            max={new Date().toISOString().slice(0, 10)}
+            value={dateOfBirth}
+            onChange={(event) => {
+              setDateOfBirth(event.target.value)
+              setError('')
+            }}
+          />
+        </div>
+      )}
+
       <div className="form-group cp-renew-payment">
         <label htmlFor="cp-membership-payment">Payment</label>
         <select
@@ -257,7 +342,12 @@ function MembershipTab({ account, onChanged }) {
             Back
           </button>
         )}
-        <button type="button" className="btn primary" onClick={handleRenew} disabled={saving}>
+        <button
+          type="button"
+          className="btn primary"
+          onClick={handleRenew}
+          disabled={saving || !canPay}
+        >
           {saving ? 'Processing...' : selectedPlan ? `Pay ${money(selectedPlan.Price)}` : 'Pay'}
         </button>
       </div>

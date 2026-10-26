@@ -13,7 +13,7 @@ const storeTypes = {
   cafe: {
     itemTable: "cafe",
     saleTable: "cafesale",
-    role: "Cafe",
+    role: ["Staff", "Admin"],
     buyer: "member.CustomerID",
   },
 };
@@ -375,9 +375,15 @@ async function getSales(params, body, kind) {
 }
 
 
-async function addItem(params, body, kind) {
+async function addItem(params, body, kind, actorId) {
   const store = getStore(kind);
-  const item = checkItem(body, kind);
+  const item = checkItem(
+    {
+      ...body,
+      StaffID: actorId || body.StaffID,
+    },
+    kind
+  );
   const connection = await pool.getConnection();
 
   try {
@@ -416,10 +422,16 @@ async function addItem(params, body, kind) {
 }
 
 
-async function updateItem(params, body, kind) {
+async function updateItem(params, body, kind, actorId) {
   const id = checkId(params);
   const store = getStore(kind);
-  const item = checkItem(body, kind);
+  const item = checkItem(
+    {
+      ...body,
+      StaffID: actorId || body.StaffID,
+    },
+    kind
+  );
   const connection = await pool.getConnection();
 
   try {
@@ -761,12 +773,14 @@ function routesFor(kind) {
     {
       method: "POST",
       path: `${base}/items`,
-      handler: (params, body) => addItem(params, body, kind),
+      handler: (params, body, actorId) => addItem(params, body, kind, actorId),
+      needsActor: true,
     },
     {
       method: "PUT",
       path: `${base}/items/:id`,
-      handler: (params, body) => updateItem(params, body, kind),
+      handler: (params, body, actorId) => updateItem(params, body, kind, actorId),
+      needsActor: true,
     },
     {
       method: "DELETE",
