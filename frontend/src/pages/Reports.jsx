@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import Chart from '../components/Chart'
@@ -149,6 +149,67 @@ const reportTypes = [
       { key: 'PercentOfTotal', label: 'Percent of Total' },
     ],
   },
+  {
+    id: 'collection-distribution',
+    name: 'Collection Inventory',
+    formats: ['bar', 'pie'],
+    labelKey: 'CollectionName',
+    charts: [
+      {
+        title: 'Total Artworks by Collection',
+        series: [{ key: 'TotalArtworks', label: 'Artworks' }],
+        prefix: '',
+        suffix: '',
+      },
+    ],
+    columns: [
+      { key: 'CollectionName', label: 'Collection' },
+      { key: 'TotalArtworks', label: 'Total Artworks' },
+      { key: 'OldestArtworkYear', label: 'Oldest Year' },
+      { key: 'NewestArtworkYear', label: 'Newest Year' },
+    ],
+  },
+  {
+    id: 'visitor-traffic',
+    name: 'Hourly Visits',
+    formats: ['table'],
+    columns: [
+      { key: 'HourOfDay', label: 'Hour (24h)' },
+      { key: 'TicketsSold', label: 'Tickets Sold' },
+      { key: 'Revenue', label: 'Revenue' },
+    ],
+  },
+  {
+    id: 'artwork-timeline',
+    name: 'Artwork Acquisition Timeline',
+    formats: ['bar', 'line'],
+    labelKey: 'AcquisitionYear',
+    charts: [
+      {
+        title: 'Artworks Acquired by Year',
+        series: [{ key: 'ArtworksAcquired', label: 'Artworks Acquired' }],
+        prefix: '',
+        suffix: '',
+      },
+    ],
+    columns: [
+      { key: 'AcquisitionYear', label: 'Acquisition Year' },
+      { key: 'ArtworksAcquired', label: 'Artworks Acquired' },
+    ],
+  },
+  {
+    id: 'membership-expiration',
+    name: 'Expiring Memberships',
+    formats: ['table'],
+    columns: [
+      { key: 'MemberName', label: 'Member Name' },
+      { key: 'Email', label: 'Email' },
+      { key: 'MembershipType', label: 'Type' },
+      { key: 'StartDate', label: 'Start Date' },
+      { key: 'EndDate', label: 'End Date' },
+      { key: 'DaysUntilExpiration', label: 'Days Until Expiration' },
+    ],
+  },
 ]
 
 function getSavedHistory(storageKey) {
@@ -181,6 +242,13 @@ function Reports() {
   const [endDate, setEndDate] = useState('')
   const [history, setHistory] = useState(() => getSavedHistory(storageKey))
   const [message, setMessage] = useState('')
+  const [summaryStats, setSummaryStats] = useState(null)
+
+  useEffect(() => {
+    callApi('/api/reports/summary-stats', 'GET')
+      .then((data) => setSummaryStats(data))
+      .catch(() => {})
+  }, [])
 
   const saveHistory = (newHistory) => {
     try {
@@ -366,6 +434,36 @@ function Reports() {
     <div className="page page-wide reports-page">
       <div className="page-header">
         <h1 className="page-title">Reports</h1>
+      </div>
+
+      <div className="dash-stat-grid" style={{ marginBottom: '1.5rem' }}>
+        <div className="card dash-stat-card">
+          <div className="dash-stat-label">Expiring (Next 30 Days)</div>
+          <div className="dash-stat-value" style={{ color: 'var(--warning, #d97706)' }}>
+            {summaryStats?.expiringSoon?.toLocaleString() ?? '—'}
+          </div>
+        </div>
+
+        <div className="card dash-stat-card">
+          <div className="dash-stat-label">Avg Exhibition Fill</div>
+          <div className="dash-stat-value">
+            {summaryStats ? `${summaryStats.avgCapacity}%` : '—'}
+          </div>
+        </div>
+
+        <div className="card dash-stat-card">
+          <div className="dash-stat-label">Total Cataloged Artworks</div>
+          <div className="dash-stat-value">
+            {summaryStats?.totalArtworks?.toLocaleString() ?? '—'}
+          </div>
+        </div>
+
+        <div className="card dash-stat-card">
+          <div className="dash-stat-label">Active Members</div>
+          <div className="dash-stat-value">
+            {summaryStats?.activeMembers?.toLocaleString() ?? '—'}
+          </div>
+        </div>
       </div>
 
       <div className="card report-request-panel">

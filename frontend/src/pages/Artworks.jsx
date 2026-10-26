@@ -29,6 +29,10 @@ function Artworks() {
     YearCreated: '',
   })
 
+  const filteredArtworkTypes = ARTWORK_TYPES.filter(
+    (item) => !['Drawing', 'Drawings', 'Print', 'Prints'].includes(item)
+  )
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -225,7 +229,7 @@ function Artworks() {
             }}
           >
             <option value="">All Types</option>
-            {ARTWORK_TYPES.map((item) => (
+            {filteredArtworkTypes.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -349,7 +353,7 @@ function Artworks() {
               required
             >
               <option value="">Select a type</option>
-              {ARTWORK_TYPES.map((item) => (
+              {filteredArtworkTypes.map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>

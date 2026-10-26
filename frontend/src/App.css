@@ -2402,3 +2402,45 @@ input[type='radio'] {
     padding: 36px 16px;
   }
 }
+
+.report-viewer {
+  width: 100%;
+}
+
+.report-viewer-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin-bottom: 1.5rem;
+}
+
+.report-viewer > div:not(.report-viewer-header),
+.report-viewer .chart-container,
+.report-viewer .chart-wrap {
+  width: 100% !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.report-viewer svg,
+.report-viewer canvas {
+  width: 100% !important;
+  max-width: 650px !important; 
+  height: 300px !important;
+  margin: 0 auto;
+}
+
+.report-viewer h3,
+.report-viewer .chart-title {
+  text-align: center;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.report-viewer .data-table {
+  width: 100%;
+}
