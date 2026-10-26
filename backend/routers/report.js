@@ -350,8 +350,148 @@ async function getCafeItemsReport(params, body, staffId) {
   return getItemRevenue(params, "cafesale", "cafe");
 }
 
+async function getCollectionDistributionReport(params, body, staffId) {
+  const [rows] = await pool.query(
+    `SELECT 
+        collection.CollectionID,
+        collection.Name AS CollectionName,
+        COUNT(artwork.ArtworkID) AS TotalArtworks,
+        MIN(artwork.YearCreated) AS OldestArtworkYear,
+        MAX(artwork.YearCreated) AS NewestArtworkYear
+    FROM collection
+    LEFT JOIN artwork ON collection.CollectionID = artwork.CollectionID AND artwork.IsDeleted = 0
+    WHERE collection.IsDeleted = 0
+    GROUP BY collection.CollectionID, collection.Name
+    ORDER BY TotalArtworks DESC, collection.Name`
+  );
+
+  for (const row of rows) {
+    row.TotalArtworks = Number(row.TotalArtworks);
+    row.OldestArtworkYear = row.OldestArtworkYear ? Number(row.OldestArtworkYear) : null;
+    row.NewestArtworkYear = row.NewestArtworkYear ? Number(row.NewestArtworkYear) : null;
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getVisitorTrafficReport(params, body, staffId) {
+  const dates = readDates(params);
+  const tickets = getRange("SaleDate", dates);
+
+  const [rows] = await pool.query(
+    `SELECT
+      HOUR(SaleDate) AS HourOfDay,
+      COUNT(TicketID) AS TicketsSold,
+      COALESCE(SUM(Price), 0) AS Revenue
+    FROM ticket
+    WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'` + tickets.where + `
+    GROUP BY HOUR(SaleDate)
+    ORDER BY HourOfDay`,
+    tickets.values
+  );
+
+  for (const row of rows) {
+    row.HourOfDay = Number(row.HourOfDay);
+    row.TicketsSold = Number(row.TicketsSold);
+    row.Revenue = Number(row.Revenue);
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getMembershipExpirationReport(params, body, staffId) {
+  const [rows] = await pool.query(
+    `SELECT
+      membership.MembershipID,
+      CONCAT(customer.FirstName, ' ', customer.LastName) AS MemberName,
+      customer.Email,
+      term.MembershipType,
+      DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
+      DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
+      DATEDIFF(term.EndDate, CURDATE()) AS DaysUntilExpiration
+    FROM membershipterm term
+    JOIN membership ON membership.MembershipID = term.MembershipID
+    JOIN customer ON customer.CustomerID = membership.CustomerID
+    WHERE membership.IsDeleted = 0 AND term.EndDate >= CURDATE()
+    ORDER BY DaysUntilExpiration ASC`
+  );
+
+  for (const row of rows) {
+    row.DaysUntilExpiration = Number(row.DaysUntilExpiration);
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getArtworkAcquisitionTimelineReport(params, body, staffId) {
+  const dates = readDates(params);
+  const conditions = [];
+  const values = [];
+  addRange("DATE(artwork.CreatedAt)", dates, conditions, values);
+
+  const [rows] = await pool.query(
+    `SELECT
+      YEAR(artwork.CreatedAt) AS AcquisitionYear,
+      COUNT(artwork.ArtworkID) AS ArtworksAcquired
+    FROM artwork
+    WHERE artwork.IsDeleted = 0` + joinConditions(conditions) + `
+    GROUP BY YEAR(artwork.CreatedAt)
+    ORDER BY AcquisitionYear ASC`,
+    values
+  );
+
+  for (const row of rows) {
+    row.AcquisitionYear = Number(row.AcquisitionYear);
+    row.ArtworksAcquired = Number(row.ArtworksAcquired);
+  }
+
+  return { status: 200, data: rows };
+}
+
+async function getReportSummaryStats(params, body, staffId) {
+  const [expiringRows] = await pool.query(
+    `SELECT COUNT(term.MembershipID) AS ExpiringSoon 
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0 
+     AND term.EndDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
+  );
+
+  const [exhibRows] = await pool.query(
+    `SELECT 
+      COALESCE(AVG((SELECT COUNT(TicketID) FROM ticket t WHERE t.ExhibitionID = exhibition.ExhibitionID AND t.IsDeleted = 0 AND t.RefundStatus <> 'Refunded') / NULLIF(Capacity, 0) * 100), 0) AS AvgCapacity
+    FROM exhibition 
+    WHERE IsDeleted = 0 AND Capacity > 0`
+  );
+
+  const [artRows] = await pool.query(
+    `SELECT COUNT(ArtworkID) AS TotalArtworks FROM artwork WHERE IsDeleted = 0`
+  );
+
+  const [memberRows] = await pool.query(
+    `SELECT COUNT(DISTINCT term.MembershipID) AS ActiveMembers 
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0 AND term.EndDate >= CURDATE()`
+  );
+
+  return {
+    status: 200,
+    data: {
+      expiringSoon: Number(expiringRows[0]?.ExpiringSoon || 0),
+      avgCapacity: Math.round(Number(exhibRows[0]?.AvgCapacity || 0)),
+      totalArtworks: Number(artRows[0]?.TotalArtworks || 0),
+      activeMembers: Number(memberRows[0]?.ActiveMembers || 0),
+    },
+  };
+}
+
 module.exports = [
   { method: "GET", path: "/api/reports/collection", handler: getCollectionReport },
+  { method: "GET", path: "/api/reports/collection-distribution", handler: getCollectionDistributionReport },
+  { method: "GET", path: "/api/reports/artwork-timeline", handler: getArtworkAcquisitionTimelineReport },
+  { method: "GET", path: "/api/reports/visitor-traffic", handler: getVisitorTrafficReport },
+  { method: "GET", path: "/api/reports/membership-expiration", handler: getMembershipExpirationReport },
   { method: "GET", path: "/api/reports/exhibitions", handler: getExhibitionReport },
   { method: "GET", path: "/api/reports/memberships", handler: getMembershipReport },
   { method: "GET", path: "/api/reports/sales", handler: getSalesReport },
@@ -360,4 +500,5 @@ module.exports = [
   { method: "GET", path: "/api/reports/membership-types", handler: getMembershipTypesReport },
   { method: "GET", path: "/api/reports/giftshop-items", handler: getGiftShopItemsReport },
   { method: "GET", path: "/api/reports/cafe-items", handler: getCafeItemsReport },
+  { method: "GET", path: "/api/reports/summary-stats", handler: getReportSummaryStats },
 ];
