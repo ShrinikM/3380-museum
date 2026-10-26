@@ -721,6 +721,11 @@ textarea:focus-visible {
   color: #5a1a8a;
 }
 
+.badge-dual {
+  background: #e8f0fb;
+  color: #1d4f91;
+}
+
 /* Chips and summary cards */
 
 .chips {
