@@ -512,7 +512,7 @@ function PurchasesTab({ purchases }) {
 
 
 
-function TicketsTab({ data, onBought }) {
+function TicketsTab({ data, account, onBought }) {
   const [exhibitionId, setExhibitionId] = useState(null)
   const [counts, setCounts] = useState({})
   const [visitDate, setVisitDate] = useState('')
@@ -528,16 +528,57 @@ function TicketsTab({ data, onBought }) {
     (item) => item.ExhibitionID === exhibitionId
   )
 
-  const priceFor = (type) =>
-    prices[type] * (1 - (discounts?.[type] ?? 0) / 100)
+
+  const discountedLimit = {
+    Adult: 0,
+    Child: 0,
+    Student: 0,
+    Senior: 0,
+  }
+
+  const membership = account?.membership ?? account?.Membership ?? null
+
+  if (membership?.Status?.toLowerCase() === 'active') {
+    switch (membership.MembershipType) {
+      case 'Individual':
+        discountedLimit.Adult = 1
+        break
+      case 'Family':
+        discountedLimit.Adult = 2
+        discountedLimit.Child = 6
+        break
+      case 'Student':
+        discountedLimit.Student = 1
+        break
+      case 'Senior':
+        discountedLimit.Senior = 1
+        break
+    }
+  }
+
+  const priceFor = (type, index = 0) => {
+    const discount = index < (discountedLimit[type] || 0)
+      ? (discounts?.[type] ?? 0)
+      : 0
+
+    return prices[type] * (1 - discount / 100)
+  }
+
   const totalCount = types.reduce(
     (sum, type) => sum + (counts[type] || 0),
     0
   )
+
   const totalPrice = types.reduce(
-    (sum, type) => sum + (counts[type] || 0) * priceFor(type),
+    (sum, type) =>
+      sum +
+      Array.from(
+        { length: counts[type] || 0 },
+        (_, index) => priceFor(type, index)
+      ).reduce((subtotal, price) => subtotal + price, 0),
     0
   )
+
   const limit = Math.min(
     MAX_PER_ORDER,
     selected ? selected.Remaining : 0
@@ -1317,7 +1358,7 @@ function CustomerPage() {
       {!loadError && account === null && <p className="cp-empty">Loading...</p>}
 
       {account && tab === 'membership' && <MembershipTab account={account} onChanged={handleBought} />}
-      {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} onBought={handleBought} />}
+      {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} account={account} onBought={handleBought} />}
       {shopItems && tab === 'shop' && <ShopTab items={shopItems} onBought={handleBought} />}
       {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} />}
     </div>

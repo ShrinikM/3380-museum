@@ -888,8 +888,8 @@ async function addTickets(params, body, customerId) {
          e.Capacity,
          DATE_FORMAT(e.StartDate, '%Y-%m-%d') AS StartDate,
          DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate
-       FROM exhibition e
-       WHERE e.ExhibitionID = ?
+         FROM exhibition e
+         WHERE e.ExhibitionID = ?
          AND e.IsDeleted = 0
          AND e.CancelledAt IS NULL
          AND e.EndDate >= CURDATE()
@@ -928,9 +928,48 @@ async function addTickets(params, body, customerId) {
 
     let total = 0;
 
+    const discountedCounts = {
+      Adult: 0,
+      Child: 0,
+      Student: 0,
+      Senior: 0,
+    };
+
     for (const visitor of order.Visitors) {
       const type = visitor.TicketType;
-      const discount = getTicketDiscount(membership, type);
+      let discount = getTicketDiscount(membership, type);
+
+      if (membership !== null && membership.Status === "active") {
+        switch (membership.MembershipType) {
+          case "Individual":
+            if (type === "Adult" && discountedCounts.Adult >= 1) {
+              discount = 0;
+            }
+            break;
+
+          case "Family":
+            if (type === "Adult" && discountedCounts.Adult >= 2) {
+              discount = 0;
+            }
+
+            if (type === "Child" && discountedCounts.Child >= 6) {
+              discount = 0;
+            }
+            break;
+
+          case "Student":
+            if (type === "Student" && discountedCounts.Student >= 1) {
+              discount = 0;
+            }
+            break;
+
+          case "Senior":
+            if (type === "Senior" && discountedCounts.Senior >= 1) {
+              discount = 0;
+            }
+            break;
+        }
+      }
 
       const price = money(
         ticketPrices[type] * (1 - discount / 100)
@@ -938,10 +977,10 @@ async function addTickets(params, body, customerId) {
 
       await connection.query(
         `INSERT INTO ticket
-          (TicketType, Price, SaleDate, VisitDate,
-           ExhibitionID, MembershipID, CustomerID,
-           CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-         VALUES (?, ?, CURDATE(), ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+      (TicketType, Price, SaleDate, VisitDate,
+       ExhibitionID, MembershipID, CustomerID,
+       CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+     VALUES (?, ?, CURDATE(), ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
         [
           type,
           price,
@@ -951,6 +990,10 @@ async function addTickets(params, body, customerId) {
           customerId,
         ]
       );
+
+      if (discount > 0) {
+        discountedCounts[type]++;
+      }
 
       total += price;
     }
