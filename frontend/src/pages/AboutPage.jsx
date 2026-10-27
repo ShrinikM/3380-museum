@@ -24,7 +24,6 @@ const HOURS = [
   { day: 'Sunday', time: '12 pm - 9 pm' },
 ]
 
-// Same prices and discounts as membershipPlans in backend/prices.js
 const PLANS = [
   {
     type: 'Dual',
@@ -78,7 +77,6 @@ function formatPrice(value){
   return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`
 }
 
-// Customers go straight to their account tab, everyone else logs in first
 function useAccountLink(tab){
   const { user } = useRole()
   const isCustomer = user !== null && user.role === 'Customer'

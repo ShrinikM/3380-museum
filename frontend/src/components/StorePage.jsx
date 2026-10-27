@@ -35,7 +35,6 @@ const emptyForm = {
   MembershipID: '',
 }
 
-// Local date as YYYY-MM-DD (toISOString would give the UTC date)
 function localToday(){
   const now = new Date()
   const month = String(now.getMonth() + 1).padStart(2, '0')
@@ -111,7 +110,6 @@ function StorePage({ kind }){
 
   const revenue = sales.reduce((sum, sale)=>sum + saleTotal(sale), 0)
 
-  // Form
 
   const openModal = (values, id)=>{
     setFormData({ ...emptyForm, ...values })
@@ -205,7 +203,6 @@ function StorePage({ kind }){
     }
 
     if(isGiftShop){
-      // When editing, the original sale's quantity goes back into stock first
       const original = sales.find((sale)=>Number(sale.SaleID) === Number(editingId))
       const returned = original && Number(original.ItemID) === Number(item.ItemID)
         ? original.Quantity
@@ -270,7 +267,6 @@ function StorePage({ kind }){
     }
   }
 
-  // Delete
 
   const deleteItem = async (item)=>{
     const hasSales = sales.some((sale)=>Number(sale.ItemID) === Number(item.ItemID))

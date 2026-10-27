@@ -1,4 +1,5 @@
 const pool = require("../db");
+const { joinCurrentTerm } = require("../terms");
 
 function makeError(status, message) {
   const error = new Error(message);
@@ -64,9 +65,9 @@ function getRange(column, dates) {
 
 async function getRevenueReport(params, body, staffId) {
   const dates = readDates(params);
-  const tickets = getRange("SaleDate", dates);
-  const giftShop = getRange("SaleDate", dates);
-  const cafe = getRange("SaleDate", dates);
+  const tickets = getRange("ticket.SaleDate", dates);
+  const giftShop = getRange("sale.SaleDate", dates);
+  const cafe = getRange("sale.SaleDate", dates);
   const memberships = getRange("term.StartDate", dates);
   const donations = getRange("DonationDate", dates);
 
@@ -76,25 +77,31 @@ async function getRevenueReport(params, body, staffId) {
       SUM(Revenue) AS Revenue,
       SUM(Visitors) AS TotalVisitors
     FROM (
-      SELECT DATE_FORMAT(SaleDate, '%b %y') AS Month, SUM(Price) AS Revenue, COUNT(TicketID) AS Visitors, MIN(SaleDate) AS SortDate
+      SELECT DATE_FORMAT(ticket.SaleDate, '%b %y') AS Month, SUM(ticket.Price) AS Revenue, COUNT(ticket.TicketID) AS Visitors, MIN(ticket.SaleDate) AS SortDate
       FROM ticket
-      WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'` + tickets.where + `
-      GROUP BY DATE_FORMAT(SaleDate, '%b %y')
+      JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
+      WHERE ticket.IsDeleted = 0
+        AND ticket.RefundStatus <> 'Refunded'
+        AND exhibition.IsDeleted = 0
+        AND exhibition.CancelledAt IS NULL` + tickets.where + `
+      GROUP BY DATE_FORMAT(ticket.SaleDate, '%b %y')
       UNION ALL
-      SELECT DATE_FORMAT(SaleDate, '%b %y') AS Month, SUM(SalePrice * Quantity) AS Revenue, 0 AS Visitors, MIN(SaleDate) AS SortDate
-      FROM giftshopsale
-      WHERE IsDeleted = 0` + giftShop.where + `
-      GROUP BY DATE_FORMAT(SaleDate, '%b %y')
+      SELECT DATE_FORMAT(sale.SaleDate, '%b %y') AS Month, SUM(sale.SalePrice * sale.Quantity) AS Revenue, 0 AS Visitors, MIN(sale.SaleDate) AS SortDate
+      FROM giftshopsale sale
+      JOIN giftshop item ON item.ItemID = sale.ItemID
+      WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` + giftShop.where + `
+      GROUP BY DATE_FORMAT(sale.SaleDate, '%b %y')
       UNION ALL
-      SELECT DATE_FORMAT(SaleDate, '%b %y') AS Month, SUM(SalePrice * Quantity) AS Revenue, 0 AS Visitors, MIN(SaleDate) AS SortDate
-      FROM cafesale
-      WHERE IsDeleted = 0` + cafe.where + `
-      GROUP BY DATE_FORMAT(SaleDate, '%b %y')
+      SELECT DATE_FORMAT(sale.SaleDate, '%b %y') AS Month, SUM(sale.SalePrice * sale.Quantity) AS Revenue, 0 AS Visitors, MIN(sale.SaleDate) AS SortDate
+      FROM cafesale sale
+      JOIN cafe item ON item.ItemID = sale.ItemID
+      WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` + cafe.where + `
+      GROUP BY DATE_FORMAT(sale.SaleDate, '%b %y')
       UNION ALL
       SELECT DATE_FORMAT(term.StartDate, '%b %y') AS Month, SUM(term.Price) AS Revenue, 0 AS Visitors, MIN(term.StartDate) AS SortDate
       FROM membershipterm term
       JOIN membership ON membership.MembershipID = term.MembershipID
-      WHERE membership.IsDeleted = 0` + memberships.where + `
+      WHERE membership.IsDeleted = 0 AND term.CancelledAt IS NULL` + memberships.where + `
       GROUP BY DATE_FORMAT(term.StartDate, '%b %y')
       UNION ALL
       SELECT DATE_FORMAT(DonationDate, '%b %y') AS Month, SUM(AmountDonated) AS Revenue, 0 AS Visitors, MIN(DonationDate) AS SortDate
@@ -152,6 +159,7 @@ async function getTicketSalesReport(params, body, staffId) {
       AND ticket.IsDeleted = 0
       AND ticket.RefundStatus <> 'Refunded'` + tickets.where + `
     WHERE exhibition.IsDeleted = 0
+      AND exhibition.CancelledAt IS NULL
     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
     ORDER BY TicketsSold DESC, exhibition.Name`,
     tickets.values
@@ -172,7 +180,7 @@ async function getTicketSalesReport(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
-async function getItemRevenue(params, saleTable, itemTable) {
+async function getItemRevenue(params, saleTable, itemTable, storeName) {
   const dates = readDates(params);
   const sales = getRange("sale.SaleDate", dates);
 
@@ -185,7 +193,7 @@ async function getItemRevenue(params, saleTable, itemTable) {
       SUM(sale.SalePrice * sale.Quantity) AS Revenue
     FROM ` + saleTable + ` AS sale
     JOIN ` + itemTable + ` AS item ON item.ItemID = sale.ItemID
-    WHERE sale.IsDeleted = 0` + sales.where + `
+    WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` + sales.where + `
     GROUP BY item.ItemID, item.ItemName, item.Category
     ORDER BY Revenue DESC, item.ItemName`,
     sales.values
@@ -193,6 +201,7 @@ async function getItemRevenue(params, saleTable, itemTable) {
 
   let total = 0;
   for (const row of rows) {
+    row.Store = storeName;
     row.UnitsSold = Number(row.UnitsSold);
     row.Revenue = Number(row.Revenue);
     total = total + row.Revenue;
@@ -206,11 +215,14 @@ async function getItemRevenue(params, saleTable, itemTable) {
     }
   }
 
-  return { status: 200, data: rows };
+  return rows;
 }
 
-async function getGiftShopItemsReport(params, body, staffId) {
-  return getItemRevenue(params, "giftshopsale", "giftshop");
+async function getStoreItemsReport(params, body, staffId) {
+  const giftShop = await getItemRevenue(params, "giftshopsale", "giftshop", "Gift Shop");
+  const cafe = await getItemRevenue(params, "cafesale", "cafe", "Café");
+
+  return { status: 200, data: giftShop.concat(cafe) };
 }
 
 async function getMembershipExpirationReport(params, body, staffId) {
@@ -223,11 +235,15 @@ async function getMembershipExpirationReport(params, body, staffId) {
       DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
       DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
       DATEDIFF(term.EndDate, CURDATE()) AS DaysUntilExpiration
-    FROM membershipterm term
-    JOIN membership ON membership.MembershipID = term.MembershipID
-    JOIN customer ON customer.CustomerID = membership.CustomerID
-    WHERE membership.IsDeleted = 0 AND term.EndDate >= CURDATE()
-    ORDER BY DaysUntilExpiration ASC`
+    FROM membership
+    JOIN customer
+      ON customer.CustomerID = membership.CustomerID
+      AND customer.IsDeleted = 0
+    ` + joinCurrentTerm("membership") + `
+    WHERE membership.IsDeleted = 0
+      AND term.CancelledAt IS NULL
+      AND term.EndDate >= CURDATE()
+    ORDER BY DaysUntilExpiration ASC, MemberName`
   );
 
   for (const row of rows) {
@@ -278,7 +294,7 @@ async function getReportSummaryStats(params, body, staffId) {
 module.exports = [
   { method: "GET", path: "/api/reports/revenue", handler: getRevenueReport },
   { method: "GET", path: "/api/reports/ticket-sales", handler: getTicketSalesReport },
-  { method: "GET", path: "/api/reports/giftshop-cafe", handler: getGiftShopItemsReport },
+  { method: "GET", path: "/api/reports/giftshop-cafe", handler: getStoreItemsReport },
   { method: "GET", path: "/api/reports/membership-expiration", handler: getMembershipExpirationReport },
   { method: "GET", path: "/api/reports/summary-stats", handler: getReportSummaryStats },
 ];

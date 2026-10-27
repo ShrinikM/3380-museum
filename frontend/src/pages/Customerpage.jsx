@@ -942,7 +942,7 @@ function TicketsTab({ data, account, onBought }) {
                   )}
 
                   <span className="cp-option-meta">
-                    {formatDate(item.StartDate)} – {formatDate(item.EndDate)}
+                    {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
                     {' · '}Sold out
                     {' · '}Waitlist {item.WaitlistCount} of {waitlistLimit}
                   </span>
@@ -1015,7 +1015,7 @@ function TicketsTab({ data, account, onBought }) {
                 )}
 
                 <span className="cp-option-meta">
-                  {formatDate(item.StartDate)} – {formatDate(item.EndDate)}
+                  {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
                   {' · '}{item.Remaining} left
                   {entry && entry.Status === 'Notified' &&
                     ' · A spot opened for you'}

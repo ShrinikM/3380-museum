@@ -1505,33 +1505,34 @@ input[type='radio'] {
   margin-bottom: 24px;
 }
 
-.reports-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
-}
-
-.reports-summary .summary-card {
-  min-height: 68px;
-  padding: 12px 20px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
+/* Quieter buttons on the reports page, so only Run Report stands out */
+.reports-page .btn.secondary {
+  border-color: var(--border);
   background: var(--card);
+  color: var(--foreground);
 }
 
-.reports-summary .summary-value {
-  font-size: 30px;
+.reports-page .btn.secondary:hover {
+  border-color: #cfcac3;
+  background: var(--muted);
 }
 
-.reports-summary .summary-label {
-  font-size: 14px;
+.reports-page .btn.danger {
+  border-color: rgba(176, 39, 26, 0.3);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.reports-page .btn.danger:hover {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
 }
 
 .report-request-panel,
 .report-viewer {
-  padding: 24px;
   margin-bottom: 32px;
+  padding: 24px;
 }
 
 .report-request-panel .module-title {
@@ -1541,12 +1542,13 @@ input[type='radio'] {
 .report-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 18px 20px;
 }
 
-.report-form .form-group label {
-  font-size: 14px;
-  font-weight: 500;
+.report-form .form-group label,
+.report-form .field-label {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .report-form .input {
@@ -1555,19 +1557,47 @@ input[type='radio'] {
   padding: 8px 12px;
 }
 
+.report-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-form .report-column {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.report-column:has(input:checked) {
+  border-color: rgba(200, 16, 46, 0.35);
+  background: var(--primary-tint);
+}
+
+.report-form .report-column input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
 .report-form-actions {
   grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 8px;
-}
-
-.report-message {
-  margin-top: 16px;
-  color: var(--primary);
-  font-size: 14px;
+  padding-top: 4px;
 }
 
 .report-section-header {
@@ -1587,27 +1617,70 @@ input[type='radio'] {
   margin-bottom: 32px;
 }
 
-.chart-card {
-  padding: 16px 0;
+/* Report viewer */
+
+.report-viewer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
-.chart-title {
-  margin-bottom: 8px;
-  font-size: 14px;
+.report-viewer-header .module-title {
+  margin-bottom: 2px;
+}
+
+.report-viewer-meta {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.report-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.report-chart {
+  min-width: 0;
+  padding: 18px 18px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.report-chart h3 {
+  margin-bottom: 10px;
+  font-size: 15px;
   font-weight: 600;
 }
 
+.report-cell {
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+
+/* Charts */
+
+.chart-card {
+  min-width: 0;
+}
+
 .chart-svg {
+  display: block;
   width: 100%;
-  max-width: 640px;
   height: auto;
 }
 
 .chart-legend {
   display: flex;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 8px;
+  gap: 8px 20px;
+  margin-top: 6px;
   font-size: 13px;
 }
 
@@ -1617,52 +1690,64 @@ input[type='radio'] {
   gap: 6px;
 }
 
-.chart-legend-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.chart-legend-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .chart-swatch {
   display: inline-block;
+  flex-shrink: 0;
   width: 12px;
   height: 12px;
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
 .chart-pie {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 24px;
+  gap: 20px;
 }
 
 .chart-pie-svg {
-  width: 280px;
-  max-width: 100%;
+  flex-shrink: 0;
+  width: 200px;
+  max-width: 45%;
   height: auto;
 }
 
-.report-viewer-header {
+.chart-pie-legend {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 8px;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
 }
 
-.report-viewer .data-table {
-  margin-top: 16px;
+.chart-pie-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chart-pie-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-pie-value {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1100px) {
+  .report-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Dashboard */
@@ -2406,46 +2491,4 @@ input[type='radio'] {
   .site-footer {
     padding: 36px 16px;
   }
-}
-
-.report-viewer {
-  width: 100%;
-}
-
-.report-viewer-header {
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-  width: 100% !important;
-  margin-bottom: 1.5rem;
-}
-
-.report-viewer > div:not(.report-viewer-header),
-.report-viewer .chart-container,
-.report-viewer .chart-wrap {
-  width: 100% !important;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1.5rem;
-}
-
-.report-viewer svg,
-.report-viewer canvas {
-  width: 100% !important;
-  max-width: 650px !important; 
-  height: 300px !important;
-  margin: 0 auto;
-}
-
-.report-viewer h3,
-.report-viewer .chart-title {
-  text-align: center;
-  width: 100%;
-  margin-bottom: 1rem;
-}
-
-.report-viewer .data-table {
-  width: 100%;
 }
