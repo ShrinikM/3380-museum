@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import Chart from '../components/Chart'
@@ -141,13 +141,6 @@ function Reports() {
   const [endDate, setEndDate] = useState('')
   const [history, setHistory] = useState(() => getSavedHistory(storageKey))
   const [message, setMessage] = useState('')
-  const [summaryStats, setSummaryStats] = useState(null)
-
-  useEffect(() => {
-    callApi('/api/reports/summary-stats', 'GET')
-      .then((data) => setSummaryStats(data))
-      .catch(() => {})
-  }, [])
 
   const saveHistory = (newHistory) => {
     try {
@@ -342,36 +335,6 @@ function Reports() {
 
       <div className="page-header">
         <h1 className="page-title">Reports</h1>
-      </div>
-
-      <div className="dash-stat-grid" style={{ marginBottom: '1.25rem' }}>
-        <div className="card dash-stat-card">
-          <div className="dash-stat-label">Expiring (Next 30 Days)</div>
-          <div className="dash-stat-value" style={{ color: 'var(--warning, #d97706)' }}>
-            {summaryStats?.expiringSoon?.toLocaleString() ?? '—'}
-          </div>
-        </div>
-
-        <div className="card dash-stat-card">
-          <div className="dash-stat-label">Avg Exhibition Fill</div>
-          <div className="dash-stat-value">
-            {summaryStats ? `${summaryStats.avgCapacity}%` : '—'}
-          </div>
-        </div>
-
-        <div className="card dash-stat-card">
-          <div className="dash-stat-label">Total Cataloged Artworks</div>
-          <div className="dash-stat-value">
-            {summaryStats?.totalArtworks?.toLocaleString() ?? '—'}
-          </div>
-        </div>
-
-        <div className="card dash-stat-card">
-          <div className="dash-stat-label">Active Members</div>
-          <div className="dash-stat-value">
-            {summaryStats?.activeMembers?.toLocaleString() ?? '—'}
-          </div>
-        </div>
       </div>
 
       <div className="card report-request-panel">
