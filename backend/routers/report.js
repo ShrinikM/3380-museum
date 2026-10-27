@@ -54,131 +54,6 @@ function joinConditions(conditions) {
   return " AND " + conditions.join(" AND ");
 }
 
-async function getCollectionReport(params, body, staffId) {
-  const dates = readDates(params);
-  const conditions = [];
-  const values = [];
-  addRange("DATE(artwork.CreatedAt)", dates, conditions, values);
-
-  const [rows] = await pool.query(
-    `SELECT
-       artwork.ArtworkID,
-       artwork.Title,
-       artwork.Type,
-       artwork.YearCreated,
-       CONCAT(artist.FirstName, ' ', artist.LastName) AS ArtistName,
-       collection.Name AS CollectionName,
-       DATE_FORMAT(artwork.CreatedAt, '%Y-%m-%d') AS DateAdded
-     FROM artwork
-     JOIN artist ON artist.ArtistID = artwork.ArtistID
-     JOIN collection ON collection.CollectionID = artwork.CollectionID
-     WHERE artwork.IsDeleted = 0` + joinConditions(conditions) + `
-     ORDER BY collection.Name, artwork.Title`,
-    values
-  );
-
-  return { status: 200, data: rows };
-}
-
-async function getExhibitionReport(params, body, staffId) {
-  const dates = readDates(params);
-  const conditions = [];
-  const values = [];
-
-  if (dates.start !== null) {
-    conditions.push("EndDate >= ?");
-    values.push(dates.start);
-  }
-  if (dates.end !== null) {
-    conditions.push("StartDate <= ?");
-    values.push(dates.end);
-  }
-
-  const [rows] = await pool.query(
-    `SELECT
-       ExhibitionID,
-       Name,
-       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
-       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
-       Description,
-       Capacity
-     FROM exhibition
-     WHERE IsDeleted = 0` + joinConditions(conditions) + `
-     ORDER BY StartDate`,
-    values
-  );
-
-  return { status: 200, data: rows };
-}
-
-async function getMembershipReport(params, body, staffId) {
-  const dates = readDates(params);
-  const conditions = [];
-  const values = [];
-  addRange("term.StartDate", dates, conditions, values);
-
-  const [rows] = await pool.query(
-    `SELECT
-       membership.MembershipID,
-       CONCAT(customer.FirstName, ' ', customer.LastName) AS MemberName,
-       customer.Email,
-       term.MembershipType,
-       DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS StartDate,
-       DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
-       term.Price,
-       term.DiscountPercent,
-       term.PaymentMethod
-     FROM membershipterm term
-     JOIN membership ON membership.MembershipID = term.MembershipID
-     JOIN customer ON customer.CustomerID = membership.CustomerID
-     WHERE membership.IsDeleted = 0` + joinConditions(conditions) + `
-     ORDER BY term.StartDate`,
-    values
-  );
-
-  return { status: 200, data: rows };
-}
-
-async function getSalesReport(params, body, staffId) {
-  const dates = readDates(params);
-  const conditions = [];
-  const values = [];
-  addRange("sale.SaleDate", dates, conditions, values);
-  const where = joinConditions(conditions);
-
-  const [rows] = await pool.query(
-    `SELECT
-       'Gift Shop' AS Shop,
-       sale.SaleID,
-       item.ItemName,
-       sale.Quantity,
-       sale.SalePrice,
-       sale.Quantity * sale.SalePrice AS Total,
-       DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS SaleDate,
-       sale.PaymentMethod
-     FROM giftshopsale AS sale
-     JOIN giftshop AS item ON item.ItemID = sale.ItemID
-     WHERE sale.IsDeleted = 0` + where + `
-     UNION ALL
-     SELECT
-       'Cafe' AS Shop,
-       sale.SaleID,
-       item.ItemName,
-       sale.Quantity,
-       sale.SalePrice,
-       sale.Quantity * sale.SalePrice AS Total,
-       DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS SaleDate,
-       sale.PaymentMethod
-     FROM cafesale AS sale
-     JOIN cafe AS item ON item.ItemID = sale.ItemID
-     WHERE sale.IsDeleted = 0` + where + `
-     ORDER BY SaleDate, Shop`,
-    values.concat(values)
-  );
-
-  return { status: 200, data: rows };
-}
-
 function getRange(column, dates) {
   const conditions = [];
   const values = [];
@@ -196,26 +71,39 @@ async function getRevenueReport(params, body, staffId) {
   const donations = getRange("DonationDate", dates);
 
   const [rows] = await pool.query(
-    `SELECT 'Tickets' AS Source, COALESCE(SUM(Price), 0) AS Revenue
-     FROM ticket
-     WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'` + tickets.where + `
-     UNION ALL
-     SELECT 'Gift Shop' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
-     FROM giftshopsale
-     WHERE IsDeleted = 0` + giftShop.where + `
-     UNION ALL
-     SELECT 'Cafe' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
-     FROM cafesale
-     WHERE IsDeleted = 0` + cafe.where + `
-     UNION ALL
-     SELECT 'Memberships' AS Source, COALESCE(SUM(term.Price), 0) AS Revenue
-     FROM membershipterm term
-     JOIN membership ON membership.MembershipID = term.MembershipID
-     WHERE membership.IsDeleted = 0` + memberships.where + `
-     UNION ALL
-     SELECT 'Donations' AS Source, COALESCE(SUM(AmountDonated), 0) AS Revenue
-     FROM donations
-     WHERE IsDeleted = 0` + donations.where,
+    `SELECT 
+      Month,
+      SUM(Revenue) AS Revenue,
+      SUM(Visitors) AS TotalVisitors
+    FROM (
+      SELECT DATE_FORMAT(SaleDate, '%b %y') AS Month, SUM(Price) AS Revenue, COUNT(TicketID) AS Visitors, MIN(SaleDate) AS SortDate
+      FROM ticket
+      WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'` + tickets.where + `
+      GROUP BY DATE_FORMAT(SaleDate, '%b %y')
+      UNION ALL
+      SELECT DATE_FORMAT(SaleDate, '%b %y') AS Month, SUM(SalePrice * Quantity) AS Revenue, 0 AS Visitors, MIN(SaleDate) AS SortDate
+      FROM giftshopsale
+      WHERE IsDeleted = 0` + giftShop.where + `
+      GROUP BY DATE_FORMAT(SaleDate, '%b %y')
+      UNION ALL
+      SELECT DATE_FORMAT(SaleDate, '%b %y') AS Month, SUM(SalePrice * Quantity) AS Revenue, 0 AS Visitors, MIN(SaleDate) AS SortDate
+      FROM cafesale
+      WHERE IsDeleted = 0` + cafe.where + `
+      GROUP BY DATE_FORMAT(SaleDate, '%b %y')
+      UNION ALL
+      SELECT DATE_FORMAT(term.StartDate, '%b %y') AS Month, SUM(term.Price) AS Revenue, 0 AS Visitors, MIN(term.StartDate) AS SortDate
+      FROM membershipterm term
+      JOIN membership ON membership.MembershipID = term.MembershipID
+      WHERE membership.IsDeleted = 0` + memberships.where + `
+      GROUP BY DATE_FORMAT(term.StartDate, '%b %y')
+      UNION ALL
+      SELECT DATE_FORMAT(DonationDate, '%b %y') AS Month, SUM(AmountDonated) AS Revenue, 0 AS Visitors, MIN(DonationDate) AS SortDate
+      FROM donations
+      WHERE IsDeleted = 0` + donations.where + `
+      GROUP BY DATE_FORMAT(DonationDate, '%b %y')
+    ) combined
+    GROUP BY Month
+    ORDER BY MIN(SortDate) ASC`,
     tickets.values.concat(
       giftShop.values,
       cafe.values,
@@ -224,18 +112,24 @@ async function getRevenueReport(params, body, staffId) {
     )
   );
 
-  let total = 0;
+  let prevRevenue = null;
   for (const row of rows) {
     row.Revenue = Number(row.Revenue);
-    total = total + row.Revenue;
-  }
-
-  for (const row of rows) {
-    if (total > 0) {
-      row.PercentOfTotal = Math.round((row.Revenue / total) * 1000) / 10;
+    row.TotalVisitors = Number(row.TotalVisitors);
+    
+    if (row.TotalVisitors > 0) {
+      row.AvgSpendPerVisitor = Math.round((row.Revenue / row.TotalVisitors) * 100) / 100;
     } else {
-      row.PercentOfTotal = 0;
+      row.AvgSpendPerVisitor = 0;
     }
+
+    if (prevRevenue !== null && prevRevenue > 0) {
+      const growth = ((row.Revenue - prevRevenue) / prevRevenue) * 100;
+      row.MonthOverMonthGrowth = Math.round(growth * 10) / 10;
+    } else {
+      row.MonthOverMonthGrowth = 0;
+    }
+    prevRevenue = row.Revenue;
   }
 
   return { status: 200, data: rows };
@@ -247,19 +141,19 @@ async function getTicketSalesReport(params, body, staffId) {
 
   const [rows] = await pool.query(
     `SELECT
-       exhibition.ExhibitionID,
-       exhibition.Name,
-       COUNT(ticket.TicketID) AS TicketsSold,
-       COALESCE(SUM(ticket.Price), 0) AS Revenue,
-       exhibition.Capacity
-     FROM exhibition
-     LEFT JOIN ticket
-       ON ticket.ExhibitionID = exhibition.ExhibitionID
-       AND ticket.IsDeleted = 0
-       AND ticket.RefundStatus <> 'Refunded'` + tickets.where + `
-     WHERE exhibition.IsDeleted = 0
-     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
-     ORDER BY TicketsSold DESC, exhibition.Name`,
+      exhibition.ExhibitionID,
+      exhibition.Name,
+      COUNT(ticket.TicketID) AS TicketsSold,
+      COALESCE(SUM(ticket.Price), 0) AS Revenue,
+      exhibition.Capacity
+    FROM exhibition
+    LEFT JOIN ticket
+      ON ticket.ExhibitionID = exhibition.ExhibitionID
+      AND ticket.IsDeleted = 0
+      AND ticket.RefundStatus <> 'Refunded'` + tickets.where + `
+    WHERE exhibition.IsDeleted = 0
+    GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
+    ORDER BY TicketsSold DESC, exhibition.Name`,
     tickets.values
   );
 
@@ -278,49 +172,22 @@ async function getTicketSalesReport(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
-async function getMembershipTypesReport(params, body, staffId) {
-  const dates = readDates(params);
-  const memberships = getRange("term.StartDate", dates);
-
-  const [rows] = await pool.query(
-    `SELECT
-       term.MembershipType,
-       COUNT(*) AS Members,
-       COALESCE(SUM(term.Price), 0) AS Revenue,
-       ROUND(AVG(term.DiscountPercent), 1) AS AverageDiscount
-     FROM membershipterm term
-     JOIN membership ON membership.MembershipID = term.MembershipID
-     WHERE membership.IsDeleted = 0` + memberships.where + `
-     GROUP BY term.MembershipType
-     ORDER BY FIELD(term.MembershipType, 'Dual', 'Family', 'Student', 'Senior')`,
-    memberships.values
-  );
-
-  for (const row of rows) {
-    row.Members = Number(row.Members);
-    row.Revenue = Number(row.Revenue);
-    row.AverageDiscount = Number(row.AverageDiscount);
-  }
-
-  return { status: 200, data: rows };
-}
-
 async function getItemRevenue(params, saleTable, itemTable) {
   const dates = readDates(params);
   const sales = getRange("sale.SaleDate", dates);
 
   const [rows] = await pool.query(
     `SELECT
-       item.ItemID,
-       item.ItemName,
-       item.Category,
-       SUM(sale.Quantity) AS UnitsSold,
-       SUM(sale.SalePrice * sale.Quantity) AS Revenue
-     FROM ` + saleTable + ` AS sale
-     JOIN ` + itemTable + ` AS item ON item.ItemID = sale.ItemID
-     WHERE sale.IsDeleted = 0` + sales.where + `
-     GROUP BY item.ItemID, item.ItemName, item.Category
-     ORDER BY Revenue DESC, item.ItemName`,
+      item.ItemID,
+      item.ItemName,
+      item.Category,
+      SUM(sale.Quantity) AS UnitsSold,
+      SUM(sale.SalePrice * sale.Quantity) AS Revenue
+    FROM ` + saleTable + ` AS sale
+    JOIN ` + itemTable + ` AS item ON item.ItemID = sale.ItemID
+    WHERE sale.IsDeleted = 0` + sales.where + `
+    GROUP BY item.ItemID, item.ItemName, item.Category
+    ORDER BY Revenue DESC, item.ItemName`,
     sales.values
   );
 
@@ -344,59 +211,6 @@ async function getItemRevenue(params, saleTable, itemTable) {
 
 async function getGiftShopItemsReport(params, body, staffId) {
   return getItemRevenue(params, "giftshopsale", "giftshop");
-}
-
-async function getCafeItemsReport(params, body, staffId) {
-  return getItemRevenue(params, "cafesale", "cafe");
-}
-
-async function getCollectionDistributionReport(params, body, staffId) {
-  const [rows] = await pool.query(
-    `SELECT 
-        collection.CollectionID,
-        collection.Name AS CollectionName,
-        COUNT(artwork.ArtworkID) AS TotalArtworks,
-        MIN(artwork.YearCreated) AS OldestArtworkYear,
-        MAX(artwork.YearCreated) AS NewestArtworkYear
-    FROM collection
-    LEFT JOIN artwork ON collection.CollectionID = artwork.CollectionID AND artwork.IsDeleted = 0
-    WHERE collection.IsDeleted = 0
-    GROUP BY collection.CollectionID, collection.Name
-    ORDER BY TotalArtworks DESC, collection.Name`
-  );
-
-  for (const row of rows) {
-    row.TotalArtworks = Number(row.TotalArtworks);
-    row.OldestArtworkYear = row.OldestArtworkYear ? Number(row.OldestArtworkYear) : null;
-    row.NewestArtworkYear = row.NewestArtworkYear ? Number(row.NewestArtworkYear) : null;
-  }
-
-  return { status: 200, data: rows };
-}
-
-async function getVisitorTrafficReport(params, body, staffId) {
-  const dates = readDates(params);
-  const tickets = getRange("SaleDate", dates);
-
-  const [rows] = await pool.query(
-    `SELECT
-      HOUR(SaleDate) AS HourOfDay,
-      COUNT(TicketID) AS TicketsSold,
-      COALESCE(SUM(Price), 0) AS Revenue
-    FROM ticket
-    WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded'` + tickets.where + `
-    GROUP BY HOUR(SaleDate)
-    ORDER BY HourOfDay`,
-    tickets.values
-  );
-
-  for (const row of rows) {
-    row.HourOfDay = Number(row.HourOfDay);
-    row.TicketsSold = Number(row.TicketsSold);
-    row.Revenue = Number(row.Revenue);
-  }
-
-  return { status: 200, data: rows };
 }
 
 async function getMembershipExpirationReport(params, body, staffId) {
@@ -423,38 +237,13 @@ async function getMembershipExpirationReport(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
-async function getArtworkAcquisitionTimelineReport(params, body, staffId) {
-  const dates = readDates(params);
-  const conditions = [];
-  const values = [];
-  addRange("DATE(artwork.CreatedAt)", dates, conditions, values);
-
-  const [rows] = await pool.query(
-    `SELECT
-      YEAR(artwork.CreatedAt) AS AcquisitionYear,
-      COUNT(artwork.ArtworkID) AS ArtworksAcquired
-    FROM artwork
-    WHERE artwork.IsDeleted = 0` + joinConditions(conditions) + `
-    GROUP BY YEAR(artwork.CreatedAt)
-    ORDER BY AcquisitionYear ASC`,
-    values
-  );
-
-  for (const row of rows) {
-    row.AcquisitionYear = Number(row.AcquisitionYear);
-    row.ArtworksAcquired = Number(row.ArtworksAcquired);
-  }
-
-  return { status: 200, data: rows };
-}
-
 async function getReportSummaryStats(params, body, staffId) {
   const [expiringRows] = await pool.query(
     `SELECT COUNT(term.MembershipID) AS ExpiringSoon 
-     FROM membershipterm term
-     JOIN membership ON membership.MembershipID = term.MembershipID
-     WHERE membership.IsDeleted = 0 
-     AND term.EndDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
+    FROM membershipterm term
+    JOIN membership ON membership.MembershipID = term.MembershipID
+    WHERE membership.IsDeleted = 0 
+    AND term.EndDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
   );
 
   const [exhibRows] = await pool.query(
@@ -470,9 +259,9 @@ async function getReportSummaryStats(params, body, staffId) {
 
   const [memberRows] = await pool.query(
     `SELECT COUNT(DISTINCT term.MembershipID) AS ActiveMembers 
-     FROM membershipterm term
-     JOIN membership ON membership.MembershipID = term.MembershipID
-     WHERE membership.IsDeleted = 0 AND term.EndDate >= CURDATE()`
+    FROM membershipterm term
+    JOIN membership ON membership.MembershipID = term.MembershipID
+    WHERE membership.IsDeleted = 0 AND term.EndDate >= CURDATE()`
   );
 
   return {
@@ -487,18 +276,9 @@ async function getReportSummaryStats(params, body, staffId) {
 }
 
 module.exports = [
-  { method: "GET", path: "/api/reports/collection", handler: getCollectionReport },
-  { method: "GET", path: "/api/reports/collection-distribution", handler: getCollectionDistributionReport },
-  { method: "GET", path: "/api/reports/artwork-timeline", handler: getArtworkAcquisitionTimelineReport },
-  { method: "GET", path: "/api/reports/visitor-traffic", handler: getVisitorTrafficReport },
-  { method: "GET", path: "/api/reports/membership-expiration", handler: getMembershipExpirationReport },
-  { method: "GET", path: "/api/reports/exhibitions", handler: getExhibitionReport },
-  { method: "GET", path: "/api/reports/memberships", handler: getMembershipReport },
-  { method: "GET", path: "/api/reports/sales", handler: getSalesReport },
   { method: "GET", path: "/api/reports/revenue", handler: getRevenueReport },
   { method: "GET", path: "/api/reports/ticket-sales", handler: getTicketSalesReport },
-  { method: "GET", path: "/api/reports/membership-types", handler: getMembershipTypesReport },
-  { method: "GET", path: "/api/reports/giftshop-items", handler: getGiftShopItemsReport },
-  { method: "GET", path: "/api/reports/cafe-items", handler: getCafeItemsReport },
+  { method: "GET", path: "/api/reports/giftshop-cafe", handler: getGiftShopItemsReport },
+  { method: "GET", path: "/api/reports/membership-expiration", handler: getMembershipExpirationReport },
   { method: "GET", path: "/api/reports/summary-stats", handler: getReportSummaryStats },
 ];

@@ -487,6 +487,29 @@ async function cancelMembership(params, body, customerId) {
   };
 }
 
+function calculateAge(dateOfBirth, onDate) {
+  const dob = new Date(dateOfBirth + "T00:00:00Z");
+  const date = new Date(onDate + "T00:00:00Z");
+  let age = date.getUTCFullYear() - dob.getUTCFullYear();
+
+  const birthdayHasNotOccurred =
+    date.getUTCMonth() < dob.getUTCMonth() ||
+    (
+      date.getUTCMonth() === dob.getUTCMonth() &&
+      date.getUTCDate() < dob.getUTCDate()
+    );
+
+  if (birthdayHasNotOccurred) {
+    age--;
+  }
+
+  return age;
+}
+
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function checkRenewal(body) {
   if (!membershipTypes.includes(body.MembershipType)) {
     throw makeError(400, "Please select a membership plan");
@@ -496,9 +519,53 @@ function checkRenewal(body) {
     throw makeError(400, "Please select a valid payment method");
   }
 
+  let schoolEmail = null;
+  let dateOfBirth = null;
+
+  if (body.MembershipType === "Student") {
+    if (typeof body.SchoolEmail !== "string" || body.SchoolEmail.trim() === "") {
+      throw makeError(
+        400,
+        "Student memberships require an approved school email ending in @cougarnet.uh.edu."
+      );
+    }
+
+    const email = body.SchoolEmail.trim().toLowerCase();
+
+    if (!/^[^\s@]+@cougarnet\.uh\.edu$/i.test(email)) {
+      throw makeError(
+        400,
+        "Student memberships require an approved school email ending in @cougarnet.uh.edu."
+      );
+    }
+
+    schoolEmail = email;
+  }
+
+  if (body.MembershipType === "Senior") {
+    if (!isValidDate(body.DateOfBirth)) {
+      throw makeError(400, "Date of birth is required for Senior memberships.");
+    }
+
+    if (body.DateOfBirth >= todayStamp()) {
+      throw makeError(400, "Date of birth must be before today.");
+    }
+
+    if (calculateAge(body.DateOfBirth, todayStamp()) < 65) {
+      throw makeError(
+        400,
+        "Senior memberships require you to be at least 65 years old."
+      );
+    }
+
+    dateOfBirth = body.DateOfBirth;
+  }
+
   return {
     MembershipType: body.MembershipType,
     PaymentMethod: body.PaymentMethod,
+    SchoolEmail: schoolEmail,
+    DateOfBirth: dateOfBirth,
   };
 }
 
@@ -574,6 +641,24 @@ async function renewMembership(params, body, customerId) {
         renewal.PaymentMethod,
       ]
     );
+
+    if (renewal.SchoolEmail) {
+      await connection.query(
+        `UPDATE customer
+         SET SchoolEmail = ?, UpdatedAt = NOW()
+         WHERE CustomerID = ?`,
+        [renewal.SchoolEmail, customerId]
+      );
+    }
+
+    if (renewal.DateOfBirth) {
+      await connection.query(
+        `UPDATE customer
+         SET DateOfBirth = ?, UpdatedAt = NOW()
+         WHERE CustomerID = ?`,
+        [renewal.DateOfBirth, customerId]
+      );
+    }
 
     await connection.commit();
 

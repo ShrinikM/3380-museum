@@ -16,26 +16,34 @@ const formatNames = {
 const reportTypes = [
   {
     id: 'revenue',
-    name: 'Revenue by Source',
-    formats: ['bar', 'pie', 'line'],
-    labelKey: 'Source',
+    name: 'Revenue & Financial Trends',
+    formats: ['bar', 'line', 'pie'],
+    labelKey: 'Month',
     charts: [
       {
-        title: 'Revenue by Source',
-        series: [{ key: 'Revenue', label: 'Revenue' }],
+        title: 'Monthly Revenue Trend',
+        series: [{ key: 'Revenue', label: 'Monthly Revenue' }],
+        prefix: '$',
+        suffix: '',
+      },
+      {
+        title: 'Average Spending Per Visitor',
+        series: [{ key: 'AvgSpendPerVisitor', label: 'Avg Spend ($)' }],
         prefix: '$',
         suffix: '',
       },
     ],
     columns: [
-      { key: 'Source', label: 'Source' },
-      { key: 'Revenue', label: 'Revenue' },
-      { key: 'PercentOfTotal', label: 'Percent of Total' },
+      { key: 'Month', label: 'Month' },
+      { key: 'Revenue', label: 'Total Revenue' },
+      { key: 'TotalVisitors', label: 'Total Visitors' },
+      { key: 'AvgSpendPerVisitor', label: 'Avg Spend Per Visitor' },
+      { key: 'MonthOverMonthGrowth', label: 'Monthly Growth (%)' },
     ],
   },
   {
     id: 'ticket-sales',
-    name: 'Ticket Sales by Exhibition',
+    name: 'Ticket Sales & Exhibition Capacity',
     formats: ['bar', 'line'],
     labelKey: 'Name',
     charts: [
@@ -64,45 +72,13 @@ const reportTypes = [
     ],
   },
   {
-    id: 'membership-types',
-    name: 'Membership Breakdown',
-    formats: ['bar', 'line'],
-    labelKey: 'MembershipType',
-    charts: [
-      {
-        title: 'Members',
-        series: [{ key: 'Members', label: 'Members' }],
-        prefix: '',
-        suffix: '',
-      },
-      {
-        title: 'Revenue',
-        series: [{ key: 'Revenue', label: 'Revenue' }],
-        prefix: '$',
-        suffix: '',
-      },
-      {
-        title: 'Average Discount',
-        series: [{ key: 'AverageDiscount', label: 'Average Discount' }],
-        prefix: '',
-        suffix: '%',
-      },
-    ],
-    columns: [
-      { key: 'MembershipType', label: 'Type' },
-      { key: 'Members', label: 'Members' },
-      { key: 'Revenue', label: 'Revenue' },
-      { key: 'AverageDiscount', label: 'Average Discount %' },
-    ],
-  },
-  {
-    id: 'giftshop-items',
-    name: 'Gift Shop Revenue by Item',
+    id: 'giftshop-cafe',
+    name: 'Gift Shop & Café Sales',
     formats: ['bar', 'pie'],
     labelKey: 'ItemName',
     charts: [
       {
-        title: 'Revenue',
+        title: 'Revenue by Item',
         series: [{ key: 'Revenue', label: 'Revenue' }],
         prefix: '$',
         suffix: '',
@@ -115,91 +91,16 @@ const reportTypes = [
       },
     ],
     columns: [
-      { key: 'ItemName', label: 'Item' },
+      { key: 'ItemName', label: 'Item Name' },
       { key: 'Category', label: 'Category' },
       { key: 'UnitsSold', label: 'Units Sold' },
       { key: 'Revenue', label: 'Revenue' },
       { key: 'PercentOfTotal', label: 'Percent of Total' },
-    ],
-  },
-  {
-    id: 'cafe-items',
-    name: 'Cafe Revenue by Item',
-    formats: ['bar', 'pie'],
-    labelKey: 'ItemName',
-    charts: [
-      {
-        title: 'Revenue',
-        series: [{ key: 'Revenue', label: 'Revenue' }],
-        prefix: '$',
-        suffix: '',
-      },
-      {
-        title: 'Units Sold',
-        series: [{ key: 'UnitsSold', label: 'Units Sold' }],
-        prefix: '',
-        suffix: '',
-      },
-    ],
-    columns: [
-      { key: 'ItemName', label: 'Item' },
-      { key: 'Category', label: 'Category' },
-      { key: 'UnitsSold', label: 'Units Sold' },
-      { key: 'Revenue', label: 'Revenue' },
-      { key: 'PercentOfTotal', label: 'Percent of Total' },
-    ],
-  },
-  {
-    id: 'collection-distribution',
-    name: 'Collection Inventory',
-    formats: ['bar', 'pie'],
-    labelKey: 'CollectionName',
-    charts: [
-      {
-        title: 'Total Artworks by Collection',
-        series: [{ key: 'TotalArtworks', label: 'Artworks' }],
-        prefix: '',
-        suffix: '',
-      },
-    ],
-    columns: [
-      { key: 'CollectionName', label: 'Collection' },
-      { key: 'TotalArtworks', label: 'Total Artworks' },
-      { key: 'OldestArtworkYear', label: 'Oldest Year' },
-      { key: 'NewestArtworkYear', label: 'Newest Year' },
-    ],
-  },
-  {
-    id: 'visitor-traffic',
-    name: 'Hourly Visits',
-    formats: ['table'],
-    columns: [
-      { key: 'HourOfDay', label: 'Hour (24h)' },
-      { key: 'TicketsSold', label: 'Tickets Sold' },
-      { key: 'Revenue', label: 'Revenue' },
-    ],
-  },
-  {
-    id: 'artwork-timeline',
-    name: 'Artwork Acquisition Timeline',
-    formats: ['bar', 'line'],
-    labelKey: 'AcquisitionYear',
-    charts: [
-      {
-        title: 'Artworks Acquired by Year',
-        series: [{ key: 'ArtworksAcquired', label: 'Artworks Acquired' }],
-        prefix: '',
-        suffix: '',
-      },
-    ],
-    columns: [
-      { key: 'AcquisitionYear', label: 'Acquisition Year' },
-      { key: 'ArtworksAcquired', label: 'Artworks Acquired' },
     ],
   },
   {
     id: 'membership-expiration',
-    name: 'Expiring Memberships',
+    name: 'Active Memberships & Expirations',
     formats: ['table'],
     columns: [
       { key: 'MemberName', label: 'Member Name' },
@@ -214,14 +115,9 @@ const reportTypes = [
 
 function getSavedHistory(storageKey) {
   const saved = localStorage.getItem(storageKey)
-
-  if (saved === null) {
-    return []
-  }
-
+  if (saved === null) return []
   try {
     const savedReports = JSON.parse(saved)
-
     return savedReports.filter((item) =>
       reportTypes.some((type) => type.id === item.reportType)
     )
@@ -237,6 +133,9 @@ function Reports() {
 
   const [reportType, setReportType] = useState(reportTypes[0].id)
   const [reportFormat, setReportFormat] = useState(reportTypes[0].formats[0])
+  const [selectedColumns, setSelectedColumns] = useState(
+    reportTypes[0].columns.map((col) => col.key)
+  )
   const [viewingId, setViewingId] = useState(null)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -257,7 +156,6 @@ function Reports() {
       setMessage('Report loaded, but it is too large to save in this browser.')
       return false
     }
-
     return true
   }
 
@@ -268,11 +166,21 @@ function Reports() {
     const newReport = reportTypes.find((item) => item.id === newType)
 
     setReportType(newType)
+    setSelectedColumns(newReport.columns.map((col) => col.key))
 
     if (newReport.formats) {
       setReportFormat(newReport.formats[0])
     } else {
       setReportFormat('table')
+    }
+  }
+
+  const handleColumnToggle = (columnKey) => {
+    if (selectedColumns.includes(columnKey)) {
+      if (selectedColumns.length === 1) return
+      setSelectedColumns(selectedColumns.filter((key) => key !== columnKey))
+    } else {
+      setSelectedColumns([...selectedColumns, columnKey])
     }
   }
 
@@ -295,17 +203,10 @@ function Reports() {
       return
     }
 
-    const report = reportTypes.find((item) => item.id === reportType)
-
     let data
     try {
       data = await callApi(
-        '/api/reports/' +
-          reportType +
-          '?start=' +
-          startDate +
-          '&end=' +
-          endDate,
+        '/api/reports/' + reportType + '?start=' + startDate + '&end=' + endDate,
         'GET'
       )
     } catch (err) {
@@ -316,17 +217,17 @@ function Reports() {
     const newReport = {
       id: Date.now(),
       reportType: reportType,
-      name: report.name,
+      name: selectedReport.name,
       format: reportFormat,
       startDate: startDate || 'All dates',
       endDate: endDate || 'All dates',
       runAt: new Date().toLocaleString(),
       rows: data,
+      activeColumns: selectedColumns,
     }
 
     const newHistory = [newReport, ...history].slice(0, MAX_HISTORY)
     saveHistory(newHistory)
-
     setHistory(newHistory)
 
     if (reportFormat !== 'table') {
@@ -336,16 +237,17 @@ function Reports() {
 
   const exportReport = (item) => {
     const report = reportTypes.find((type) => type.id === item.reportType)
+    const activeColsKeys = item.activeColumns || report.columns.map((c) => c.key)
+    const activeCols = report.columns.filter((c) => activeColsKeys.includes(c.key))
 
     if (item.rows.length === 0) {
       setMessage('This report has no data to export.')
       return
     }
 
-    const headers = report.columns.map((column) => column.label)
-
+    const headers = activeCols.map((column) => column.label)
     const csvRows = item.rows.map((row) =>
-      report.columns.map((column) => row[column.key])
+      activeCols.map((column) => row[column.key])
     )
 
     const csv = [headers, ...csvRows]
@@ -356,15 +258,12 @@ function Reports() {
       )
       .join('\n')
 
-    const blob = new Blob([csv], {
-      type: 'text/csv;charset=utf-8;',
-    })
-
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
 
     link.href = url
-    link.download = item.reportType + '-report.csv'
+    link.download = item.reportType + '-custom-report.csv'
     link.click()
 
     URL.revokeObjectURL(url)
@@ -389,14 +288,10 @@ function Reports() {
 
   const deleteSelected = () => {
     let question = 'Are you sure you want to delete this report?'
-
     if (selectedReports.length > 1) {
       question = `Are you sure you want to delete these ${selectedReports.length} reports?`
     }
-
-    if (!window.confirm(question)) {
-      return
-    }
+    if (!window.confirm(question)) return
 
     const newHistory = history.filter((item) => !isSelected(item.id))
     saveHistory(newHistory)
@@ -405,15 +300,11 @@ function Reports() {
     if (selectedReports.some((item) => item.id === viewingId)) {
       setViewingId(null)
     }
-
     clear()
   }
 
   const clearHistory = () => {
-    if (!window.confirm('Are you sure you want to delete all saved reports?')) {
-      return
-    }
-
+    if (!window.confirm('Are you sure you want to delete all saved reports?')) return
     localStorage.removeItem(storageKey)
     setHistory([])
     setViewingId(null)
@@ -430,13 +321,30 @@ function Reports() {
     ? reportTypes.find((type) => type.id === viewingItem.reportType)
     : null
 
+  const viewerRows = viewingItem?.rows || []
+  const viewingColsKeys = viewingItem?.activeColumns || viewingReport?.columns.map((c) => c.key) || []
+  const viewingColumns = viewingReport?.columns.filter((c) => viewingColsKeys.includes(c.key)) || []
+
   return (
     <div className="page page-wide reports-page">
+      <style>{`
+        .report-viewer .card .legend,
+        .report-viewer .card .chart-legend,
+        .report-viewer .card ul {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 0.25rem 1.5rem !important;
+          justify-content: flex-start !important;
+          text-align: left !important;
+          margin-top: -1rem !important;
+        }
+      `}</style>
+
       <div className="page-header">
         <h1 className="page-title">Reports</h1>
       </div>
 
-      <div className="dash-stat-grid" style={{ marginBottom: '1.5rem' }}>
+      <div className="dash-stat-grid" style={{ marginBottom: '1.25rem' }}>
         <div className="card dash-stat-card">
           <div className="dash-stat-label">Expiring (Next 30 Days)</div>
           <div className="dash-stat-value" style={{ color: 'var(--warning, #d97706)' }}>
@@ -470,9 +378,8 @@ function Reports() {
         <h2 className="module-title">Run a Report</h2>
 
         <form className="report-form" onSubmit={handleSubmit}>
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative', zIndex: 10 }}>
             <label htmlFor="report-type">Report Type</label>
-
             <select
               id="report-type"
               className="input"
@@ -488,9 +395,8 @@ function Reports() {
           </div>
 
           {selectedReport.formats && (
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative', zIndex: 10 }}>
               <label htmlFor="report-format">Format</label>
-
               <select
                 id="report-format"
                 className="input"
@@ -507,9 +413,52 @@ function Reports() {
             </div>
           )}
 
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: '600' }}>
+              Select Columns to Include
+            </label>
+            <div style={{ 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              gap: '0.5rem', 
+              background: '#ffffff', 
+              padding: '0.6rem 0.75rem', 
+              borderRadius: '6px', 
+              border: '1px solid #e2e8f0',
+              alignItems: 'center'
+            }}>
+              {selectedReport.columns.map((column) => (
+                <label 
+                  key={column.key} 
+                  style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.35rem', 
+                    cursor: 'pointer', 
+                    fontSize: '0.85rem',
+                    padding: '0.3rem 0.55rem',
+                    background: '#f8fafc',
+                    borderRadius: '4px',
+                    border: '1px solid #e2e8f0',
+                    margin: 0
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    style={{ margin: 0, cursor: 'pointer', width: '14px', height: '14px' }}
+                    checked={selectedColumns.includes(column.key)}
+                    onChange={() => handleColumnToggle(column.key)}
+                  />
+                  <span style={{ color: '#1e293b', whiteSpace: 'nowrap' }}>
+                    {column.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="form-group">
             <label htmlFor="report-start">Start Date</label>
-
             <input
               id="report-start"
               className="input"
@@ -522,7 +471,6 @@ function Reports() {
 
           <div className="form-group">
             <label htmlFor="report-end">End Date</label>
-
             <input
               id="report-end"
               className="input"
@@ -540,10 +488,11 @@ function Reports() {
               onClick={() => {
                 setStartDate('')
                 setEndDate('')
+                setSelectedColumns(selectedReport.columns.map((col) => col.key))
                 setMessage('')
               }}
             >
-              Clear Dates
+              Reset Filters
             </button>
 
             <button type="submit" className="btn primary">
@@ -552,11 +501,7 @@ function Reports() {
           </div>
         </form>
 
-        {message && (
-          <p className="report-message" role="status">
-            {message}
-          </p>
-        )}
+        {message}
       </div>
 
       {viewingItem && viewingReport && viewingReport.charts && (
@@ -575,24 +520,76 @@ function Reports() {
             </button>
           </div>
 
-          {viewingReport.charts.map((chart) => (
-            <Chart
-              key={chart.title}
-              type={viewingItem.format}
-              title={chart.title}
-              data={viewingItem.rows}
-              labelKey={viewingReport.labelKey}
-              series={chart.series}
-              prefix={chart.prefix}
-              suffix={chart.suffix}
-            />
-          ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem', marginTop: '0.75rem', alignItems: 'stretch' }}>
+            <div className="card dash-stat-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '1rem 1.25rem' }}>
+              <div className="dash-stat-label">Total Records / Rows</div>
+              <div className="dash-stat-value">{viewerRows.length}</div>
+            </div>
+
+            <div className="card dash-stat-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '1rem 1.25rem' }}>
+              <div className="dash-stat-label">Date Range</div>
+              <div className="dash-stat-value" style={{ fontSize: '0.95rem' }}>
+                {viewingItem.startDate} to {viewingItem.endDate}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', 
+            gap: '1.5rem', 
+            marginBottom: '1.5rem',
+            justifyContent: 'center',
+            width: '100%'
+          }}>
+            {viewingReport.charts.map((chart) => {
+              const activeSeries = chart.series.filter((s) =>
+                viewingColsKeys.includes(s.key)
+              )
+
+              if (activeSeries.length === 0) return null
+
+              const isPie = viewingItem.format === 'pie'
+
+              return (
+                <div 
+                  key={chart.title} 
+                  className="card" 
+                  style={{ 
+                    width: '100%', 
+                    padding: isPie ? '2rem 1.5rem 4.5rem 1.5rem' : '1.5rem 1.5rem 1.75rem 1.5rem', 
+                    background: '#ffffff', 
+                    border: '1px solid #e2e8f0', 
+                    borderRadius: '8px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center' 
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '600', marginBottom: isPie ? '1.25rem' : '1rem', color: '#0f172a', textAlign: 'center' }}>{chart.title}</h3>
+                  <div style={{ width: '100%', height: isPie ? '360px' : '280px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ width: '100%', height: '100%' }}>
+                      <Chart
+                        type={viewingItem.format}
+                        title=""
+                        data={viewingItem.rows}
+                        labelKey={viewingReport.labelKey}
+                        series={activeSeries}
+                        prefix={chart.prefix}
+                        suffix={chart.suffix}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
           <table className="data-table">
             <caption className="sr-only">Report data</caption>
             <thead>
               <tr>
-                {viewingReport.columns.map((column) => (
+                {viewingColumns.map((column) => (
                   <th key={column.key} scope="col">
                     {column.label}
                   </th>
@@ -601,9 +598,9 @@ function Reports() {
             </thead>
 
             <tbody>
-              {viewingItem.rows.map((row, index) => (
+              {viewerRows.map((row, index) => (
                 <tr key={index}>
-                  {viewingReport.columns.map((column) => (
+                  {viewingColumns.map((column) => (
                     <td key={column.key}>{row[column.key]}</td>
                   ))}
                 </tr>
