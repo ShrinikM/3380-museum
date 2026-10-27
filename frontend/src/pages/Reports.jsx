@@ -333,9 +333,10 @@ function Reports() {
         .report-viewer .card ul {
           display: grid !important;
           grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          gap: 0.35rem 1.5rem !important;
+          gap: 0.25rem 1.5rem !important;
           justify-content: flex-start !important;
           text-align: left !important;
+          margin-top: -1rem !important;
         }
       `}</style>
 
@@ -419,35 +420,36 @@ function Reports() {
             <div style={{ 
               display: 'flex', 
               flexWrap: 'wrap', 
-              gap: '0.6rem', 
+              gap: '0.5rem', 
               background: '#ffffff', 
-              padding: '0.75rem 1rem', 
+              padding: '0.6rem 0.75rem', 
               borderRadius: '6px', 
-              border: '1px solid #e2e8f0'
+              border: '1px solid #e2e8f0',
+              alignItems: 'center'
             }}>
               {selectedReport.columns.map((column) => (
                 <label 
                   key={column.key} 
                   style={{ 
-                    display: 'flex', 
+                    display: 'inline-flex', 
                     alignItems: 'center', 
-                    gap: '0.5rem', 
+                    gap: '0.35rem', 
                     cursor: 'pointer', 
-                    fontSize: '0.9rem',
-                    padding: '0.4rem 0.7rem',
+                    fontSize: '0.85rem',
+                    padding: '0.3rem 0.55rem',
                     background: '#f8fafc',
                     borderRadius: '4px',
                     border: '1px solid #e2e8f0',
-                    width: 'fit-content'
+                    margin: 0
                   }}
                 >
                   <input
                     type="checkbox"
-                    style={{ margin: 0, cursor: 'pointer' }}
+                    style={{ margin: 0, cursor: 'pointer', width: '14px', height: '14px' }}
                     checked={selectedColumns.includes(column.key)}
                     onChange={() => handleColumnToggle(column.key)}
                   />
-                  <span style={{ whiteSpace: column.label.includes(' ') ? 'normal' : 'nowrap', color: '#1e293b' }}>
+                  <span style={{ color: '#1e293b', whiteSpace: 'nowrap' }}>
                     {column.label}
                   </span>
                 </label>
@@ -547,10 +549,25 @@ function Reports() {
 
               if (activeSeries.length === 0) return null
 
+              const isPie = viewingItem.format === 'pie'
+
               return (
-                <div key={chart.title} className="card" style={{ width: '100%', padding: '2rem 1.5rem 4.5rem 1.5rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '600', marginBottom: '1.25rem', color: '#0f172a', textAlign: 'center' }}>{chart.title}</h3>
-                  <div style={{ width: '100%', height: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <div 
+                  key={chart.title} 
+                  className="card" 
+                  style={{ 
+                    width: '100%', 
+                    padding: isPie ? '2rem 1.5rem 4.5rem 1.5rem' : '1.5rem 1.5rem 1.75rem 1.5rem', 
+                    background: '#ffffff', 
+                    border: '1px solid #e2e8f0', 
+                    borderRadius: '8px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center' 
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '600', marginBottom: isPie ? '1.25rem' : '1rem', color: '#0f172a', textAlign: 'center' }}>{chart.title}</h3>
+                  <div style={{ width: '100%', height: isPie ? '360px' : '280px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ width: '100%', height: '100%' }}>
                       <Chart
                         type={viewingItem.format}
@@ -566,30 +583,6 @@ function Reports() {
                 </div>
               )
             })}
-          </div>
-
-          <div className="card" style={{ padding: '1.25rem 1.5rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--primary, #0f172a)' }}>
-              Dataset Overview
-            </h3>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: '1.4', marginBottom: '1rem' }}>
-              This view summarizes active metrics for <strong>{viewingItem.name}</strong> based on the selected configuration and date filters.
-            </p>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.875rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Active Format:</span>
-                <span style={{ fontWeight: '600' }}>{formatNames[viewingItem.format]}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Total Entries:</span>
-                <span style={{ fontWeight: '600' }}>{viewerRows.length}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Columns Active:</span>
-                <span style={{ fontWeight: '600' }}>{viewingColumns.length}</span>
-              </div>
-            </div>
           </div>
 
           <table className="data-table">
