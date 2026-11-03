@@ -1,9 +1,10 @@
 const pool = require("../db");
 const {
-  ticketPrices,
-  ticketTypes,
+  getTicketPrices,
+  getTicketTypes,
   membershipPlans,
-  membershipTicketLimits,
+  getMembershipLimits,
+  getMembershipTicketDiscount,
   membershipTypes,
 } = require("../prices");
 const { joinCurrentTerm, termStatus } = require("../terms");
@@ -18,7 +19,7 @@ const maxShopQuantity = 20;
 
 const waitlistLimit = 10;
 
-const blockedStudentMemberships = ["Dual", "Family", "Senior"];
+const blockedStudentMemberships = ["Senior"];
 
 function makeError(status, message) {
   const error = new Error(message);
@@ -312,11 +313,6 @@ function getDiscount(membership) {
   return 0;
 }
 
-
-function getMembershipLimits(membershipType) {
-  return membershipTicketLimits[membershipType] || {};
-}
-
 function hasActiveMembership(membership, type) {
   return (
     membership !== null &&
@@ -331,6 +327,14 @@ function studentTicketsBlocked(membership) {
   }
 
   return blockedStudentMemberships.includes(membership.MembershipType);
+}
+
+function needsStudentTicketEmail(membership) {
+  if (studentTicketsBlocked(membership)) {
+    return false;
+  }
+
+  return !hasActiveMembership(membership, "Student");
 }
 
 function checkStudentTicketEmail(value) {
@@ -353,21 +357,55 @@ function checkStudentTicketEmail(value) {
   return email;
 }
 
-function checkStudentTicketAccess(membership, counts, schoolEmail) {
+async function schoolEmailAlreadyUsed(email, connection) {
+  const db = connection || pool;
+  const [rows] = await db.query(
+    `SELECT TicketID
+     FROM ticket
+     WHERE TicketType = 'Student'
+       AND SchoolEmail = ?
+       AND IsDeleted = 0
+       AND RefundStatus <> 'Refunded'
+     LIMIT 1`,
+    [email]
+  );
+
+  return rows.length > 0;
+}
+
+async function checkStudentTicketAccess(membership, counts, schoolEmail, connection) {
   if (!counts.Student) {
-    return;
+    return null;
   }
 
   if (studentTicketsBlocked(membership)) {
     throw makeError(
       400,
-      "Student tickets are not available with a Dual, Family, or Senior membership."
+      "Student tickets are not available with a Senior membership."
     );
   }
 
-  if (!hasActiveMembership(membership, "Student")) {
-    checkStudentTicketEmail(schoolEmail);
+  if (!needsStudentTicketEmail(membership)) {
+    return null;
   }
+
+  if (counts.Student > 1) {
+    throw makeError(
+      400,
+      "Only one Student ticket can be purchased per school email."
+    );
+  }
+
+  const email = checkStudentTicketEmail(schoolEmail);
+
+  if (await schoolEmailAlreadyUsed(email, connection)) {
+    throw makeError(
+      400,
+      "A Student ticket has already been purchased with that school email."
+    );
+  }
+
+  return email;
 }
 
 function getTicketDiscount(membership, ticketType) {
@@ -375,13 +413,11 @@ function getTicketDiscount(membership, ticketType) {
     return 0;
   }
 
-  const limits = getMembershipLimits(membership.MembershipType);
-
-  if (!limits[ticketType]) {
-    return 0;
-  }
-
-  return Number(membership.DiscountPercent);
+  return getMembershipTicketDiscount(
+    membership.MembershipType,
+    membership.DiscountPercent,
+    ticketType
+  );
 }
 
 
@@ -821,6 +857,7 @@ async function getMyAlerts(params, body, customerId) {
 async function getExhibitions(params, body, customerId) {
   await findCustomer(customerId);
   const membership = await findMembership(customerId);
+  const ticketPrices = await getTicketPrices();
 
   const [rows] = await pool.query(
     `SELECT
@@ -887,7 +924,7 @@ async function getExhibitions(params, body, customerId) {
       prices: ticketPrices,
       discount: getDiscount(membership),
       discounts: Object.fromEntries(
-        ticketTypes.map((type) => [
+        getTicketTypes(ticketPrices).map((type) => [
           type,
           getTicketDiscount(membership, type),
         ])
@@ -899,7 +936,7 @@ async function getExhibitions(params, body, customerId) {
 
 
 
-function checkTicketOrder(body) {
+function checkTicketOrder(body, ticketTypes) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw makeError(400, "Invalid ticket order");
   }
@@ -958,14 +995,22 @@ function checkTicketOrder(body) {
 async function addTickets(params, body, customerId) {
   await findCustomer(customerId);
 
-  const order = checkTicketOrder(body);
+  const ticketPrices = await getTicketPrices();
+  const ticketTypes = getTicketTypes(ticketPrices);
+  const order = checkTicketOrder(body, ticketTypes);
   const membership = await findMembership(customerId);
-  checkStudentTicketAccess(membership, order.Counts, body.SchoolEmail);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
+
+    const schoolEmail = await checkStudentTicketAccess(
+      membership,
+      order.Counts,
+      body.SchoolEmail,
+      connection
+    );
 
     const [exhibitions] = await connection.query(
       `SELECT
@@ -1040,9 +1085,9 @@ async function addTickets(params, body, customerId) {
         await connection.query(
           `INSERT INTO ticket
             (TicketType, Price, SaleDate, VisitDate,
-             ExhibitionID, MembershipID, CustomerID,
+             ExhibitionID, MembershipID, CustomerID, SchoolEmail,
              CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-           VALUES (?, ?, CURDATE(), ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+           VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
           [
             type,
             price,
@@ -1050,6 +1095,7 @@ async function addTickets(params, body, customerId) {
             order.ExhibitionID,
             membershipID,
             customerId,
+            type === "Student" ? schoolEmail : null,
           ]
         );
 
@@ -1091,6 +1137,8 @@ async function addTickets(params, body, customerId) {
 async function joinWaitlist(params, body, customerId) {
   await findCustomer(customerId);
   const exhibitionID = checkPositiveId(body.ExhibitionID, "exhibition");
+  const ticketPrices = await getTicketPrices();
+  const ticketTypes = getTicketTypes(ticketPrices);
 
   if (!ticketTypes.includes(body.TicketType)) {
     throw makeError(400, "Please select a valid ticket type");
@@ -1099,7 +1147,7 @@ async function joinWaitlist(params, body, customerId) {
   const membership = await findMembership(customerId);
 
   if (body.TicketType === "Student") {
-    checkStudentTicketAccess(
+    await checkStudentTicketAccess(
       membership,
       { Student: 1 },
       body.SchoolEmail

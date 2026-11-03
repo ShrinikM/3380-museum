@@ -4,13 +4,13 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 
-const ticketTypes = ['Adult', 'Senior', 'Student', 'Child']
+const defaultTicketTypes = ['Adult', 'Senior', 'Student', 'Child']
 
-const ticketPrices = {
-  Adult: 25,
-  Senior: 20,
-  Student: 15,
-  Child: 15,
+const membershipTicketLimits = {
+  Dual: { Adult: 2 },
+  Family: { Adult: 2, Child: 2 },
+  Student: { Adult: 2 },
+  Senior: { Senior: 20 },
 }
 
 const emptyForm = {
@@ -21,7 +21,21 @@ const emptyForm = {
   MembershipID: '',
 }
 
-function getPrice(ticketType, discount) {
+function getMemberDiscount(member, ticketType) {
+  if (!member || !ticketType) {
+    return 0
+  }
+
+  const limits = membershipTicketLimits[member.MembershipType] || {}
+
+  if (!limits[ticketType]) {
+    return 0
+  }
+
+  return Number(member.DiscountPercent) || 0
+}
+
+function getPrice(ticketPrices, ticketType, discount) {
   const basePrice = ticketPrices[ticketType] || 0
 
   return (basePrice * (1 - discount / 100)).toFixed(2)
@@ -36,6 +50,7 @@ function Tickets() {
   const [refunds, setRefunds] = useState([])
   const [waitlists, setWaitlists] = useState([])
   const [exhibitions, setExhibitions] = useState([])
+  const [ticketPrices, setTicketPrices] = useState({})
   const [loadError, setLoadError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
 
@@ -49,15 +64,21 @@ function Tickets() {
   const [lookupMessage, setLookupMessage] = useState('')
   const [member, setMember] = useState(null)
 
+  const ticketTypes = Object.keys(ticketPrices).length > 0
+    ? Object.keys(ticketPrices)
+    : defaultTicketTypes
+
   useEffect(() => {
     async function loadData() {
       try {
-        const [ticketsData, exhibitionsData, refundsData, waitlistData] = await Promise.all([
-          callApi('/api/tickets', 'GET'),
-          callApi('/api/exhibitions', 'GET'),
-          callApi('/api/tickets/refunds', 'GET'),
-          callApi('/api/tickets/waitlist', 'GET'),
-        ])
+        const [ticketsData, exhibitionsData, refundsData, waitlistData, pricesData] =
+          await Promise.all([
+            callApi('/api/tickets', 'GET'),
+            callApi('/api/exhibitions', 'GET'),
+            callApi('/api/tickets/refunds', 'GET'),
+            callApi('/api/tickets/waitlist', 'GET'),
+            callApi('/api/ticket-prices', 'GET'),
+          ])
 
         setTickets(
           ticketsData.map((ticket) => ({
@@ -69,6 +90,7 @@ function Tickets() {
         setExhibitions(exhibitionsData)
         setRefunds(refundsData)
         setWaitlists(waitlistData)
+        setTicketPrices(pricesData)
         setLoadError('')
       } catch (err) {
         setLoadError('Could not load tickets: ' + err.message)
@@ -147,12 +169,12 @@ function Tickets() {
 
   const handleTypeChange = (e) => {
     const value = e.target.value
-    const discount = member ? member.DiscountPercent : 0
+    const discount = getMemberDiscount(member, value)
 
     setFormData({
       ...formData,
       TicketType: value,
-      Price: value ? getPrice(value, discount) : '',
+      Price: value ? getPrice(ticketPrices, value, discount) : '',
     })
   }
 
@@ -183,13 +205,28 @@ function Tickets() {
         return
       }
 
+      if (
+        found.MembershipType === 'Senior' &&
+        formData.TicketType === 'Student'
+      ) {
+        setLookupMessage(
+          found.Name +
+            ' has a Senior membership. Student tickets are not available.'
+        )
+        return
+      }
+
       setMember(found)
       setLookupMessage('')
       setFormData({
         ...formData,
         MembershipID: String(found.MembershipID),
         Price: formData.TicketType
-          ? getPrice(formData.TicketType, found.DiscountPercent)
+          ? getPrice(
+              ticketPrices,
+              formData.TicketType,
+              getMemberDiscount(found, formData.TicketType)
+            )
           : '',
       })
     } catch (err) {
@@ -204,7 +241,9 @@ function Tickets() {
     setFormData({
       ...formData,
       MembershipID: '',
-      Price: formData.TicketType ? getPrice(formData.TicketType, 0) : '',
+      Price: formData.TicketType
+        ? getPrice(ticketPrices, formData.TicketType, 0)
+        : '',
     })
   }
 
@@ -239,6 +278,7 @@ function Tickets() {
         ? {
             MembershipID: ticket.MembershipID,
             Name: ticket.MembershipName,
+            MembershipType: ticket.MembershipType || null,
             DiscountPercent: ticket.MemberDiscount,
           }
         : null
@@ -263,6 +303,14 @@ function Tickets() {
 
     if (!ticketTypes.includes(formData.TicketType)) {
       alert('Please select a valid Ticket Type.')
+      return
+    }
+
+    if (
+      member?.MembershipType === 'Senior' &&
+      formData.TicketType === 'Student'
+    ) {
+      alert('Student tickets are not available with a Senior membership.')
       return
     }
 

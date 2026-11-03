@@ -14,7 +14,7 @@ const TABS = [
 const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
 const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const MAX_PER_ORDER = 20
-const BLOCKED_STUDENT_MEMBERSHIPS = ['Dual', 'Family', 'Senior']
+const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
 
 function canBuyStudentTickets(membership) {
@@ -30,7 +30,11 @@ function needsStudentEmail(membership) {
     return false
   }
 
-  return !membership || membership.Status?.toLowerCase() !== 'active' || membership.MembershipType !== 'Student'
+  return (
+    !membership ||
+    membership.Status?.toLowerCase() !== 'active' ||
+    membership.MembershipType !== 'Student'
+  )
 }
 
 const STATUS_TEXT = {
@@ -677,7 +681,7 @@ function TicketsTab({ data, account, onBought }) {
     } else if (membership.MembershipType === 'Student') {
       discountedLimit.Adult = 2
     } else if (membership.MembershipType === 'Senior') {
-      discountedLimit.Adult = 2
+      discountedLimit.Senior = 20
     }
   }
 
@@ -730,6 +734,11 @@ function TicketsTab({ data, account, onBought }) {
   }
 
   const changeTicketCount = (type, value) => {
+    if (type === 'Student' && askForStudentEmail && value > 1) {
+      setError('Only one Student ticket can be purchased per school email.')
+      return
+    }
+
     if (type !== 'Student' || !askForStudentEmail || value <= (counts.Student || 0)) {
       if (type === 'Student' && value === 0) {
         setSchoolEmailOk(false)
@@ -1088,7 +1097,11 @@ function TicketsTab({ data, account, onBought }) {
                     <Stepper
                       label={`${type} tickets`}
                       value={count}
-                      max={count + limit - totalCount}
+                      max={
+                        type === 'Student' && askForStudentEmail
+                          ? Math.min(1, count + limit - totalCount)
+                          : count + limit - totalCount
+                      }
                       onChange={(value) => changeTicketCount(type, value)}
                     />
                   </li>

@@ -1,5 +1,9 @@
 const pool = require("../db");
-const { ticketPrices, ticketTypes } = require("../prices");
+const {
+  getTicketPrices,
+  getTicketTypes,
+  getMembershipTicketDiscount,
+} = require("../prices");
 const { joinCurrentTerm, activeTerm } = require("../terms");
 
 const selectTickets = `
@@ -14,6 +18,7 @@ const selectTickets = `
     t.CustomerID,
     t.RefundStatus,
     t.NotificationStatus,
+    term.MembershipType,
     term.DiscountPercent AS MemberDiscount,
     CONCAT(member.FirstName, ' ', member.LastName) AS MembershipName,
     CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName,
@@ -48,7 +53,9 @@ function checkId(params) {
 }
 
 
-function checkTicket(body) {
+function checkTicket(body, ticketPrices) {
+  const ticketTypes = getTicketTypes(ticketPrices);
+
   if (!ticketTypes.includes(body.TicketType)) {
     throw makeError(400, "Please select a valid ticket type");
   }
@@ -127,7 +134,11 @@ async function checkReferences(ticket) {
 
   if (ticket.MembershipID !== null) {
     const [memberships] = await pool.query(
-      `SELECT m.MembershipID, m.CustomerID, term.DiscountPercent
+      `SELECT
+         m.MembershipID,
+         m.CustomerID,
+         term.MembershipType,
+         term.DiscountPercent
        FROM membership m
        ${joinCurrentTerm("m")}
        WHERE m.MembershipID = ?
@@ -143,9 +154,25 @@ async function checkReferences(ticket) {
       );
     }
 
-    const discount = Number(memberships[0].DiscountPercent);
+    const membership = memberships[0];
 
-    ticket.CustomerID = Number(memberships[0].CustomerID);
+    if (
+      ticket.TicketType === "Student" &&
+      membership.MembershipType === "Senior"
+    ) {
+      throw makeError(
+        400,
+        "Student tickets are not available with a Senior membership."
+      );
+    }
+
+    const discount = getMembershipTicketDiscount(
+      membership.MembershipType,
+      membership.DiscountPercent,
+      ticket.TicketType
+    );
+
+    ticket.CustomerID = Number(membership.CustomerID);
 
     ticket.Price = Number(
       (ticket.Price * (1 - discount / 100)).toFixed(2)
@@ -187,8 +214,18 @@ async function getTickets() {
   };
 }
 
+async function getPrices() {
+  const prices = await getTicketPrices();
+
+  return {
+    status: 200,
+    data: prices,
+  };
+}
+
 async function addTicket(params, body) {
-  const ticket = checkTicket(body);
+  const ticketPrices = await getTicketPrices();
+  const ticket = checkTicket(body, ticketPrices);
 
   await checkReferences(ticket);
 
@@ -215,7 +252,8 @@ async function addTicket(params, body) {
 
 async function updateTicket(params, body) {
   const id = checkId(params);
-  const ticket = checkTicket(body);
+  const ticketPrices = await getTicketPrices();
+  const ticket = checkTicket(body, ticketPrices);
 
   if (await findTicket(id) === null) {
     throw makeError(404, "Ticket not found");
@@ -388,6 +426,11 @@ async function refundTickets(params) {
 }
 
 module.exports = [
+  {
+    method: "GET",
+    path: "/api/ticket-prices",
+    handler: getPrices,
+  },
   {
     method: "GET",
     path: "/api/tickets",
