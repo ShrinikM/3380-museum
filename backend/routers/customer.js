@@ -248,6 +248,86 @@ async function logoutCustomer(params, body, customerId) {
   };
 }
 
+async function checkCurrentPassword(customerId, password) {
+  if (typeof password !== "string" || password === "") {
+    throw makeError(400, "Please enter your current password");
+  }
+
+  const [rows] = await pool.query(
+    `SELECT PasswordHash
+     FROM customercredentials
+     WHERE CustomerID = ?`,
+    [customerId]
+  );
+
+  if (rows.length === 0 || !checkPassword(password, rows[0].PasswordHash)) {
+    throw makeError(400, "Current password is incorrect");
+  }
+}
+
+async function updateDetails(params, body, customerId) {
+  const details = {
+    FirstName: checkName(body.FirstName, "First name"),
+    LastName: checkName(body.LastName, "Last name"),
+    Email: checkEmail(body.Email),
+    Phone: checkPhone(body.Phone),
+  };
+
+  await checkCurrentPassword(customerId, body.CurrentPassword);
+
+  try {
+    await pool.query(
+      `UPDATE customer
+       SET FirstName = ?, LastName = ?, Email = ?, Phone = ?, UpdatedAt = NOW()
+       WHERE CustomerID = ?
+         AND IsDeleted = 0`,
+      [
+        details.FirstName,
+        details.LastName,
+        details.Email,
+        details.Phone,
+        customerId,
+      ]
+    );
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      throw makeError(
+        409,
+        "Another account already uses this email or phone number"
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    status: 200,
+    data: { customer: await findCustomer(customerId) },
+  };
+}
+
+async function changePassword(params, body, customerId) {
+  const newPassword = checkNewPassword(body.NewPassword);
+
+  await checkCurrentPassword(customerId, body.CurrentPassword);
+
+  if (newPassword === body.CurrentPassword) {
+    throw makeError(400, "New password must be different from the current one");
+  }
+
+  await pool.query(
+    `UPDATE customercredentials
+     SET PasswordHash = ?, UpdatedAt = NOW()
+     WHERE CustomerID = ?`,
+    [hashPassword(newPassword), customerId]
+  );
+
+  return {
+    status: 200,
+    data: { message: "Password changed" },
+  };
+}
+
 async function findMembership(customerId) {
   const [rows] = await pool.query(
     `SELECT
@@ -1387,6 +1467,18 @@ module.exports = [
     method: "POST",
     path: "/api/customer/logout",
     handler: logoutCustomer,
+    needsCustomer: true,
+  },
+  {
+    method: "PUT",
+    path: "/api/customer/details",
+    handler: updateDetails,
+    needsCustomer: true,
+  },
+  {
+    method: "PUT",
+    path: "/api/customer/password",
+    handler: changePassword,
     needsCustomer: true,
   },
   {

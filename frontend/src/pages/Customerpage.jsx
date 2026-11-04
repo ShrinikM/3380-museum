@@ -560,51 +560,51 @@ function DetailsTab({ account, onUpdated }) {
   }
 
   return (
-    <div className="cp-details-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+    <div className="cp-details-grid">
       <section className="cp-card">
         <h2>Personal details</h2>
-        <form onSubmit={handleSaveDetails}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <div className="form-group" style={{ flex: 1 }}>
+        <form className="cp-form" onSubmit={handleSaveDetails}>
+          <div className="cp-form-row">
+            <div className="form-group">
               <label htmlFor="edit-first-name">First name</label>
               <input
                 id="edit-first-name"
                 type="text"
                 value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                onChange={(e)=>setFirstName(e.target.value)}
                 required
               />
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label htmlFor="edit-last-name">Last name</label>
               <input
                 id="edit-last-name"
                 type="text"
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                onChange={(e)=>setLastName(e.target.value)}
                 required
               />
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <div className="form-group" style={{ flex: 1 }}>
+          <div className="cp-form-row">
+            <div className="form-group">
               <label htmlFor="edit-email">Email</label>
               <input
                 id="edit-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e)=>setEmail(e.target.value)}
                 required
               />
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label htmlFor="edit-phone">Phone (optional)</label>
               <input
                 id="edit-phone"
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e)=>setPhone(e.target.value)}
               />
             </div>
           </div>
@@ -615,71 +615,63 @@ function DetailsTab({ account, onUpdated }) {
               id="edit-details-password"
               type="password"
               value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
+              onChange={(e)=>setCurrentPassword(e.target.value)}
               required
             />
-            <small style={{ color: '#64748b', fontSize: '12px' }}>
-              Your email is your login. We need your password to change it.
-            </small>
+            <small className="cp-hint">Your email is your login. We need your password to change it.</small>
           </div>
 
           {detailsError && <p className="form-error" role="alert">{detailsError}</p>}
 
-          <div style={{ marginTop: '20px' }}>
-            <button type="submit" className="btn primary" disabled={savingDetails}>
-              {savingDetails ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+          <button type="submit" className="btn primary" disabled={savingDetails}>
+            {savingDetails ? 'Saving...' : 'Save Changes'}
+          </button>
         </form>
       </section>
 
       <section className="cp-card">
         <h2>Change password</h2>
-        <form onSubmit={handleSavePassword}>
+        <form className="cp-form" onSubmit={handleSavePassword}>
           <div className="form-group">
             <label htmlFor="current-pw">Current password</label>
             <input
               id="current-pw"
               type="password"
               value={currentPasswordPw}
-              onChange={(e) => setCurrentPasswordPw(e.target.value)}
+              onChange={(e)=>setCurrentPasswordPw(e.target.value)}
               required
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <div className="form-group" style={{ flex: 1 }}>
+          <div className="cp-form-row">
+            <div className="form-group">
               <label htmlFor="new-pw">New password</label>
               <input
                 id="new-pw"
                 type="password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e)=>setNewPassword(e.target.value)}
                 required
               />
+              <small className="cp-hint">At least 8 characters.</small>
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label htmlFor="confirm-pw">Confirm new password</label>
               <input
                 id="confirm-pw"
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e)=>setConfirmPassword(e.target.value)}
                 required
               />
             </div>
           </div>
-          <small style={{ color: '#64748b', fontSize: '12px', display: 'block', marginBottom: '16px' }}>
-            At least 8 characters.
-          </small>
 
           {passwordError && <p className="form-error" role="alert">{passwordError}</p>}
 
-          <div style={{ marginTop: '20px' }}>
-            <button type="submit" className="btn primary" disabled={savingPassword}>
-              {savingPassword ? 'Changing...' : 'Change Password'}
-            </button>
-          </div>
+          <button type="submit" className="btn primary" disabled={savingPassword}>
+            {savingPassword ? 'Changing...' : 'Change Password'}
+          </button>
         </form>
       </section>
     </div>

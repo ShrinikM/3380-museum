@@ -3,18 +3,19 @@ import { RoleContext } from './role'
 import { callApi } from '../api'
 import { ROLES, DEMO_LOGINS } from '../data/roles'
 
-function getSavedUser() {
-  try {
+function getSavedUser(){
+  try{
     return JSON.parse(localStorage.getItem('user'))
-  } catch {
+  }
+  catch{
     return null
   }
 }
 
-function RoleProvider({ children }) {
+function RoleProvider({ children }){
   const [user, setUser] = useState(getSavedUser)
 
-  const login = (username, password) => {
+  const login = (username, password)=>{
     const found = DEMO_LOGINS.find((item)=>
       item.username === username && item.password === password
     )
@@ -29,7 +30,7 @@ function RoleProvider({ children }) {
     return true
   }
 
-  const startCustomer = (data) => {
+  const startCustomer = (data)=>{
     const loggedInUser = {
       username: data.customer.Email,
       name: data.customer.FirstName,
@@ -41,7 +42,7 @@ function RoleProvider({ children }) {
     setUser(loggedInUser)
   }
 
-  const loginCustomer = async (email, password) => {
+  const loginCustomer = async (email, password)=>{
     const data = await callApi('/api/customer/login', 'POST', {
       Email: email,
       Password: password,
@@ -50,22 +51,22 @@ function RoleProvider({ children }) {
     startCustomer(data)
   }
 
-  const registerCustomer = async (details) => {
+  const registerCustomer = async (details)=>{
     const data = await callApi('/api/customer/register', 'POST', details)
 
     startCustomer(data)
   }
 
-  const logout = () => {
-    if (user !== null && user.token) {
-      callApi('/api/customer/logout', 'POST').catch(() => {})
+  const logout = ()=>{
+    if(user !== null && user.token){
+      callApi('/api/customer/logout', 'POST').catch(()=>{})
     }
 
     localStorage.removeItem('user')
     setUser(null)
   }
 
-  const canView = (path) => {
+  const canView = (path)=>{
     if(user === null){
       return false
     }
@@ -73,7 +74,7 @@ function RoleProvider({ children }) {
     return ROLES[user.role]?.pages.includes(path) ?? false
   }
 
-  const canEdit = (path) => {
+  const canEdit = (path)=>{
     if(user === null){
       return false
     }

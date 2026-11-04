@@ -543,12 +543,44 @@
 .cp-details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 24px;
   align-items: start;
+}
+
+.cp-form .form-group {
+  margin-bottom: 18px;
+}
+
+.cp-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cp-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.cp-form .form-error {
+  margin-bottom: 16px;
+}
+
+.cp-form .btn {
+  margin-top: 4px;
 }
 
 @media (max-width: 900px) {
   .cp-details-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .cp-form-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 }
