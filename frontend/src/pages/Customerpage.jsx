@@ -279,7 +279,7 @@ function MembershipTab({ account, onChanged }) {
               <span className="cp-option-meta">
                 {isCurrent
                   ? 'Your current plan'
-                  : `${item.DiscountPercent}% off tickets · ${item.GiftShopDiscount}% off gift shop · ${item.CafeDiscount}% off CoogCafe`}
+                  : `${item.DiscountPercent}% off tickets - ${item.GiftShopDiscount}% off gift shop - ${item.CafeDiscount}% off CoogCafe`}
               </span>
             </button>
           )
@@ -678,9 +678,37 @@ function DetailsTab({ account, onUpdated }) {
   )
 }
 
-function PurchasesTab({ purchases }) {
+function PurchasesTab({ purchases, onChanged }) {
   const [view, setView] = useState('tickets')
+  const [refunding, setRefunding] = useState(null)
+  const [refundError, setRefundError] = useState('')
+  const [saving, setSaving] = useState(false)
   const { tickets, orders, waitlist } = purchases
+
+  const closeRefund = ()=>{
+    setRefunding(null)
+    setRefundError('')
+  }
+
+  const confirmRefund = async ()=>{
+    setSaving(true)
+    setRefundError('')
+
+    try{
+      const result = await callApi('/api/customer/tickets/refund', 'POST', {
+        TicketID: refunding.TicketID,
+      })
+
+      setRefunding(null)
+      onChanged(`Your ticket was refunded. ${money(result.refund)} will be returned to your card.`)
+    }
+    catch(refundFailed){
+      setRefundError(refundFailed.message)
+    }
+    finally{
+      setSaving(false)
+    }
+  }
 
   return (
     <section className="cp-card">
@@ -729,6 +757,7 @@ function PurchasesTab({ purchases }) {
                   <th scope="col">Bought</th>
                   <th scope="col">Visit Date</th>
                   <th scope="col">Status</th>
+                  <th scope="col"><span className="sr-only">Refund</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -747,6 +776,17 @@ function PurchasesTab({ purchases }) {
                       <span className={`badge badge-${TICKET_STATUS[ticket.RefundStatus].variant}`}>
                         {TICKET_STATUS[ticket.RefundStatus].label}
                       </span>
+                    </td>
+                    <td className="cp-cell-action">
+                      {ticket.CanRefund && (
+                        <button
+                          type="button"
+                          className="btn secondary cp-small-btn"
+                          onClick={()=>setRefunding(ticket)}
+                        >
+                          Refund
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -819,6 +859,26 @@ function PurchasesTab({ purchases }) {
           </div>
         )
       )}
+
+      <Modal open={refunding !== null} title="Refund ticket" onClose={closeRefund}>
+        {refunding && (
+          <p>
+            Refund your {refunding.TicketType} ticket for <strong>{refunding.ExhibitionName}</strong>?
+            {' '}{money(refunding.Price)} will be returned to your card and the spot will go to the next person on the waitlist.
+          </p>
+        )}
+
+        {refundError && <p className="form-error" role="alert">{refundError}</p>}
+
+        <div className="modal-actions">
+          <button type="button" className="btn secondary" onClick={closeRefund} disabled={saving}>
+            Keep Ticket
+          </button>
+          <button type="button" className="btn primary" onClick={confirmRefund} disabled={saving}>
+            {saving ? 'Refunding...' : 'Refund Ticket'}
+          </button>
+        </div>
+      </Modal>
     </section>
   )
 }
@@ -1138,8 +1198,8 @@ function TicketsTab({ data, account, onBought }) {
 
                   <span className="cp-option-meta">
                     {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
-                    {' · '}Sold out
-                    {' · '}Waitlist {item.WaitlistCount} of {waitlistLimit}
+                    {' - '}Sold out
+                    {' - '}Waitlist {item.WaitlistCount} of {waitlistLimit}
                   </span>
 
                   <div className="cp-waitlist">
@@ -1161,22 +1221,26 @@ function TicketsTab({ data, account, onBought }) {
                       <span>The waitlist is full</span>
                     ) : (
                       <>
-                        <select
-                          aria-label={`Ticket type for ${item.Name}`}
-                          value={waitTypes[item.ExhibitionID] || types[0]}
-                          onChange={(event) =>
-                            setWaitTypes((current) => ({
-                              ...current,
-                              [item.ExhibitionID]: event.target.value,
-                            }))
-                          }
-                        >
-                          {types.map((type) => (
-                            <option key={type} value={type}>
-                              {type}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="cp-chips" role="group" aria-label={`Ticket type for ${item.Name}`}>
+                          {types.map((type)=>{
+                            const active = (waitTypes[item.ExhibitionID] || types[0]) === type
+
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                className={`cp-chip${active ? ' is-active' : ''}`}
+                                aria-pressed={active}
+                                onClick={()=>setWaitTypes((current)=>({
+                                  ...current,
+                                  [item.ExhibitionID]: type,
+                                }))}
+                              >
+                                {type}
+                              </button>
+                            )
+                          })}
+                        </div>
 
                         <button
                           type="button"
@@ -1211,9 +1275,9 @@ function TicketsTab({ data, account, onBought }) {
 
                 <span className="cp-option-meta">
                   {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
-                  {' · '}{item.Remaining} left
+                  {': '}{item.Remaining} left
                   {entry && entry.Status === 'Notified' &&
-                    ' · A spot opened for you'}
+                    ' - A spot opened for you'}
                 </span>
               </button>
             )
@@ -1266,7 +1330,7 @@ function TicketsTab({ data, account, onBought }) {
                         {memberCount > 0 && regularCount > 0 ? (
                           <>
                             {money(memberPrice)} × {memberCount}
-                            {' · '}
+                            {' - '}
                             {money(regularPrice)} × {regularCount}
                           </>
                         ) : memberLimit > 0 ? (
@@ -1682,7 +1746,7 @@ function CustomerPage() {
       {shopItems && tab === 'shop' && (
         <ShopTab items={shopItems} account={account} onBought={handleBought} />
       )}
-      {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} />}
+      {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} onChanged={handleBought} />}
       {account && tab === 'details' && <DetailsTab account={account} onUpdated={handleBought} />}
     </div>
   )

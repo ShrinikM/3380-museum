@@ -358,7 +358,7 @@ function Dashboard() {
               <div>
                 <strong>{item.Name}</strong>
                 <p>
-                  {item.CollectionName} ·{' '}
+                  {item.CollectionName} -{' '}
                   {item.Status === 'active'
                     ? daysUntil(item.EndDate) + ' days left'
                     : 'opens in ' + daysUntil(item.StartDate) + ' days'}
@@ -449,7 +449,7 @@ function Dashboard() {
                 <strong>{item.Description}</strong>
                 <p>
                   {item.Kind}
-                  {item.StaffName ? ' · by ' + item.StaffName : ''}
+                  {item.StaffName ? ' - by ' + item.StaffName : ''}
                 </p>
               </div>
 

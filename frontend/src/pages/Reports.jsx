@@ -413,8 +413,8 @@ function Reports(){
               <h2 className="module-title">{viewingItem.name}</h2>
               <p className="report-viewer-meta">
                 {formatNames[viewingItem.format]}
-                {viewingReport.usesDates && ` · ${viewingItem.startDate} to ${viewingItem.endDate}`}
-                {` · ${viewingItem.rows.length} rows`}
+                {viewingReport.usesDates && ` - ${viewingItem.startDate} to ${viewingItem.endDate}`}
+                {` - ${viewingItem.rows.length} rows`}
               </p>
             </div>
 

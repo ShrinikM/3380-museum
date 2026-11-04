@@ -238,7 +238,7 @@ function PieChart({ data, labelKey, series, prefix, suffix }){
             <span className="chart-swatch" style={{ background: slice.color }} />
             <span className="chart-pie-name" title={slice.label}>{slice.label}</span>
             <span className="chart-pie-value">
-              {formatValue(slice.value, prefix, suffix)} · {slice.percent}%
+              {formatValue(slice.value, prefix, suffix)} - {slice.percent}%
             </span>
           </li>
         ))}

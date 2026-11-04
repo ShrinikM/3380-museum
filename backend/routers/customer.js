@@ -534,7 +534,6 @@ function getActiveMembershipID(membership) {
 const openExhibition = `
   e.IsDeleted = 0
   AND e.CancelledAt IS NULL
-  AND e.StartDate <= CURDATE()
   AND e.EndDate >= CURDATE()
 `;
 
@@ -800,17 +799,19 @@ async function getPurchases(params, body, customerId) {
        e.CancellationReason,
        t.TicketType,
        t.Price,
-       t.RefundStatus,
+       CASE WHEN t.IsDeleted = 1 THEN 'Refunded' ELSE t.RefundStatus END AS RefundStatus,
        t.NotificationStatus,
        DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate,
        DATE_FORMAT(t.VisitDate, '%Y-%m-%d') AS VisitDate,
        DATE_FORMAT(t.UpdatedAt, '%Y-%m-%d') AS UpdatedAt,
-       DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt
+       DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
+       t.IsDeleted = 0
+         AND t.RefundStatus = 'None'
+         AND COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS CanRefund
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
-     WHERE t.IsDeleted = 0
-       AND t.CustomerID = ?
+     WHERE t.CustomerID = ?
      ORDER BY t.SaleDate DESC, t.TicketID DESC`,
     [customerId]
   );
@@ -856,6 +857,7 @@ async function getPurchases(params, body, customerId) {
         ...ticket,
         TicketID: Number(ticket.TicketID),
         Price: Number(ticket.Price),
+        CanRefund: Number(ticket.CanRefund) === 1,
       })),
       orders: orders.map((order) => ({
         ...order,
@@ -1214,6 +1216,68 @@ async function addTickets(params, body, customerId) {
 }
 
 
+async function refundTicket(params, body, customerId) {
+  const ticketId = checkPositiveId(body.TicketID, "ticket");
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT
+         t.ExhibitionID,
+         t.Price,
+         t.RefundStatus,
+         COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS BeforeVisit
+       FROM ticket t
+       JOIN exhibition e
+         ON e.ExhibitionID = t.ExhibitionID
+       WHERE t.TicketID = ?
+         AND t.CustomerID = ?
+         AND t.IsDeleted = 0
+       FOR UPDATE`,
+      [ticketId, customerId]
+    );
+
+    if (rows.length === 0) {
+      throw makeError(404, "Ticket not found");
+    }
+
+    const ticket = rows[0];
+
+    if (ticket.RefundStatus !== "None") {
+      throw makeError(409, "This ticket has already been refunded");
+    }
+
+    if (Number(ticket.BeforeVisit) !== 1) {
+      throw makeError(
+        400,
+        "Tickets can be refunded until the day before your visit"
+      );
+    }
+
+    // A customer refund removes the ticket, which frees the seat.
+    // trg_ticket_free_seat then gives the spot to the waitlist.
+    await connection.query(
+      `UPDATE ticket
+       SET IsDeleted = 1, UpdatedAt = NOW()
+       WHERE TicketID = ?`,
+      [ticketId]
+    );
+    await connection.commit();
+
+    return {
+      status: 200,
+      data: { refund: money(ticket.Price) },
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function joinWaitlist(params, body, customerId) {
   await findCustomer(customerId);
   const exhibitionID = checkPositiveId(body.ExhibitionID, "exhibition");
@@ -1521,6 +1585,12 @@ module.exports = [
     method: "POST",
     path: "/api/customer/tickets",
     handler: addTickets,
+    needsCustomer: true,
+  },
+  {
+    method: "POST",
+    path: "/api/customer/tickets/refund",
+    handler: refundTicket,
     needsCustomer: true,
   },
   {
