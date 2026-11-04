@@ -9,6 +9,7 @@ const TABS = [
   { id: 'tickets', label: 'Buy Tickets' },
   { id: 'shop', label: 'Gift Shop' },
   { id: 'purchases', label: 'Purchases' },
+  { id: 'details', label: 'My Details' },
 ]
 
 const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
@@ -88,7 +89,6 @@ function calculateAge(dateOfBirth) {
   return age
 }
 
-
 function formatDate(value) {
   if (!value) {
     return '';
@@ -117,7 +117,6 @@ function formatDate(value) {
   });
 }
 
-
 function Stepper({ value, max, onChange, label }) {
   return (
     <div className="cp-stepper">
@@ -141,7 +140,6 @@ function Stepper({ value, max, onChange, label }) {
     </div>
   )
 }
-
 
 function MembershipTab({ account, onChanged }) {
   const { customer, membership, terms, plans } = account
@@ -486,6 +484,207 @@ function MembershipTab({ account, onChanged }) {
   )
 }
 
+function DetailsTab({ account, onUpdated }) {
+  const { customer } = account
+  const [firstName, setFirstName] = useState(customer.FirstName || '')
+  const [lastName, setLastName] = useState(customer.LastName || '')
+  const [email, setEmail] = useState(customer.Email || '')
+  const [phone, setPhone] = useState(customer.Phone || '')
+  const [currentPassword, setCurrentPassword] = useState('')
+
+  const [currentPasswordPw, setCurrentPasswordPw] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  const [detailsError, setDetailsError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  const handleSaveDetails = async (e) => {
+    e.preventDefault()
+    setDetailsError('')
+
+    if (!currentPassword) {
+      setDetailsError('Please enter your current password to update your details.')
+      return
+    }
+
+    setSavingDetails(true)
+    try {
+      await callApi('/api/customer/details', 'PUT', {
+        FirstName: firstName,
+        LastName: lastName,
+        Email: email,
+        Phone: phone,
+        CurrentPassword: currentPassword,
+      })
+      setCurrentPassword('')
+      onUpdated('Your personal details have been updated successfully.')
+    } catch (err) {
+      setDetailsError(err.message)
+    } finally {
+      setSavingDetails(false)
+    }
+  }
+
+  const handleSavePassword = async (e) => {
+    e.preventDefault()
+    setPasswordError('')
+
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.')
+      return
+    }
+
+    setSavingPassword(true)
+    try {
+      await callApi('/api/customer/password', 'PUT', {
+        CurrentPassword: currentPasswordPw,
+        NewPassword: newPassword,
+      })
+      setCurrentPasswordPw('')
+      setNewPassword('')
+      setConfirmPassword('')
+      onUpdated('Your password has been changed successfully.')
+    } catch (err) {
+      setPasswordError(err.message)
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  return (
+    <div className="cp-details-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+      <section className="cp-card">
+        <h2>Personal details</h2>
+        <form onSubmit={handleSaveDetails}>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="edit-first-name">First name</label>
+              <input
+                id="edit-first-name"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="edit-last-name">Last name</label>
+              <input
+                id="edit-last-name"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="edit-email">Email</label>
+              <input
+                id="edit-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="edit-phone">Phone (optional)</label>
+              <input
+                id="edit-phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="edit-details-password">Current password</label>
+            <input
+              id="edit-details-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+            <small style={{ color: '#64748b', fontSize: '12px' }}>
+              Your email is your login. We need your password to change it.
+            </small>
+          </div>
+
+          {detailsError && <p className="form-error" role="alert">{detailsError}</p>}
+
+          <div style={{ marginTop: '20px' }}>
+            <button type="submit" className="btn primary" disabled={savingDetails}>
+              {savingDetails ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="cp-card">
+        <h2>Change password</h2>
+        <form onSubmit={handleSavePassword}>
+          <div className="form-group">
+            <label htmlFor="current-pw">Current password</label>
+            <input
+              id="current-pw"
+              type="password"
+              value={currentPasswordPw}
+              onChange={(e) => setCurrentPasswordPw(e.target.value)}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="new-pw">New password</label>
+              <input
+                id="new-pw"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="confirm-pw">Confirm new password</label>
+              <input
+                id="confirm-pw"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <small style={{ color: '#64748b', fontSize: '12px', display: 'block', marginBottom: '16px' }}>
+            At least 8 characters.
+          </small>
+
+          {passwordError && <p className="form-error" role="alert">{passwordError}</p>}
+
+          <div style={{ marginTop: '20px' }}>
+            <button type="submit" className="btn primary" disabled={savingPassword}>
+              {savingPassword ? 'Changing...' : 'Change Password'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
 
 function PurchasesTab({ purchases }) {
   const [view, setView] = useState('tickets')
@@ -632,9 +831,6 @@ function PurchasesTab({ purchases }) {
   )
 }
 
-
-
-
 function TicketsTab({ data, account, onBought }) {
   const [exhibitionId, setExhibitionId] = useState(null)
   const [counts, setCounts] = useState({})
@@ -717,7 +913,6 @@ function TicketsTab({ data, account, onBought }) {
     String(now.getDate()).padStart(2, '0'),
   ].join('-')
 
-
   const setCount = (type, value) => {
     setCounts((current) => ({
       ...current,
@@ -759,7 +954,6 @@ function TicketsTab({ data, account, onBought }) {
     setStudentModalError('')
     setStudentModalOpen(true)
   }
-
 
   const chooseExhibition = (id) => {
     const item = exhibitions.find(
@@ -1172,9 +1366,6 @@ function TicketsTab({ data, account, onBought }) {
   )
 }
 
-
-
-
 function ShopTab({ items, account, onBought }) {
   const [cart, setCart] = useState({})
   const [payment, setPayment] = useState('')
@@ -1332,8 +1523,6 @@ function ShopTab({ items, account, onBought }) {
   )
 }
 
-
-
 function Notices({ purchases, waitlist, onLeave, onGo }) {
   const cancelled = []
 
@@ -1387,7 +1576,6 @@ function Notices({ purchases, waitlist, onLeave, onGo }) {
     </div>
   )
 }
-
 
 function CustomerPage() {
   const [searchParams] = useSearchParams()
@@ -1503,6 +1691,7 @@ function CustomerPage() {
         <ShopTab items={shopItems} account={account} onBought={handleBought} />
       )}
       {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} />}
+      {account && tab === 'details' && <DetailsTab account={account} onUpdated={handleBought} />}
     </div>
   )
 }
