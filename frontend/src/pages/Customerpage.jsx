@@ -618,7 +618,6 @@ function DetailsTab({ account, onUpdated }) {
               onChange={(e)=>setCurrentPassword(e.target.value)}
               required
             />
-            <small className="cp-hint">Your email is your login. We need your password to change it.</small>
           </div>
 
           {detailsError && <p className="form-error" role="alert">{detailsError}</p>}
@@ -653,7 +652,6 @@ function DetailsTab({ account, onUpdated }) {
                 onChange={(e)=>setNewPassword(e.target.value)}
                 required
               />
-              <small className="cp-hint">At least 8 characters.</small>
             </div>
             <div className="form-group">
               <label htmlFor="confirm-pw">Confirm new password</label>
@@ -680,32 +678,58 @@ function DetailsTab({ account, onUpdated }) {
 
 function PurchasesTab({ purchases, onChanged }) {
   const [view, setView] = useState('tickets')
-  const [refunding, setRefunding] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [refundError, setRefundError] = useState('')
   const [saving, setSaving] = useState(false)
   const { tickets, orders, waitlist } = purchases
 
-  const closeRefund = ()=>{
-    setRefunding(null)
+  const selectedTickets = tickets.filter((ticket) =>
+    selectedIds.includes(ticket.TicketID)
+  )
+  const selectedTotal = selectedTickets.reduce(
+    (sum, ticket) => sum + ticket.Price,
+    0
+  )
+  const selecting = selectedIds.length > 0
+
+  const toggleTicket = (ticketId) => {
+    setSelectedIds((current) => {
+      if (current.includes(ticketId)) {
+        return current.filter((id) => id !== ticketId)
+      }
+
+      return [...current, ticketId]
+    })
     setRefundError('')
   }
 
-  const confirmRefund = async ()=>{
+  const closeRefund = () => {
+    setConfirmOpen(false)
+    setRefundError('')
+  }
+
+  const confirmRefund = async () => {
+    if (selectedIds.length === 0) {
+      return
+    }
+
     setSaving(true)
     setRefundError('')
 
-    try{
+    try {
       const result = await callApi('/api/customer/tickets/refund', 'POST', {
-        TicketID: refunding.TicketID,
+        TicketIDs: selectedIds,
       })
 
-      setRefunding(null)
-      onChanged(`Your ticket was refunded. ${money(result.refund)} will be returned to your card.`)
-    }
-    catch(refundFailed){
+      setConfirmOpen(false)
+      setSelectedIds([])
+      onChanged(
+        `${result.count} ${result.count === 1 ? 'ticket was' : 'tickets were'} refunded. ${money(result.refund)} will be returned to your card.`
+      )
+    } catch (refundFailed) {
       setRefundError(refundFailed.message)
-    }
-    finally{
+    } finally {
       setSaving(false)
     }
   }
@@ -715,31 +739,63 @@ function PurchasesTab({ purchases, onChanged }) {
       <div className="cp-card-head">
         <h2>Purchases</h2>
 
-        <div className="cp-toggle" role="group" aria-label="Purchase type">
-          <button
-            type="button"
-            className={view === 'tickets' ? 'is-active' : ''}
-            aria-pressed={view === 'tickets'}
-            onClick={() => setView('tickets')}
-          >
-            Tickets
-          </button>
-          <button
-            type="button"
-            className={view === 'orders' ? 'is-active' : ''}
-            aria-pressed={view === 'orders'}
-            onClick={() => setView('orders')}
-          >
-            Gift Shop
-          </button>
-          <button
-            type="button"
-            className={view === 'waitlist' ? 'is-active' : ''}
-            aria-pressed={view === 'waitlist'}
-            onClick={() => setView('waitlist')}
-          >
-            Waitlist
-          </button>
+        <div className="page-header-actions">
+          {view === 'tickets' && selecting && (
+            <>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setSelectedIds([])}
+                disabled={saving}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => setConfirmOpen(true)}
+                disabled={saving}
+              >
+                Refund Selected ({selectedIds.length})
+              </button>
+            </>
+          )}
+
+          <div className="cp-toggle" role="group" aria-label="Purchase type">
+            <button
+              type="button"
+              className={view === 'tickets' ? 'is-active' : ''}
+              aria-pressed={view === 'tickets'}
+              onClick={() => {
+                setView('tickets')
+                setSelectedIds([])
+              }}
+            >
+              Tickets
+            </button>
+            <button
+              type="button"
+              className={view === 'orders' ? 'is-active' : ''}
+              aria-pressed={view === 'orders'}
+              onClick={() => {
+                setView('orders')
+                setSelectedIds([])
+              }}
+            >
+              Gift Shop
+            </button>
+            <button
+              type="button"
+              className={view === 'waitlist' ? 'is-active' : ''}
+              aria-pressed={view === 'waitlist'}
+              onClick={() => {
+                setView('waitlist')
+                setSelectedIds([])
+              }}
+            >
+              Waitlist
+            </button>
+          </div>
         </div>
       </div>
 
@@ -748,21 +804,42 @@ function PurchasesTab({ purchases, onChanged }) {
           <p className="cp-empty">You haven't bought any tickets yet.</p>
         ) : (
           <div className="table-wrap">
-            <table className="data-table">
+            <table
+              className={
+                'data-table cp-ticket-table' + (selecting ? ' selecting' : '')
+              }
+            >
               <thead>
                 <tr>
+                  <th scope="col" className="select-col">
+                    <span className="sr-only">Select</span>
+                  </th>
                   <th scope="col">Exhibition</th>
                   <th scope="col">Type</th>
                   <th scope="col">Price</th>
                   <th scope="col">Bought</th>
                   <th scope="col">Visit Date</th>
                   <th scope="col">Status</th>
-                  <th scope="col"><span className="sr-only">Refund</span></th>
                 </tr>
               </thead>
               <tbody>
                 {tickets.map((ticket) => (
-                  <tr key={ticket.TicketID}>
+                  <tr
+                    key={ticket.TicketID}
+                    className={
+                      selectedIds.includes(ticket.TicketID) ? 'selected-row' : ''
+                    }
+                  >
+                    <td className="select-col">
+                      {ticket.CanRefund ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(ticket.TicketID)}
+                          onChange={() => toggleTicket(ticket.TicketID)}
+                          aria-label={`Select ${ticket.TicketType} ticket for ${ticket.ExhibitionName}`}
+                        />
+                      ) : null}
+                    </td>
                     <td className="strong">{ticket.ExhibitionName}</td>
                     <td>{ticket.TicketType}</td>
                     <td>{money(ticket.Price)}</td>
@@ -776,17 +853,6 @@ function PurchasesTab({ purchases, onChanged }) {
                       <span className={`badge badge-${TICKET_STATUS[ticket.RefundStatus].variant}`}>
                         {TICKET_STATUS[ticket.RefundStatus].label}
                       </span>
-                    </td>
-                    <td className="cp-cell-action">
-                      {ticket.CanRefund && (
-                        <button
-                          type="button"
-                          className="btn secondary cp-small-btn"
-                          onClick={()=>setRefunding(ticket)}
-                        >
-                          Refund
-                        </button>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -860,22 +926,22 @@ function PurchasesTab({ purchases, onChanged }) {
         )
       )}
 
-      <Modal open={refunding !== null} title="Refund ticket" onClose={closeRefund}>
-        {refunding && (
-          <p>
-            Refund your {refunding.TicketType} ticket for <strong>{refunding.ExhibitionName}</strong>?
-            {' '}{money(refunding.Price)} will be returned to your card and the spot will go to the next person on the waitlist.
-          </p>
-        )}
+      <Modal open={confirmOpen} title="Refund tickets" onClose={closeRefund}>
+        <p>
+          Refund {selectedIds.length}{' '}
+          {selectedIds.length === 1 ? 'ticket' : 'tickets'} for{' '}
+          <strong>{money(selectedTotal)}</strong>? Spots will go to the next
+          people on the waitlist.
+        </p>
 
         {refundError && <p className="form-error" role="alert">{refundError}</p>}
 
         <div className="modal-actions">
           <button type="button" className="btn secondary" onClick={closeRefund} disabled={saving}>
-            Keep Ticket
+            Keep Tickets
           </button>
           <button type="button" className="btn primary" onClick={confirmRefund} disabled={saving}>
-            {saving ? 'Refunding...' : 'Refund Ticket'}
+            {saving ? 'Refunding...' : 'Refund Selected'}
           </button>
         </div>
       </Modal>
@@ -889,14 +955,13 @@ function TicketsTab({ data, account, onBought }) {
   const [visitDate, setVisitDate] = useState('')
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
-  const [waitTypes, setWaitTypes] = useState({})
   const [waiting, setWaiting] = useState(false)
   const [schoolEmail, setSchoolEmail] = useState('')
   const [schoolEmailOk, setSchoolEmailOk] = useState(false)
   const [studentModalOpen, setStudentModalOpen] = useState(false)
   const [studentModalError, setStudentModalError] = useState('')
   const [pendingStudentCount, setPendingStudentCount] = useState(null)
-  const [pendingWaitlistId, setPendingWaitlistId] = useState(null)
+  const [pendingWaitlistJoin, setPendingWaitlistJoin] = useState(false)
 
   const { exhibitions, waitlist, prices, discounts, waitlistLimit } = data
   const membership = account?.membership ?? account?.Membership ?? null
@@ -912,6 +977,13 @@ function TicketsTab({ data, account, onBought }) {
   const selected = exhibitions.find(
     (item) => item.ExhibitionID === exhibitionId
   )
+  const isWaitlistMode = selected !== undefined && selected.Remaining === 0
+  const myWaitlistEntries = selected
+    ? waitlist.filter((entry) => entry.ExhibitionID === selected.ExhibitionID)
+    : []
+  const waitlistSlotsLeft = selected
+    ? Math.max(waitlistLimit - selected.WaitlistCount, 0)
+    : 0
 
   const discountedLimit = {
     Adult: 0,
@@ -976,7 +1048,7 @@ function TicketsTab({ data, account, onBought }) {
   const closeStudentModal = () => {
     setStudentModalOpen(false)
     setPendingStudentCount(null)
-    setPendingWaitlistId(null)
+    setPendingWaitlistJoin(false)
     setStudentModalError('')
   }
 
@@ -1002,7 +1074,7 @@ function TicketsTab({ data, account, onBought }) {
     }
 
     setPendingStudentCount(value)
-    setPendingWaitlistId(null)
+    setPendingWaitlistJoin(false)
     setStudentModalError('')
     setStudentModalOpen(true)
   }
@@ -1021,6 +1093,11 @@ function TicketsTab({ data, account, onBought }) {
   const handleBuy = async () => {
     if (!selected) {
       setError('Please choose an exhibition.')
+      return
+    }
+
+    if (isWaitlistMode) {
+      await handleJoinWaitlist()
       return
     }
 
@@ -1049,7 +1126,7 @@ function TicketsTab({ data, account, onBought }) {
 
     if ((counts.Student || 0) > 0 && askForStudentEmail && !schoolEmailOk) {
       setPendingStudentCount(null)
-      setPendingWaitlistId(null)
+      setPendingWaitlistJoin(false)
       setStudentModalError('')
       setStudentModalOpen(true)
       return
@@ -1083,12 +1160,25 @@ function TicketsTab({ data, account, onBought }) {
     }
   }
 
-  const handleJoin = async (id, email) => {
-    const ticketType = waitTypes[id] || types[0]
+  const handleJoinWaitlist = async (email) => {
+    if (!selected) {
+      setError('Please choose an exhibition.')
+      return
+    }
 
-    if (ticketType === 'Student' && askForStudentEmail && !schoolEmailOk && !email) {
-      setPendingWaitlistId(id)
+    if (totalCount === 0) {
+      setError('Please choose at least one ticket for the waitlist.')
+      return
+    }
+
+    if (totalCount > waitlistSlotsLeft) {
+      setError('Not enough waitlist spots left for that many tickets.')
+      return
+    }
+
+    if ((counts.Student || 0) > 0 && askForStudentEmail && !schoolEmailOk && !email) {
       setPendingStudentCount(null)
+      setPendingWaitlistJoin(true)
       setStudentModalError('')
       setStudentModalOpen(true)
       return
@@ -1098,14 +1188,19 @@ function TicketsTab({ data, account, onBought }) {
     setError('')
 
     try {
-      await callApi('/api/customer/waitlist', 'POST', {
-        ExhibitionID: id,
-        TicketType: ticketType,
+      const result = await callApi('/api/customer/waitlist', 'POST', {
+        ExhibitionID: selected.ExhibitionID,
+        Tickets: counts,
         SchoolEmail: email || schoolEmail,
       })
 
+      setCounts({})
+      setExhibitionId(null)
+      setSchoolEmail('')
+      setSchoolEmailOk(false)
+
       onBought(
-        'You are on the waitlist. We will let you know when a spot opens up.'
+        `Joined the waitlist for ${result.count} ${result.count === 1 ? 'ticket' : 'tickets'}. We will let you know when a spot opens up.`
       )
     } catch (waitError) {
       setError(waitError.message)
@@ -1134,10 +1229,9 @@ function TicketsTab({ data, account, onBought }) {
       setPendingStudentCount(null)
     }
 
-    if (pendingWaitlistId !== null) {
-      const exhibitionIdToJoin = pendingWaitlistId
-      setPendingWaitlistId(null)
-      handleJoin(exhibitionIdToJoin, email)
+    if (pendingWaitlistJoin) {
+      setPendingWaitlistJoin(false)
+      handleJoinWaitlist(email)
     }
   }
 
@@ -1178,92 +1272,18 @@ function TicketsTab({ data, account, onBought }) {
         <div className="cp-options">
           {exhibitions.map((item) => {
             const soldOut = item.Remaining === 0
-            const entry = waitlist.find(
+            const myEntries = waitlist.filter(
               (spot) => spot.ExhibitionID === item.ExhibitionID
             )
-
-            if (soldOut) {
-              return (
-                <div
-                  key={item.ExhibitionID}
-                  className="cp-option is-soldout"
-                >
-                  <span className="cp-option-name">{item.Name}</span>
-
-                  {item.Description && (
-                    <span className="cp-option-text">
-                      {item.Description}
-                    </span>
-                  )}
-
-                  <span className="cp-option-meta">
-                    {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
-                    {' - '}Sold out
-                    {' - '}Waitlist {item.WaitlistCount} of {waitlistLimit}
-                  </span>
-
-                  <div className="cp-waitlist">
-                    {entry ? (
-                      <>
-                        <span>
-                          You are on the waitlist ({entry.TicketType})
-                        </span>
-                        <button
-                          type="button"
-                          className="btn secondary"
-                          onClick={() => handleLeave(entry.WaitlistID)}
-                          disabled={waiting}
-                        >
-                          Leave
-                        </button>
-                      </>
-                    ) : item.WaitlistFull ? (
-                      <span>The waitlist is full</span>
-                    ) : (
-                      <>
-                        <div className="cp-chips" role="group" aria-label={`Ticket type for ${item.Name}`}>
-                          {types.map((type)=>{
-                            const active = (waitTypes[item.ExhibitionID] || types[0]) === type
-
-                            return (
-                              <button
-                                key={type}
-                                type="button"
-                                className={`cp-chip${active ? ' is-active' : ''}`}
-                                aria-pressed={active}
-                                onClick={()=>setWaitTypes((current)=>({
-                                  ...current,
-                                  [item.ExhibitionID]: type,
-                                }))}
-                              >
-                                {type}
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        <button
-                          type="button"
-                          className="btn secondary"
-                          onClick={() => handleJoin(item.ExhibitionID)}
-                          disabled={waiting}
-                        >
-                          Join Waitlist
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )
-            }
+            const notified = myEntries.some((spot) => spot.Status === 'Notified')
 
             return (
               <button
                 key={item.ExhibitionID}
                 type="button"
-                className={`cp-option${item.ExhibitionID === exhibitionId ? ' is-selected' : ''
-                  }`}
+                className={`cp-option${item.ExhibitionID === exhibitionId ? ' is-selected' : ''}${soldOut ? ' is-soldout' : ''}`}
                 onClick={() => chooseExhibition(item.ExhibitionID)}
+                disabled={soldOut && item.WaitlistFull && myEntries.length === 0}
               >
                 <span className="cp-option-name">{item.Name}</span>
 
@@ -1275,9 +1295,12 @@ function TicketsTab({ data, account, onBought }) {
 
                 <span className="cp-option-meta">
                   {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
-                  {': '}{item.Remaining} left
-                  {entry && entry.Status === 'Notified' &&
-                    ' - A spot opened for you'}
+                  {soldOut
+                    ? ` · Sold out · Waitlist ${item.WaitlistCount} of ${waitlistLimit}`
+                    : ` · ${item.Remaining} left`}
+                  {myEntries.length > 0 &&
+                    ` · You have ${myEntries.length} on the waitlist`}
+                  {notified && ' · A spot opened for you'}
                 </span>
               </button>
             )
@@ -1291,43 +1314,60 @@ function TicketsTab({ data, account, onBought }) {
 
       <section className="cp-card cp-summary">
         <div className="cp-label">Step 2</div>
-        <h2>Choose tickets and visit date</h2>
+        <h2>
+          {isWaitlistMode
+            ? 'Choose tickets for the waitlist'
+            : 'Choose tickets and visit date'}
+        </h2>
 
         {!selected ? (
           <p className="cp-empty">Choose an exhibition first.</p>
         ) : (
           <>
-            <div className="form-group">
-              <label htmlFor="ticket-visit-date">Visit date</label>
-              <input
-                id="ticket-visit-date"
-                type="date"
-                value={visitDate}
-                min={selected.StartDate > today ? selected.StartDate : today}
-                max={selected.EndDate}
-                onChange={(event) => {
-                  setVisitDate(event.target.value)
-                  setError('')
-                }}
-                required
-              />
-            </div>
+            {!isWaitlistMode && (
+              <div className="form-group">
+                <label htmlFor="ticket-visit-date">Visit date</label>
+                <input
+                  id="ticket-visit-date"
+                  type="date"
+                  value={visitDate}
+                  min={selected.StartDate > today ? selected.StartDate : today}
+                  max={selected.EndDate}
+                  onChange={(event) => {
+                    setVisitDate(event.target.value)
+                    setError('')
+                  }}
+                  required
+                />
+              </div>
+            )}
 
             <ul className="cp-lines">
               {types.map((type) => {
                 const count = counts[type] || 0
-                const memberLimit = discountedLimit[type] || 0
+                const memberLimit = isWaitlistMode
+                  ? 0
+                  : discountedLimit[type] || 0
                 const memberCount = Math.min(count, memberLimit)
                 const regularCount = count - memberCount
                 const memberPrice = priceFor(type, 0)
                 const regularPrice = prices[type]
+                const available = isWaitlistMode
+                  ? waitlistSlotsLeft
+                  : limit
+                const maxForType =
+                  type === 'Student' && askForStudentEmail
+                    ? Math.min(1, count + available - totalCount)
+                    : count + available - totalCount
 
                 return (
                   <li key={type} className="cp-line">
                     <div>
                       <div className="strong">{type}</div>
                       <div className="cp-price">
-                        {memberCount > 0 && regularCount > 0 ? (
+                        {isWaitlistMode ? (
+                          'Waitlist'
+                        ) : memberCount > 0 && regularCount > 0 ? (
                           <>
                             {money(memberPrice)} × {memberCount}
                             {' - '}
@@ -1347,11 +1387,7 @@ function TicketsTab({ data, account, onBought }) {
                     <Stepper
                       label={`${type} tickets`}
                       value={count}
-                      max={
-                        type === 'Student' && askForStudentEmail
-                          ? Math.min(1, count + limit - totalCount)
-                          : count + limit - totalCount
-                      }
+                      max={Math.max(maxForType, 0)}
                       onChange={(value) => changeTicketCount(type, value)}
                     />
                   </li>
@@ -1359,10 +1395,32 @@ function TicketsTab({ data, account, onBought }) {
               })}
             </ul>
 
-            <div className="cp-total">
-              <span>Total</span>
-              <strong>{money(totalPrice)}</strong>
-            </div>
+            {!isWaitlistMode && (
+              <div className="cp-total">
+                <span>Total</span>
+                <strong>{money(totalPrice)}</strong>
+              </div>
+            )}
+
+            {isWaitlistMode && myWaitlistEntries.length > 0 && (
+              <div className="cp-waitlist" style={{ marginBottom: '1rem' }}>
+                {myWaitlistEntries.map((entry) => (
+                  <div key={entry.WaitlistID} className="cp-line">
+                    <span>
+                      {entry.TicketType} · {entry.Status}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn secondary cp-small-btn"
+                      onClick={() => handleLeave(entry.WaitlistID)}
+                      disabled={waiting}
+                    >
+                      Leave
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {error && (
               <p className="form-error" role="alert">{error}</p>
@@ -1372,12 +1430,20 @@ function TicketsTab({ data, account, onBought }) {
               type="button"
               className="btn primary cp-wide"
               onClick={handleBuy}
-              disabled={totalCount === 0 || buying}
+              disabled={
+                totalCount === 0 ||
+                buying ||
+                waiting ||
+                (isWaitlistMode && waitlistSlotsLeft === 0)
+              }
             >
-              {buying
-                ? 'Buying...'
-                : `Buy ${totalCount || ''} ${totalCount === 1 ? 'Ticket' : 'Tickets'
-                }`}
+              {isWaitlistMode
+                ? waiting
+                  ? 'Joining...'
+                  : `Join Waitlist${totalCount > 0 ? ` (${totalCount})` : ''}`
+                : buying
+                  ? 'Buying...'
+                  : `Buy ${totalCount || ''} ${totalCount === 1 ? 'Ticket' : 'Tickets'}`}
             </button>
           </>
         )}

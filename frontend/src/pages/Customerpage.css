@@ -177,6 +177,25 @@
   font-size: 12px;
 }
 
+.cp-ticket-table .select-col input[type='checkbox'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cp-ticket-table tbody tr:hover .select-col input[type='checkbox'],
+.cp-ticket-table.selecting .select-col input[type='checkbox'],
+.cp-ticket-table .select-col input[type='checkbox']:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cp-card-head .page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 
 .cp-member {
   border-top: 4px solid var(--primary);

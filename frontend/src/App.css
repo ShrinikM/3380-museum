@@ -1632,9 +1632,8 @@ input[type='radio'] {
   margin-bottom: 2px;
 }
 
-.report-viewer-meta {
-  color: var(--muted-foreground);
-  font-size: 13px;
+.report-summary-grid {
+  margin: 0 0 24px;
 }
 
 .report-charts {

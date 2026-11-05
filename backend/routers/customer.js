@@ -807,7 +807,8 @@ async function getPurchases(params, body, customerId) {
        DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
        t.IsDeleted = 0
          AND t.RefundStatus = 'None'
-         AND COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS CanRefund
+         AND e.CancelledAt IS NULL
+         AND e.EndDate >= CURDATE() AS CanRefund
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
@@ -1217,58 +1218,82 @@ async function addTickets(params, body, customerId) {
 
 
 async function refundTicket(params, body, customerId) {
-  const ticketId = checkPositiveId(body.TicketID, "ticket");
+  const ticketIds = [];
+
+  if (Array.isArray(body.TicketIDs)) {
+    for (const value of body.TicketIDs) {
+      ticketIds.push(checkPositiveId(value, "ticket"));
+    }
+  } else if (body.TicketID !== undefined) {
+    ticketIds.push(checkPositiveId(body.TicketID, "ticket"));
+  }
+
+  if (ticketIds.length === 0) {
+    throw makeError(400, "Please select at least one ticket to refund");
+  }
+
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
 
-    const [rows] = await connection.query(
-      `SELECT
-         t.ExhibitionID,
-         t.Price,
-         t.RefundStatus,
-         COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS BeforeVisit
-       FROM ticket t
-       JOIN exhibition e
-         ON e.ExhibitionID = t.ExhibitionID
-       WHERE t.TicketID = ?
-         AND t.CustomerID = ?
-         AND t.IsDeleted = 0
-       FOR UPDATE`,
-      [ticketId, customerId]
-    );
+    let refundTotal = 0;
+    let refundCount = 0;
 
-    if (rows.length === 0) {
-      throw makeError(404, "Ticket not found");
-    }
-
-    const ticket = rows[0];
-
-    if (ticket.RefundStatus !== "None") {
-      throw makeError(409, "This ticket has already been refunded");
-    }
-
-    if (Number(ticket.BeforeVisit) !== 1) {
-      throw makeError(
-        400,
-        "Tickets can be refunded until the day before your visit"
+    for (const ticketId of ticketIds) {
+      const [rows] = await connection.query(
+        `SELECT
+           t.Price,
+           t.RefundStatus,
+           e.CancelledAt IS NULL
+             AND e.EndDate >= CURDATE() AS CanRefund
+         FROM ticket t
+         JOIN exhibition e
+           ON e.ExhibitionID = t.ExhibitionID
+         WHERE t.TicketID = ?
+           AND t.CustomerID = ?
+           AND t.IsDeleted = 0
+         FOR UPDATE`,
+        [ticketId, customerId]
       );
+
+      if (rows.length === 0) {
+        throw makeError(404, "Ticket not found");
+      }
+
+      const ticket = rows[0];
+
+      if (ticket.RefundStatus !== "None") {
+        throw makeError(409, "One of the selected tickets has already been refunded");
+      }
+
+      if (Number(ticket.CanRefund) !== 1) {
+        throw makeError(
+          400,
+          "Tickets can only be refunded while the exhibition is still open"
+        );
+      }
+
+      // Soft-delete frees the seat for the waitlist trigger.
+      await connection.query(
+        `UPDATE ticket
+         SET IsDeleted = 1, UpdatedAt = NOW()
+         WHERE TicketID = ?`,
+        [ticketId]
+      );
+
+      refundTotal = refundTotal + Number(ticket.Price);
+      refundCount = refundCount + 1;
     }
 
-    // A customer refund removes the ticket, which frees the seat.
-    // trg_ticket_free_seat then gives the spot to the waitlist.
-    await connection.query(
-      `UPDATE ticket
-       SET IsDeleted = 1, UpdatedAt = NOW()
-       WHERE TicketID = ?`,
-      [ticketId]
-    );
     await connection.commit();
 
     return {
       status: 200,
-      data: { refund: money(ticket.Price) },
+      data: {
+        count: refundCount,
+        refund: money(refundTotal),
+      },
     };
   } catch (error) {
     await connection.rollback();
@@ -1283,20 +1308,44 @@ async function joinWaitlist(params, body, customerId) {
   const exhibitionID = checkPositiveId(body.ExhibitionID, "exhibition");
   const ticketPrices = await getTicketPrices();
   const ticketTypes = getTicketTypes(ticketPrices);
-
-  if (!ticketTypes.includes(body.TicketType)) {
-    throw makeError(400, "Please select a valid ticket type");
-  }
-
   const membership = await findMembership(customerId);
 
-  if (body.TicketType === "Student") {
-    await checkStudentTicketAccess(
-      membership,
-      { Student: 1 },
-      body.SchoolEmail
-    );
+  const counts = {};
+  let total = 0;
+
+  if (body.Tickets && typeof body.Tickets === "object" && !Array.isArray(body.Tickets)) {
+    for (const type of Object.keys(body.Tickets)) {
+      if (!ticketTypes.includes(type)) {
+        throw makeError(400, "Please select a valid ticket type");
+      }
+
+      const count = Number(body.Tickets[type]);
+
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw makeError(400, "Ticket quantities must be whole numbers");
+      }
+
+      if (count > 0) {
+        counts[type] = count;
+        total = total + count;
+      }
+    }
+  } else if (ticketTypes.includes(body.TicketType)) {
+    counts[body.TicketType] = 1;
+    total = 1;
+  } else {
+    throw makeError(400, "Please choose at least one ticket for the waitlist");
   }
+
+  if (total === 0) {
+    throw makeError(400, "Please choose at least one ticket for the waitlist");
+  }
+
+  const schoolEmail = await checkStudentTicketAccess(
+    membership,
+    counts,
+    body.SchoolEmail
+  );
 
   const connection = await pool.getConnection();
 
@@ -1323,30 +1372,43 @@ async function joinWaitlist(params, body, customerId) {
     }
 
     const [waiting] = await connection.query(
-      `SELECT WaitlistID
+      `SELECT COUNT(*) AS WaitlistCount
        FROM waitlist
-       WHERE CustomerID = ?
-         AND ExhibitionID = ?
-         AND Status IN ('Waiting', 'Notified')`,
-      [customerId, exhibitionID]
+       WHERE ExhibitionID = ?
+         AND Status IN ('Waiting', 'Notified')
+       FOR UPDATE`,
+      [exhibitionID]
     );
 
-    if (waiting.length > 0) {
-      throw makeError(409, "You are already on the waitlist for this exhibition");
+    const waitlistCount = Number(waiting[0].WaitlistCount);
+
+    if (waitlistCount + total > waitlistLimit) {
+      throw makeError(
+        400,
+        "Not enough waitlist spots left for that many tickets"
+      );
     }
 
-    await connection.query(
-      `INSERT INTO waitlist
-        (ExhibitionID, CustomerID, TicketType, CreatedAt, CreatedBy)
-       VALUES (?, ?, ?, NOW(), NULL)`,
-      [exhibitionID, customerId, body.TicketType]
-    );
+    for (const type of Object.keys(counts)) {
+      for (let i = 0; i < counts[type]; i++) {
+        await connection.query(
+          `INSERT INTO waitlist
+            (ExhibitionID, CustomerID, TicketType, CreatedAt, CreatedBy)
+           VALUES (?, ?, ?, NOW(), NULL)`,
+          [exhibitionID, customerId, type]
+        );
+      }
+    }
 
     await connection.commit();
 
     return {
       status: 201,
-      data: { message: "You are on the waitlist" },
+      data: {
+        message: "You are on the waitlist",
+        count: total,
+        schoolEmail: schoolEmail,
+      },
     };
   } catch (error) {
     await connection.rollback();

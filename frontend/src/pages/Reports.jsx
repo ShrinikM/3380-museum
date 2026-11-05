@@ -143,6 +143,96 @@ function formatCell(value, format){
   return value
 }
 
+function moneyText(value){
+  return Number(value || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  })
+}
+
+function sumField(rows, key){
+  let total = 0
+
+  for(const row of rows){
+    total = total + Number(row[key] || 0)
+  }
+
+  return total
+}
+
+function averageField(rows, key){
+  if(rows.length === 0){
+    return 0
+  }
+
+  return sumField(rows, key) / rows.length
+}
+
+function getReportSummary(reportType, rows){
+  if(reportType === 'revenue'){
+    return [
+      { label: 'Total Revenue', value: moneyText(sumField(rows, 'Revenue')) },
+      { label: 'Visitors', value: Math.round(sumField(rows, 'TotalVisitors')).toLocaleString() },
+      {
+        label: 'Avg Spend / Visitor',
+        value: moneyText(averageField(rows, 'AvgSpendPerVisitor')),
+      },
+      { label: 'Months', value: String(rows.length) },
+    ]
+  }
+
+  if(reportType === 'ticket-sales'){
+    const ticketsSold = sumField(rows, 'TicketsSold')
+    const capacity = sumField(rows, 'Capacity')
+
+    return [
+      { label: 'Tickets Sold', value: Math.round(ticketsSold).toLocaleString() },
+      { label: 'Ticket Revenue', value: moneyText(sumField(rows, 'Revenue')) },
+      {
+        label: 'Avg Fill',
+        value: capacity > 0
+          ? `${Math.round((ticketsSold / capacity) * 1000) / 10}%`
+          : '0%',
+      },
+      { label: 'Exhibitions', value: String(rows.length) },
+    ]
+  }
+
+  if(reportType === 'giftshop-cafe'){
+    const giftShop = rows.filter((row)=>row.Store === 'Gift Shop')
+    const cafe = rows.filter((row)=>row.Store === 'Café' || row.Store === 'Cafe')
+
+    return [
+      { label: 'Total Sales', value: moneyText(sumField(rows, 'Revenue')) },
+      { label: 'Units Sold', value: Math.round(sumField(rows, 'UnitsSold')).toLocaleString() },
+      { label: 'Gift Shop', value: moneyText(sumField(giftShop, 'Revenue')) },
+      { label: 'Café', value: moneyText(sumField(cafe, 'Revenue')) },
+    ]
+  }
+
+  if(reportType === 'membership-expiration'){
+    let expiringSoon = 0
+
+    for(const row of rows){
+      if(Number(row.DaysUntilExpiration) <= 30){
+        expiringSoon = expiringSoon + 1
+      }
+    }
+
+    const types = new Set(rows.map((row)=>row.MembershipType))
+
+    return [
+      { label: 'Active Members', value: String(rows.length) },
+      { label: 'Expiring in 30 Days', value: String(expiringSoon) },
+      { label: 'Membership Types', value: String(types.size) },
+    ]
+  }
+
+  return [
+    { label: 'Rows', value: String(rows.length) },
+  ]
+}
+
 function getSavedHistory(storageKey){
   try{
     const saved = JSON.parse(localStorage.getItem(storageKey)) || []
@@ -411,11 +501,6 @@ function Reports(){
           <div className="report-viewer-header">
             <div>
               <h2 className="module-title">{viewingItem.name}</h2>
-              <p className="report-viewer-meta">
-                {formatNames[viewingItem.format]}
-                {viewingReport.usesDates && ` - ${viewingItem.startDate} to ${viewingItem.endDate}`}
-                {` - ${viewingItem.rows.length} rows`}
-              </p>
             </div>
 
             <div className="page-header-actions">
@@ -426,6 +511,15 @@ function Reports(){
                 Close
               </button>
             </div>
+          </div>
+
+          <div className="dash-stat-grid report-summary-grid">
+            {getReportSummary(viewingItem.reportType, viewingItem.rows).map((stat)=>(
+              <div key={stat.label} className="card dash-stat-card">
+                <div className="dash-stat-label">{stat.label}</div>
+                <div className="dash-stat-value">{stat.value}</div>
+              </div>
+            ))}
           </div>
 
           {showCharts && (
