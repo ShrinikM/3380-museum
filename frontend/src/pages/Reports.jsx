@@ -98,8 +98,11 @@ const reportTypes = [
         series: [{ key: 'UnitsSold', label: 'Units Sold' }],
       },
     ],
+    tableGroups: [
+      { title: 'Gift Shop', store: 'Gift Shop' },
+      { title: 'Café', store: 'Café' },
+    ],
     columns: [
-      { key: 'Store', label: 'Store' },
       { key: 'ItemName', label: 'Item' },
       { key: 'Category', label: 'Category' },
       { key: 'UnitsSold', label: 'Units Sold' },
@@ -551,36 +554,52 @@ function Reports(){
             </div>
           )}
 
-          <div className="table-wrap">
-            <table className="data-table">
-              <caption className="sr-only">Report data</caption>
-              <thead>
-                <tr>
-                  {viewingColumns.map((column)=>(
-                    <th key={column.key} scope="col">{column.label}</th>
-                  ))}
-                </tr>
-              </thead>
+          {(viewingReport.tableGroups || [{ title: 'Report data', store: null }]).map((group)=>{
+            const groupRows = group.store
+              ? viewingItem.rows.filter((row)=>row.Store === group.store)
+              : viewingItem.rows
 
-              <tbody>
-                {viewingItem.rows.map((row, index)=>(
-                  <tr key={index}>
-                    {viewingColumns.map((column)=>(
-                      <td key={column.key} className="report-cell">
-                        {formatCell(row[column.key], column.format)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-
-                {viewingItem.rows.length === 0 && (
-                  <tr>
-                    <td colSpan={viewingColumns.length} className="empty">No data for this report.</td>
-                  </tr>
+            return (
+              <div key={group.title} className="report-table-group">
+                {viewingReport.tableGroups && (
+                  <h3 className="report-table-title">{group.title}</h3>
                 )}
-              </tbody>
-            </table>
-          </div>
+
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <caption className="sr-only">{group.title}</caption>
+                    <thead>
+                      <tr>
+                        {viewingColumns.map((column)=>(
+                          <th key={column.key} scope="col">{column.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {groupRows.map((row, index)=>(
+                        <tr key={index}>
+                          {viewingColumns.map((column)=>(
+                            <td key={column.key} className="report-cell">
+                              {formatCell(row[column.key], column.format)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+
+                      {groupRows.length === 0 && (
+                        <tr>
+                          <td colSpan={viewingColumns.length} className="empty">
+                            No data for this report.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
