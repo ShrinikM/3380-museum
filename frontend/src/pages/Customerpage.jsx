@@ -14,7 +14,6 @@ const TABS = [
 
 const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
 const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
-const MAX_PER_ORDER = 20
 const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
 
@@ -1580,7 +1579,7 @@ function ShopTab({ items, account, onBought }) {
                   <Stepper
                     label={item.ItemName}
                     value={inCart}
-                    max={Math.min(item.Stock, MAX_PER_ORDER)}
+                    max={item.Stock}
                     onChange={(value) => setQuantity(item.ItemID, value)}
                   />
                 )

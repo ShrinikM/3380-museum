@@ -15,8 +15,6 @@ const onlinePayments = ["Credit Card", "Debit Card", "Mobile Pay"];
 
 const membershipPayments = ["Credit Card", "Debit Card"];
 
-const maxShopQuantity = 20;
-
 const waitlistLimit = 10;
 
 const blockedStudentMemberships = ["Senior"];
@@ -1484,13 +1482,9 @@ function checkShopOrder(body) {
       line.Quantity === null ||
       line.Quantity === undefined ||
       !Number.isSafeInteger(quantity) ||
-      quantity < 1 ||
-      quantity > maxShopQuantity
+      quantity < 1
     ) {
-      throw makeError(
-        400,
-        `Quantity must be between 1 and ${maxShopQuantity}`
-      );
+      throw makeError(400, "Quantity must be a whole number of at least 1");
     }
 
     if (items.some((item) => item.ItemID === itemID)) {
