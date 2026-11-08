@@ -29,6 +29,8 @@ function Exhibitions() {
   const [exhibitionToDelete, setExhibitionToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  const [warningModalOpen, setWarningModalOpen] = useState(false)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
@@ -293,7 +295,7 @@ function Exhibitions() {
 
   const handleEditSelected = () => {
     if (selectedExhibitions[0].Status === 'cancelled') {
-      alert('A cancelled exhibition cannot be edited.')
+      setWarningModalOpen(true)
       return
     }
 
@@ -742,6 +744,28 @@ function Exhibitions() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={warningModalOpen}
+        title="Cannot Edit Exhibition"
+        onClose={() => setWarningModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            A cancelled exhibition cannot be edited.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => setWarningModalOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Modal

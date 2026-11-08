@@ -3,6 +3,7 @@ import { callApi } from '../api'
 import { useRole } from '../context/role'
 import Chart from '../components/Chart'
 import { useSelection } from '../hooks/useSelection'
+import { Modal } from '../components/ui'
 
 const MAX_HISTORY = 10
 
@@ -31,7 +32,7 @@ const reportTypes = [
         prefix: '$',
       },
     ],
-    // Month + Total stay in the table; picker only toggles the breakdown columns.
+    
     fixedStartColumns: [{ key: 'Month', label: 'Month' }],
     fixedEndColumns: [
       { key: 'Revenue', label: 'Total Revenue', format: 'money' },
@@ -267,6 +268,11 @@ function Reports(){
   const [history, setHistory] = useState(()=>getSavedHistory(storageKey))
   const [message, setMessage] = useState('')
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteMode, setDeleteMode] = useState('selected') 
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
   const selectedReport = findReport(reportType)
   const formatOptions = [...selectedReport.formats, 'table']
 
@@ -378,35 +384,46 @@ function Reports(){
 
   const { selectedRows: selectedReports, isSelected, toggle, clear } = useSelection(history, (item)=>item.id)
 
-  const deleteSelected = ()=>{
-    const question = selectedReports.length > 1
-      ? `Are you sure you want to delete these ${selectedReports.length} reports?`
-      : 'Are you sure you want to delete this report?'
-
-    if(!window.confirm(question)){
-      return
-    }
-
-    const newHistory = history.filter((item)=>!isSelected(item.id))
-    saveHistory(newHistory)
-    setHistory(newHistory)
-
-    if(selectedReports.some((item)=>item.id === viewingId)){
-      setViewingId(null)
-    }
-
-    clear()
+  const openDeleteSelectedModal = () => {
+    if(selectedReports.length === 0) return
+    setDeleteMode('selected')
+    setDeleteError('')
+    setDeleteModalOpen(true)
   }
 
-  const clearHistory = ()=>{
-    if(!window.confirm('Are you sure you want to delete all saved reports?')){
-      return
-    }
+  const openClearAllModal = () => {
+    setDeleteMode('all')
+    setDeleteError('')
+    setDeleteModalOpen(true)
+  }
 
-    localStorage.removeItem(storageKey)
-    setHistory([])
-    setViewingId(null)
-    clear()
+  const handleConfirmDelete = async () => {
+    setDeleting(true)
+    setDeleteError('')
+
+    try {
+      if(deleteMode === 'selected'){
+        const newHistory = history.filter((item)=>!isSelected(item.id))
+        saveHistory(newHistory)
+        setHistory(newHistory)
+
+        if(selectedReports.some((item)=>item.id === viewingId)){
+          setViewingId(null)
+        }
+
+        clear()
+      } else {
+        localStorage.removeItem(storageKey)
+        setHistory([])
+        setViewingId(null)
+        clear()
+      }
+      setDeleteModalOpen(false)
+    } catch (err) {
+      setDeleteError('Could not delete reports: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const viewingItem = history.find((item)=>item.id === viewingId)
@@ -628,13 +645,13 @@ function Reports(){
                   <button type="button" className="btn secondary" onClick={()=>selectedReports.forEach(exportReport)}>
                     Export CSV
                   </button>
-                  <button type="button" className="btn danger" onClick={deleteSelected}>
+                  <button type="button" className="btn danger" onClick={openDeleteSelectedModal}>
                     Delete
                   </button>
                 </>
               )}
 
-              <button type="button" className="btn secondary" onClick={clearHistory}>
+              <button type="button" className="btn secondary" onClick={openClearAllModal}>
                 Clear All
               </button>
             </div>
@@ -679,6 +696,47 @@ function Reports(){
           </div>
         </>
       )}
+
+      <Modal
+        open={deleteModalOpen}
+        title={deleteMode === 'selected' ? (selectedReports.length > 1 ? 'Delete Reports' : 'Delete Report') : 'Clear All Reports'}
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            {deleteMode === 'selected'
+              ? (selectedReports.length > 1
+                  ? `Are you sure you want to delete these ${selectedReports.length} reports? This action cannot be undone.`
+                  : 'Are you sure you want to delete this report? This action cannot be undone.')
+              : 'Are you sure you want to delete all saved reports? This action cannot be undone.'}
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : (deleteMode === 'selected' ? 'Delete' : 'Clear All')}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -150,22 +150,26 @@ function MembershipTab({ account, onChanged }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const handleCancel = async () => {
-    const confirmed = window.confirm('Are you sure you want to cancel your membership?')
+  // Custom cancel modal states
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelError, setCancelError] = useState('')
 
-    if (!confirmed) {
-      return
-    }
+  const handleCancelClick = () => {
+    setCancelError('')
+    setCancelModalOpen(true)
+  }
 
+  const handleConfirmCancel = async () => {
     setSaving(true)
-    setError('')
+    setCancelError('')
 
     try {
       await callApi('/api/customer/membership/cancel', 'POST')
+      setCancelModalOpen(false)
       onChanged('Your membership has been cancelled.')
     }
     catch (cancelError) {
-      setError(cancelError.message)
+      setCancelError(cancelError.message)
     }
     finally {
       setSaving(false)
@@ -433,7 +437,7 @@ function MembershipTab({ account, onChanged }) {
               <button
                 type="button"
                 className="btn danger"
-                onClick={handleCancel}
+                onClick={handleCancelClick}
                 disabled={saving}
               >
                 {saving ? 'Cancelling...' : 'Cancel Membership'}
@@ -479,6 +483,43 @@ function MembershipTab({ account, onChanged }) {
           </table>
         </div>
       </section>
+
+      <Modal
+        open={cancelModalOpen}
+        title="Cancel Membership"
+        onClose={() => setCancelModalOpen(false)}
+      >
+        <div className="form-grid">
+          {cancelError && (
+            <p className="form-error form-full" role="alert">
+              {cancelError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to cancel your membership? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setCancelModalOpen(false)}
+              disabled={saving}
+            >
+              Keep Membership
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmCancel}
+              disabled={saving}
+            >
+              {saving ? 'Cancelling...' : 'Confirm Cancellation'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
