@@ -29,6 +29,7 @@ function Donations() {
 
   const [donations, setDonations] = useState([])
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
@@ -87,6 +88,7 @@ function Donations() {
   }
 
   const resetForm = () => {
+    setFormError('')
     setFormData({ ...emptyForm })
     setEditingId(null)
   }
@@ -116,47 +118,48 @@ function Donations() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     const firstName = formData.FirstName.trim()
     const lastName = formData.LastName.trim()
     const amount = Number(formData.AmountDonated)
 
     if (!namePattern.test(firstName)) {
-      alert(
+      setFormError(
         'First Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
     if (!namePattern.test(lastName)) {
-      alert(
+      setFormError(
         'Last Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      alert('Amount must be greater than 0.')
+      setFormError('Amount must be greater than 0.')
       return
     }
 
     if (amount > 999999.99) {
-      alert('Amount cannot be more than $999,999.99.')
+      setFormError('Amount cannot be more than $999,999.99.')
       return
     }
 
     if (Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) {
-      alert('Amount can have no more than two decimal places.')
+      setFormError('Amount can have no more than two decimal places.')
       return
     }
 
     if (!paymentMethods.includes(formData.PaymentMethod)) {
-      alert('Please select a valid payment method.')
+      setFormError('Please select a valid payment method.')
       return
     }
 
     if (!formData.DonationDate || formData.DonationDate > today) {
-      alert('Please select a valid Donation Date that is not in the future.')
+      setFormError('Please select a valid Donation Date that is not in the future.')
       return
     }
 
@@ -175,7 +178,7 @@ function Donations() {
         await callApi('/api/donations/' + editingId, 'PUT', donationData)
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
@@ -370,6 +373,12 @@ function Donations() {
         onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="donation-first-name">First Name</label>
             <input

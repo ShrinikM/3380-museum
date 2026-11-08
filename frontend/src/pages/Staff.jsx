@@ -37,6 +37,7 @@ function Staff() {
 
   const [staffMembers, setStaffMembers] = useState([])
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -96,6 +97,7 @@ function Staff() {
   }
 
   const resetForm = () => {
+    setFormError('')
     setFormData({ ...emptyForm })
   }
 
@@ -128,6 +130,7 @@ function Staff() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     const firstName = formData.FirstName.trim()
     const lastName = formData.LastName.trim()
@@ -135,31 +138,31 @@ function Staff() {
     const phone = formData.PhoneNumber.trim()
 
     if (!textPattern.test(firstName)) {
-      alert(
+      setFormError(
         'First Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
     if (!textPattern.test(lastName)) {
-      alert(
+      setFormError(
         'Last Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      alert('Please enter a valid email address.')
+      setFormError('Please enter a valid email address.')
       return
     }
 
     if (!/^[0-9+()\- ]{7,20}$/.test(phone)) {
-      alert('Please enter a valid phone number.')
+      setFormError('Please enter a valid phone number.')
       return
     }
 
     if (formData.EndDate && formData.EndDate < formData.StartDate) {
-      alert('End Date cannot be before Start Date.')
+      setFormError('End Date cannot be before Start Date.')
       return
     }
 
@@ -181,7 +184,7 @@ function Staff() {
         await callApi('/api/staff/' + editingId, 'PUT', staffData)
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
@@ -365,6 +368,12 @@ function Staff() {
         onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="staff-first-name">First Name</label>
             <input

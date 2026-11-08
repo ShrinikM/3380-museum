@@ -52,6 +52,7 @@ function Tickets() {
   const [exhibitions, setExhibitions] = useState([])
   const [ticketPrices, setTicketPrices] = useState({})
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
 
   const [search, setSearch] = useState('')
@@ -67,6 +68,10 @@ function Tickets() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [ticketToDelete, setTicketToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null)
+  const [actionError, setActionError] = useState('')
+  const [actionSaving, setActionSaving] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const ticketTypes = Object.keys(ticketPrices).length > 0
     ? Object.keys(ticketPrices)
@@ -118,35 +123,33 @@ function Tickets() {
     (ticket) => ticket.MembershipID !== null
   ).length
 
-  const handleNotify = async (item) => {
-    const confirmed = window.confirm(
-      `Notify ${item.PendingNotices} visitors that ${item.ExhibitionName} was cancelled?`
-    )
+  const handleNotify = (item) => {
+    setActionError('')
+    setPendingAction({ type: 'notify', item: item })
+  }
 
-    if (!confirmed) return
+  const handleRefund = (item) => {
+    setActionError('')
+    setPendingAction({ type: 'refund', item: item })
+  }
+
+  const confirmAction = async () => {
+    const { type, item } = pendingAction
+
+    setActionSaving(true)
+    setActionError('')
 
     try {
-      await callApi(`/api/tickets/exhibition/${item.ExhibitionID}/notify`, 'POST')
+      await callApi(`/api/tickets/exhibition/${item.ExhibitionID}/${type}`, 'POST')
+      setPendingAction(null)
       refetchTickets()
     } catch (err) {
-      alert(err.message)
+      setActionError(err.message)
+    } finally {
+      setActionSaving(false)
     }
   }
 
-  const handleRefund = async (item) => {
-    const confirmed = window.confirm(
-      `Refund ${item.PendingRefunds} tickets ($${item.RefundTotal.toFixed(2)}) for ${item.ExhibitionName}?`
-    )
-
-    if (!confirmed) return
-
-    try {
-      await callApi(`/api/tickets/exhibition/${item.ExhibitionID}/refund`, 'POST')
-      refetchTickets()
-    } catch (err) {
-      alert(err.message)
-    }
-  }
 
   const filtered = tickets.filter((ticket) => {
     const searchText = search.toLowerCase()
@@ -252,6 +255,7 @@ function Tickets() {
   }
 
   const resetForm = () => {
+    setFormError('')
     setFormData(emptyForm)
     setLookupText('')
     setLookupMessage('')
@@ -299,14 +303,15 @@ function Tickets() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     if (!formData.ExhibitionID) {
-      alert('Please select an Exhibition.')
+      setFormError('Please select an Exhibition.')
       return
     }
 
     if (!ticketTypes.includes(formData.TicketType)) {
-      alert('Please select a valid Ticket Type.')
+      setFormError('Please select a valid Ticket Type.')
       return
     }
 
@@ -314,12 +319,12 @@ function Tickets() {
       member?.MembershipType === 'Senior' &&
       formData.TicketType === 'Student'
     ) {
-      alert('Student tickets are not available with a Senior membership.')
+      setFormError('Student tickets are not available with a Senior membership.')
       return
     }
 
     if (!formData.SaleDate || formData.SaleDate > today) {
-      alert('Please select a valid Sale Date that is not in the future.')
+      setFormError('Please select a valid Sale Date that is not in the future.')
       return
     }
 
@@ -328,14 +333,14 @@ function Tickets() {
     )
 
     if (!selectedExhibition) {
-      alert('Please select a valid Exhibition.')
+      setFormError('Please select a valid Exhibition.')
       return
     }
 
     const price = Number(formData.Price)
 
     if (!Number.isFinite(price) || price <= 0) {
-      alert('Ticket price must be greater than 0.')
+      setFormError('Ticket price must be greater than 0.')
       return
     }
 
@@ -355,7 +360,7 @@ function Tickets() {
         await callApi('/api/tickets/' + editingId, 'PUT', ticketData)
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
@@ -378,6 +383,7 @@ function Tickets() {
   const handleDeleteSelected = () => {
     if (selectedTickets.length === 0) return
     setTicketToDelete(selectedTickets[0])
+    setDeleteError('')
     setDeleteModalOpen(true)
   }
 
@@ -392,7 +398,7 @@ function Tickets() {
       clear()
       refetchTickets()
     } catch (err) {
-      alert('Could not delete ticket: ' + err.message)
+      setDeleteError('Could not delete ticket: ' + err.message)
     } finally {
       setDeleting(false)
     }
@@ -764,6 +770,12 @@ function Tickets() {
         onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="ticket-exhibition">Exhibition</label>
             <select
@@ -904,6 +916,12 @@ function Tickets() {
         onClose={() => setDeleteModalOpen(false)}
       >
         <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
             Are you sure you want to delete ticket <strong>#{String(ticketToDelete?.TicketID || '').padStart(5, '0')}</strong>? This action cannot be undone.
           </p>
@@ -924,6 +942,46 @@ function Tickets() {
               disabled={deleting}
             >
               {deleting ? 'Deleting...' : 'Delete Ticket'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        open={pendingAction !== null}
+        title={pendingAction?.type === 'refund' ? 'Refund Tickets' : 'Notify Visitors'}
+        onClose={() => setPendingAction(null)}
+      >
+        <div className="form-grid">
+          {actionError && (
+            <p className="form-error form-full" role="alert">
+              {actionError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            {pendingAction?.type === 'refund'
+              ? <>Refund <strong>{pendingAction.item.PendingRefunds}</strong> tickets (${pendingAction.item.RefundTotal.toFixed(2)}) for <strong>{pendingAction.item.ExhibitionName}</strong>?</>
+              : <>Notify <strong>{pendingAction?.item.PendingNotices}</strong> visitors that <strong>{pendingAction?.item.ExhibitionName}</strong> was cancelled?</>}
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setPendingAction(null)}
+              disabled={actionSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={confirmAction}
+              disabled={actionSaving}
+            >
+              {actionSaving
+                ? 'Working...'
+                : pendingAction?.type === 'refund' ? 'Refund Tickets' : 'Notify Visitors'}
             </button>
           </div>
         </div>

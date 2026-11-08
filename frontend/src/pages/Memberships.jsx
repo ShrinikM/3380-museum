@@ -73,6 +73,7 @@ function Memberships() {
 
   const [memberships, setMemberships] = useState([])
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
 
   const [search, setSearch] = useState('')
@@ -84,6 +85,7 @@ function Memberships() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [membershipToDelete, setMembershipToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     async function loadMemberships() {
@@ -215,7 +217,7 @@ function Memberships() {
 
   const addFamilyMember = () => {
     if (formData.familyMembers.length >= 7) {
-      alert(
+      setFormError(
         'A Family membership can have at most 7 additional members, including no more than 1 additional adult and 6 children.'
       )
       return
@@ -238,6 +240,7 @@ function Memberships() {
   }
 
   const resetForm = () => {
+    setFormError('')
     setFormData({
       ...emptyForm,
       familyMembers: [],
@@ -284,6 +287,7 @@ function Memberships() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     const firstName = formData.firstName.trim()
     const lastName = formData.lastName.trim()
@@ -294,44 +298,44 @@ function Memberships() {
     const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
     if (!textPattern.test(firstName)) {
-      alert('First Name can only contain letters, spaces, hyphens, or apostrophes.')
+      setFormError('First Name can only contain letters, spaces, hyphens, or apostrophes.')
       return
     }
 
     if (!textPattern.test(lastName)) {
-      alert('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
+      setFormError('Last Name can only contain letters, spaces, hyphens, or apostrophes.')
       return
     }
 
     if (!membershipTypes.includes(formData.type)) {
-      alert('Please select a valid membership type.')
+      setFormError('Please select a valid membership type.')
       return
     }
 
     const phoneDigits = formData.phone.replace(/\D/g, '')
 
     if (formData.phone.trim() !== '' && phoneDigits.length !== 10) {
-      alert('Phone number must have 10 digits.')
+      setFormError('Phone number must have 10 digits.')
       return
     }
 
     if (!Number.isFinite(price) || price <= 0) {
-      alert('Price must be greater than 0.')
+      setFormError('Price must be greater than 0.')
       return
     }
 
     if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
-      alert('Discount must be between 0 and 100.')
+      setFormError('Discount must be between 0 and 100.')
       return
     }
 
     if (!formData.startDate || !formData.endDate) {
-      alert('Please select both Start Date and End Date.')
+      setFormError('Please select both Start Date and End Date.')
       return
     }
 
     if (formData.endDate <= formData.startDate) {
-      alert('End Date must be after Start Date.')
+      setFormError('End Date must be after Start Date.')
       return
     }
 
@@ -341,12 +345,12 @@ function Memberships() {
     )
 
     if (new Date(`${formData.endDate}T00:00:00Z`) > maxAllowedEndDate) {
-      alert('Membership cannot be longer than 1 year.')
+      setFormError('Membership cannot be longer than 1 year.')
       return
     }
 
     if (!formData.payment) {
-      alert('Please select a payment method.')
+      setFormError('Please select a payment method.')
       return
     }
 
@@ -354,7 +358,7 @@ function Memberships() {
       (formData.type === 'Senior' || formData.type === 'Family') &&
       !formData.dateOfBirth
     ) {
-      alert('Date of birth is required for Senior and Family memberships.')
+      setFormError('Date of birth is required for Senior and Family memberships.')
       return
     }
 
@@ -362,17 +366,17 @@ function Memberships() {
       const age = calculateAge(formData.dateOfBirth, formData.startDate)
 
       if (age === null || age < 0) {
-        alert('Please provide a valid date of birth before the membership start date.')
+        setFormError('Please provide a valid date of birth before the membership start date.')
         return
       }
 
       if (formData.type === 'Senior' && age < 65) {
-        alert('Senior memberships require the customer to be at least 65 years old when the membership starts.')
+        setFormError('Senior memberships require the customer to be at least 65 years old when the membership starts.')
         return
       }
 
       if (formData.type === 'Family' && age < 18) {
-        alert('The primary account holder must be at least 18 years old when the Family membership starts.')
+        setFormError('The primary account holder must be at least 18 years old when the Family membership starts.')
         return
       }
     }
@@ -381,7 +385,7 @@ function Memberships() {
       formData.type === 'Student' &&
       !formData.schoolEmail.trim()
     ) {
-      alert('School email is required for Student memberships.')
+      setFormError('School email is required for Student memberships.')
       return
     }
 
@@ -389,7 +393,7 @@ function Memberships() {
       formData.type === 'Student' &&
       !/^[^\s@]+@cougarnet\.uh\.edu$/i.test(formData.schoolEmail.trim())
     ) {
-      alert('Student memberships require an approved school email ending in @cougarnet.uh.edu.')
+      setFormError('Student memberships require an approved school email ending in @cougarnet.uh.edu.')
       return
     }
 
@@ -397,7 +401,7 @@ function Memberships() {
 
     if (formData.type === 'Family') {
       if (!Array.isArray(formData.familyMembers)) {
-        alert('Please check the family member list.')
+        setFormError('Please check the family member list.')
         return
       }
 
@@ -414,19 +418,19 @@ function Memberships() {
           !textPattern.test(memberFirstName) ||
           !textPattern.test(memberLastName)
         ) {
-          alert(`Please enter a valid first and last name for family member ${i + 1}.`)
+          setFormError(`Please enter a valid first and last name for family member ${i + 1}.`)
           return
         }
 
         if (!memberDob) {
-          alert(`Please enter a date of birth for family member ${i + 1}.`)
+          setFormError(`Please enter a date of birth for family member ${i + 1}.`)
           return
         }
 
         const memberAge = calculateAge(memberDob, formData.startDate)
 
         if (memberAge === null || memberAge < 0 || memberDob >= formData.startDate) {
-          alert(`Please enter a valid date of birth before the membership start date for family member ${i + 1}.`)
+          setFormError(`Please enter a valid date of birth before the membership start date for family member ${i + 1}.`)
           return
         }
 
@@ -444,17 +448,17 @@ function Memberships() {
       }
 
       if (adults > 2) {
-        alert('Family memberships allow a maximum of 2 adults, including the primary account holder.')
+        setFormError('Family memberships allow a maximum of 2 adults, including the primary account holder.')
         return
       }
 
       if (children > 6) {
-        alert('Family memberships allow a maximum of 6 children under 18.')
+        setFormError('Family memberships allow a maximum of 6 children under 18.')
         return
       }
 
       if (1 + validatedFamilyMembers.length > 8) {
-        alert('Family memberships allow a maximum of 8 family members, including the primary account holder.')
+        setFormError('Family memberships allow a maximum of 8 family members, including the primary account holder.')
         return
       }
     }
@@ -492,7 +496,7 @@ function Memberships() {
         )
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
@@ -515,6 +519,7 @@ function Memberships() {
   const handleDeleteSelected = () => {
     if (selectedMemberships.length === 0) return
     setMembershipToDelete(selectedMemberships[0])
+    setDeleteError('')
     setDeleteModalOpen(true)
   }
 
@@ -529,7 +534,7 @@ function Memberships() {
       clear()
       refetchMemberships()
     } catch (err) {
-      alert('Could not delete membership: ' + err.message)
+      setDeleteError('Could not delete membership: ' + err.message)
     } finally {
       setDeleting(false)
     }
@@ -758,6 +763,12 @@ function Memberships() {
         onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="membership-first-name">First Name</label>
             <input
@@ -1053,6 +1064,12 @@ function Memberships() {
         onClose={() => setDeleteModalOpen(false)}
       >
         <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
             Are you sure you want to delete the membership for <strong>{membershipToDelete?.firstName} {membershipToDelete?.lastName}</strong>? This action cannot be undone.
           </p>
