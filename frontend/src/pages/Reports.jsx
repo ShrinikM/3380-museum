@@ -9,7 +9,6 @@ const MAX_HISTORY = 10
 const formatNames = {
   table: 'Table',
   bar: 'Bar Chart',
-  line: 'Line Chart',
   pie: 'Pie Chart',
 }
 
@@ -17,7 +16,7 @@ const reportTypes = [
   {
     id: 'revenue',
     name: 'Revenue & Financial Trends',
-    formats: ['bar', 'line', 'pie'],
+    formats: ['bar', 'pie'],
     labelKey: 'Month',
     usesDates: true,
     charts: [
@@ -32,9 +31,17 @@ const reportTypes = [
         prefix: '$',
       },
     ],
-    columns: [
-      { key: 'Month', label: 'Month' },
+    // Month + Total stay in the table; picker only toggles the breakdown columns.
+    fixedStartColumns: [{ key: 'Month', label: 'Month' }],
+    fixedEndColumns: [
       { key: 'Revenue', label: 'Total Revenue', format: 'money' },
+    ],
+    columns: [
+      { key: 'TicketRevenue', label: 'Tickets', format: 'money' },
+      { key: 'GiftShopRevenue', label: 'Gift Shop', format: 'money' },
+      { key: 'CafeRevenue', label: 'Café', format: 'money' },
+      { key: 'MembershipRevenue', label: 'Memberships', format: 'money' },
+      { key: 'DonationRevenue', label: 'Donations', format: 'money' },
       { key: 'TotalVisitors', label: 'Total Visitors' },
       { key: 'AvgSpendPerVisitor', label: 'Avg Spend per Visitor', format: 'money' },
       { key: 'MonthOverMonthGrowth', label: 'Monthly Growth', format: 'percent' },
@@ -43,7 +50,7 @@ const reportTypes = [
   {
     id: 'ticket-sales',
     name: 'Ticket Sales & Exhibition Capacity',
-    formats: ['bar', 'line'],
+    formats: ['bar', 'pie'],
     labelKey: 'Name',
     usesDates: true,
     charts: [
@@ -60,12 +67,24 @@ const reportTypes = [
         prefix: '$',
       },
     ],
+    fixedStartColumns: [{ key: 'Name', label: 'Exhibition' }],
+    fixedEndColumns: [
+      { key: 'Revenue', label: 'Total Revenue', format: 'money' },
+    ],
     columns: [
-      { key: 'Name', label: 'Exhibition' },
+      { key: 'AdultTickets', label: 'Adult Tickets' },
+      { key: 'AdultRevenue', label: 'Adult Revenue', format: 'money' },
+      { key: 'SeniorTickets', label: 'Senior Tickets' },
+      { key: 'SeniorRevenue', label: 'Senior Revenue', format: 'money' },
+      { key: 'StudentTickets', label: 'Student Tickets' },
+      { key: 'StudentRevenue', label: 'Student Revenue', format: 'money' },
+      { key: 'ChildTickets', label: 'Child Tickets' },
+      { key: 'ChildRevenue', label: 'Child Revenue', format: 'money' },
       { key: 'TicketsSold', label: 'Tickets Sold' },
       { key: 'Capacity', label: 'Capacity' },
+      { key: 'SeatsLeft', label: 'Seats Left' },
       { key: 'PercentFull', label: 'Percent Full', format: 'percent' },
-      { key: 'Revenue', label: 'Revenue', format: 'money' },
+      { key: 'AvgTicketPrice', label: 'Avg Ticket Price', format: 'money' },
     ],
   },
   {
@@ -102,32 +121,32 @@ const reportTypes = [
       { title: 'Gift Shop', store: 'Gift Shop' },
       { title: 'Café', store: 'Café' },
     ],
-    columns: [
-      { key: 'ItemName', label: 'Item' },
-      { key: 'Category', label: 'Category' },
-      { key: 'UnitsSold', label: 'Units Sold' },
+    fixedStartColumns: [{ key: 'ItemName', label: 'Item' }],
+    fixedEndColumns: [
       { key: 'Revenue', label: 'Revenue', format: 'money' },
-      { key: 'PercentOfTotal', label: 'Share of Store Revenue', format: 'percent' },
     ],
-  },
-  {
-    id: 'membership-expiration',
-    name: 'Active Memberships & Expirations',
-    formats: [],
-    usesDates: false,
     columns: [
-      { key: 'MemberName', label: 'Member' },
-      { key: 'Email', label: 'Email' },
-      { key: 'MembershipType', label: 'Type' },
-      { key: 'StartDate', label: 'Start Date' },
-      { key: 'EndDate', label: 'End Date' },
-      { key: 'DaysUntilExpiration', label: 'Days Left' },
+      { key: 'Category', label: 'Category' },
+      { key: 'ListPrice', label: 'List Price', format: 'money' },
+      { key: 'SaleCount', label: 'Sales' },
+      { key: 'UnitsSold', label: 'Units Sold' },
+      { key: 'AvgSalePrice', label: 'Avg Sale Price', format: 'money' },
+      { key: 'PercentOfTotal', label: 'Share of Store Revenue', format: 'percent' },
     ],
   },
 ]
 
 function findReport(id){
   return reportTypes.find((type)=>type.id === id)
+}
+
+function getTableColumns(report, activeKeys){
+  const keys = activeKeys || report.columns.map((col)=>col.key)
+  const selected = report.columns.filter((col)=>keys.includes(col.key))
+  const start = report.fixedStartColumns || []
+  const end = report.fixedEndColumns || []
+
+  return start.concat(selected, end)
 }
 
 function formatCell(value, format){
@@ -192,12 +211,18 @@ function getReportSummary(reportType, rows){
       { label: 'Tickets Sold', value: Math.round(ticketsSold).toLocaleString() },
       { label: 'Ticket Revenue', value: moneyText(sumField(rows, 'Revenue')) },
       {
+        label: 'Adult / Student',
+        value:
+          Math.round(sumField(rows, 'AdultTickets')).toLocaleString() +
+          ' / ' +
+          Math.round(sumField(rows, 'StudentTickets')).toLocaleString(),
+      },
+      {
         label: 'Avg Fill',
         value: capacity > 0
           ? `${Math.round((ticketsSold / capacity) * 1000) / 10}%`
           : '0%',
       },
-      { label: 'Exhibitions', value: String(rows.length) },
     ]
   }
 
@@ -210,24 +235,6 @@ function getReportSummary(reportType, rows){
       { label: 'Units Sold', value: Math.round(sumField(rows, 'UnitsSold')).toLocaleString() },
       { label: 'Gift Shop', value: moneyText(sumField(giftShop, 'Revenue')) },
       { label: 'Café', value: moneyText(sumField(cafe, 'Revenue')) },
-    ]
-  }
-
-  if(reportType === 'membership-expiration'){
-    let expiringSoon = 0
-
-    for(const row of rows){
-      if(Number(row.DaysUntilExpiration) <= 30){
-        expiringSoon = expiringSoon + 1
-      }
-    }
-
-    const types = new Set(rows.map((row)=>row.MembershipType))
-
-    return [
-      { label: 'Active Members', value: String(rows.length) },
-      { label: 'Expiring in 30 Days', value: String(expiringSoon) },
-      { label: 'Membership Types', value: String(types.size) },
     ]
   }
 
@@ -345,7 +352,7 @@ function Reports(){
 
   const exportReport = (item)=>{
     const report = findReport(item.reportType)
-    const columns = report.columns.filter((col)=>(item.activeColumns || []).includes(col.key))
+    const columns = getTableColumns(report, item.activeColumns)
 
     if(item.rows.length === 0){
       setMessage('This report has no data to export.')
@@ -404,8 +411,8 @@ function Reports(){
 
   const viewingItem = history.find((item)=>item.id === viewingId)
   const viewingReport = viewingItem ? findReport(viewingItem.reportType) : null
-  const viewingKeys = viewingItem?.activeColumns || []
-  const viewingColumns = viewingReport ? viewingReport.columns.filter((col)=>viewingKeys.includes(col.key)) : []
+  const viewingKeys = viewingItem?.activeColumns || viewingReport?.columns.map((col)=>col.key) || []
+  const viewingColumns = viewingReport ? getTableColumns(viewingReport, viewingKeys) : []
   const showCharts = viewingItem && viewingItem.format !== 'table' && viewingReport?.charts
 
   return (
@@ -528,7 +535,8 @@ function Reports(){
           {showCharts && (
             <div className="report-charts">
               {viewingReport.charts.map((chart)=>{
-                const series = chart.series.filter((item)=>viewingKeys.includes(item.key))
+                const chartKeys = viewingColumns.map((col)=>col.key)
+                const series = chart.series.filter((item)=>chartKeys.includes(item.key))
                 const rows = chart.store
                   ? viewingItem.rows.filter((row)=>row.Store === chart.store)
                   : viewingItem.rows
