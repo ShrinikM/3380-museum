@@ -15,11 +15,16 @@ function Artworks() {
   const [artists, setArtists] = useState([])
   const [collections, setCollections] = useState([])
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
   const [selectedType, setSelectedType] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [artworkToDelete, setArtworkToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [formData, setFormData] = useState({
     Title: '',
@@ -61,6 +66,7 @@ function Artworks() {
       ...formData,
       [e.target.name]: e.target.value,
     })
+    setFormError('')
   }
 
   const resetForm = () => {
@@ -71,11 +77,13 @@ function Artworks() {
       CollectionID: '',
       YearCreated: '',
     })
+    setFormError('')
   }
 
   const openAddModal = () => {
     resetForm()
     setEditingId(null)
+    setFormError('')
     setOpen(true)
   }
 
@@ -89,14 +97,16 @@ function Artworks() {
     })
 
     setEditingId(artwork.ArtworkID)
+    setFormError('')
     setOpen(true)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     if (Number(formData.YearCreated) > currentYear) {
-      alert('Year Created cannot be in the future.')
+      setFormError('Year Created cannot be in the future.')
       return
     }
 
@@ -119,7 +129,7 @@ function Artworks() {
         )
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
@@ -148,21 +158,33 @@ function Artworks() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filtered, (artwork) => artwork.ArtworkID)
 
   const handleEditSelected = () => {
     openEditModal(selectedArtworks[0])
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'artwork',
-      (artwork) => artwork.Title,
-      (artwork) => callApi('/api/artworks/' + artwork.ArtworkID, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedArtworks.length === 0) return
+    setArtworkToDelete(selectedArtworks[0])
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) refetchArtworks()
+  const handleConfirmDelete = async () => {
+    if (!artworkToDelete) return
+
+    setDeleting(true)
+    try {
+      await callApi('/api/artworks/' + artworkToDelete.ArtworkID, 'DELETE')
+      setDeleteModalOpen(false)
+      setArtworkToDelete(null)
+      clear()
+      refetchArtworks()
+    } catch (err) {
+      setFormError('Could not delete artwork: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -331,6 +353,12 @@ function Artworks() {
         }}
       >
         <form onSubmit={handleSubmit} className="form-grid">
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="artwork-title">Title</label>
             <input
@@ -436,6 +464,37 @@ function Artworks() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Artwork"
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete <strong>{artworkToDelete?.Title}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Artwork'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

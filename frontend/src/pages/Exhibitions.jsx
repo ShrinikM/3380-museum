@@ -16,7 +16,19 @@ function Exhibitions() {
   const [selectedStatus, setSelectedStatus] = useState('All') 
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
+  
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [exhibitionToCancel, setExhibitionToCancel] = useState(null)
+  const [cancelError, setCancelError] = useState('')
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [exhibitionToDelete, setExhibitionToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
@@ -92,6 +104,7 @@ function Exhibitions() {
       ...formData,
       [e.target.name]: e.target.value,
     })
+    setFormError('')
   }
 
   const toggleStaff = (staffId) => {
@@ -106,6 +119,7 @@ function Exhibitions() {
         StaffIDs: [...formData.StaffIDs, staffId],
       })
     }
+    setFormError('')
   }
 
   const resetForm = () => {
@@ -118,6 +132,7 @@ function Exhibitions() {
       CollectionID: '',
       StaffIDs: [],
     })
+    setFormError('')
   }
 
   const closeModal = () => {
@@ -151,6 +166,7 @@ function Exhibitions() {
     })
 
     setEditingId(exhibition.ExhibitionID)
+    setFormError('')
     setOpen(true)
   }
 
@@ -167,32 +183,32 @@ function Exhibitions() {
       /^[A-Za-z0-9À-ÖØ-öø-ÿ\s.,:;!?' "()&'-]+$/
 
     if (!name || !textPattern.test(name)) {
-      alert('Please enter a valid exhibition name.')
+      setFormError('Please enter a valid exhibition name.')
       return
     }
 
     if (name.length > 255) {
-      alert('Exhibition name must be 255 characters or fewer.')
+      setFormError('Exhibition name must be 255 characters or fewer.')
       return
     }
 
     if (description && !textPattern.test(description)) {
-      alert('Description contains invalid characters.')
+      setFormError('Description contains invalid characters.')
       return
     }
 
     if (description.length > 255) {
-      alert('Description must be 255 characters or fewer.')
+      setFormError('Description must be 255 characters or fewer.')
       return
     }
 
     if (!formData.StartDate || !formData.EndDate) {
-      alert('Start Date and End Date are required.')
+      setFormError('Start Date and End Date are required.')
       return
     }
 
     if (formData.EndDate <= formData.StartDate) {
-      alert('End Date must be after Start Date.')
+      setFormError('End Date must be after Start Date.')
       return
     }
 
@@ -201,17 +217,17 @@ function Exhibitions() {
       capacity < 1 ||
       capacity > 1400
     ) {
-      alert('Capacity must be a whole number between 1 and 1400.')
+      setFormError('Capacity must be a whole number between 1 and 1400.')
       return
     }
 
     if (!formData.CollectionID) {
-      alert('Please select a collection.')
+      setFormError('Please select a collection.')
       return
     }
 
     if (formData.StaffIDs.length === 0) {
-      alert('Please assign at least one staff member.')
+      setFormError('Please assign at least one staff member.')
       return
     }
 
@@ -222,16 +238,8 @@ function Exhibitions() {
     )
 
     if (duplicate) {
-      alert('An exhibition with this name already exists.')
+      setFormError('An exhibition with this name already exists.')
       return
-    }
-
-    if (editingId !== null) {
-      const confirmed = window.confirm(
-        'Are you sure you want to save these changes to this exhibition?'
-      )
-
-      if (!confirmed) return
     }
 
     const payload = {
@@ -257,7 +265,7 @@ function Exhibitions() {
       clear()
       setReloadCount((count) => count + 1)
     } catch (err) {
-      alert('Could not save exhibition: ' + err.message)
+      setFormError('Could not save exhibition: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -281,7 +289,6 @@ function Exhibitions() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filtered, (exhibition) => exhibition.ExhibitionID)
 
   const handleEditSelected = () => {
@@ -298,45 +305,61 @@ function Exhibitions() {
     (selectedExhibitions[0].Status === 'active' ||
       selectedExhibitions[0].Status === 'upcoming')
 
-  const handleCancelSelected = async () => {
+  const handleOpenCancelModal = () => {
     const exhibition = selectedExhibitions[0]
+    if (!exhibition) return
 
-    const reason = window.prompt(
-      `Why is "${exhibition.Name}" being cancelled? Ticket holders will be notified and marked for a refund.`
-    )
+    setExhibitionToCancel(exhibition)
+    setCancelReason('')
+    setCancelError('')
+    setCancelModalOpen(true)
+  }
 
-    if (reason === null) return
-
-    if (!reason.trim()) {
-      alert('Please enter a reason.')
+  const handleConfirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      setCancelError('Please enter a cancellation reason.')
       return
     }
 
     setSaving(true)
+    setCancelError('')
 
     try {
-      await callApi(`/api/exhibitions/${exhibition.ExhibitionID}/cancel`, 'POST', {
-        Reason: reason.trim(),
+      await callApi(`/api/exhibitions/${exhibitionToCancel.ExhibitionID}/cancel`, 'POST', {
+        Reason: cancelReason.trim(),
       })
 
+      setCancelModalOpen(false)
       clear()
       setReloadCount((count) => count + 1)
     } catch (err) {
-      alert('Could not cancel exhibition: ' + err.message)
+      setCancelError('Could not cancel exhibition: ' + err.message)
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'exhibition',
-      (exhibition) => exhibition.Name,
-      (exhibition) =>
-        callApi(`/api/exhibitions/${exhibition.ExhibitionID}`, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedExhibitions.length === 0) return
+    setExhibitionToDelete(selectedExhibitions[0])
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) setReloadCount((count) => count + 1)
+  const handleConfirmDelete = async () => {
+    if (!exhibitionToDelete) return
+
+    setDeleting(true)
+    try {
+      await callApi(`/api/exhibitions/${exhibitionToDelete.ExhibitionID}`, 'DELETE')
+      setDeleteModalOpen(false)
+      setExhibitionToDelete(null)
+      clear()
+      setReloadCount((count) => count + 1)
+    } catch (err) {
+      setFormError('Could not delete exhibition: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -359,7 +382,7 @@ function Exhibitions() {
               <button
                 type="button"
                 className="btn danger"
-                onClick={handleCancelSelected}
+                onClick={handleOpenCancelModal}
                 disabled={saving}
               >
                 Cancel Exhibition
@@ -574,6 +597,12 @@ function Exhibitions() {
         onClose={closeModal}
       >
         <form className="form-grid" onSubmit={handleSubmit}>
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="exhibition-name">Name</label>
             <input
@@ -713,6 +742,89 @@ function Exhibitions() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={cancelModalOpen}
+        title="Cancel Exhibition"
+        onClose={() => setCancelModalOpen(false)}
+      >
+        <div className="form-grid">
+          {cancelError && (
+            <p className="form-error form-full" role="alert">
+              {cancelError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 12px', gridColumn: '1 / -1' }}>
+            Why is <strong>{exhibitionToCancel?.Name}</strong> being cancelled? Ticket holders will be notified and marked for a refund.
+          </p>
+
+          <div className="form-group form-full">
+            <label htmlFor="cancel-reason">Cancellation Reason</label>
+            <textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => {
+                setCancelReason(e.target.value)
+                setCancelError('')
+              }}
+              rows={3}
+              placeholder="Enter reason for cancellation..."
+              required
+            />
+          </div>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setCancelModalOpen(false)}
+              disabled={saving}
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmCancel}
+              disabled={saving}
+            >
+              {saving ? 'Cancelling...' : 'Confirm Cancellation'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Exhibition"
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete <strong>{exhibitionToDelete?.Name}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Exhibition'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

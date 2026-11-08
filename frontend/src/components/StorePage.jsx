@@ -79,6 +79,11 @@ function StorePage({ kind }){
   const [formData, setFormData] = useState(emptyForm)
   const [formError, setFormError] = useState('')
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [recordToDelete, setRecordToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
   const loadStoreData = useCallback(async()=>{
     const [itemsData, salesData] = await Promise.all([
       callApi(`${base}/items`, 'GET'),
@@ -268,20 +273,6 @@ function StorePage({ kind }){
   }
 
 
-  const deleteItem = async (item)=>{
-    const hasSales = sales.some((sale)=>Number(sale.ItemID) === Number(item.ItemID))
-
-    if(hasSales){
-      throw new Error('This item has sales records. Delete those sales before deleting the item.')
-    }
-
-    await callApi(`${base}/items/${item.ItemID}`, 'DELETE')
-  }
-
-  const deleteSale = async (sale)=>{
-    await callApi(`${base}/sales/${sale.SaleID}`, 'DELETE')
-  }
-
   const handleEditSelected = ()=>{
     if(tab === 'items'){
       openEditItem(itemSelection.selectedRows[0])
@@ -291,20 +282,48 @@ function StorePage({ kind }){
     }
   }
 
-  const handleDeleteSelected = async ()=>{
-    const deleted = tab === 'items'
-      ? await itemSelection.deleteSelected('item', (item)=>item.ItemName, deleteItem)
-      : await saleSelection.deleteSelected('sale', (sale)=>`Sale ${sale.SaleID}`, deleteSale)
+  const handleDeleteSelected = ()=>{
+    const currentSelection = tab === 'items' ? itemSelection : saleSelection
+    if (currentSelection.selectedRows.length === 0) return
+    setRecordToDelete(currentSelection.selectedRows[0])
+    setDeleteError('')
+    setDeleteModalOpen(true)
+  }
 
-    if(!deleted){
-      return
-    }
+  const handleConfirmDelete = async () => {
+    if (!recordToDelete) return
 
-    try{
-      await loadStoreData()
-    }
-    catch{
-      setLoadError('Deleted, but the lists could not be refreshed.')
+    setDeleting(true)
+    setDeleteError('')
+
+    try {
+      if (tab === 'items') {
+        const hasSales = sales.some((sale)=>Number(sale.ItemID) === Number(recordToDelete.ItemID))
+        if (hasSales) {
+          throw new Error('This item has sales records. Delete those sales before deleting the item.')
+        }
+        await callApi(`${base}/items/${recordToDelete.ItemID}`, 'DELETE')
+      } else {
+        await callApi(`${base}/sales/${recordToDelete.SaleID}`, 'DELETE')
+      }
+
+      setDeleteModalOpen(false)
+      setRecordToDelete(null)
+      if (tab === 'items') {
+        itemSelection.clear()
+      } else {
+        saleSelection.clear()
+      }
+
+      try {
+        await loadStoreData()
+      } catch {
+        setLoadError('Deleted, but the lists could not be refreshed.')
+      }
+    } catch (err) {
+      setDeleteError(err.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -652,6 +671,49 @@ function StorePage({ kind }){
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title={tab === 'items' ? 'Delete Item' : 'Delete Sale'}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+        }}
+      >
+        <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete {tab === 'items' ? 'item' : 'sale'} <strong>{tab === 'items' ? recordToDelete?.ItemName : `#${String(recordToDelete?.SaleID || '').padStart(5, '0')}`}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : tab === 'items' ? 'Delete Item' : 'Delete Sale'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

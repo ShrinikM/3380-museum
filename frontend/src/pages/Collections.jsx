@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
@@ -12,10 +11,16 @@ function Collections() {
 
   const [collections, setCollections] = useState([])
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [collectionToDelete, setCollectionToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
   const [formData, setFormData] = useState({
     Name: '',
     Description: '',
@@ -44,6 +49,7 @@ function Collections() {
       ...formData,
       [e.target.name]: e.target.value,
     })
+    setFormError('')
   }
 
   const resetForm = () => {
@@ -51,11 +57,13 @@ function Collections() {
       Name: '',
       Description: '',
     })
+    setFormError('')
   }
 
   const openAddModal = () => {
     resetForm()
     setEditingId(null)
+    setFormError('')
     setOpen(true)
   }
 
@@ -65,14 +73,16 @@ function Collections() {
       Description: collection.Description || '',
     })
     setEditingId(collection.CollectionID)
+    setFormError('')
     setOpen(true)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     if (!formData.Name.trim()) {
-      alert('Collection Name is required.')
+      setFormError('Collection Name is required.')
       return
     }
 
@@ -85,12 +95,6 @@ function Collections() {
       if (editingId === null) {
         await callApi('/api/collections', 'POST', collectionData)
       } else {
-        const confirmed = window.confirm(
-          'Are you sure you want to save these changes to this collection?'
-        )
-
-        if (!confirmed) return
-
         await callApi(
           '/api/collections/' + editingId,
           'PUT',
@@ -98,11 +102,12 @@ function Collections() {
         )
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
     resetForm()
+    setEditingId(null)
     setOpen(false)
     clear()
     refetchCollections()
@@ -125,22 +130,33 @@ function Collections() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filtered, (collection) => collection.CollectionID)
 
   const handleEditSelected = () => {
     openEditModal(selectedCollections[0])
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'collection',
-      (collection) => collection.Name,
-      (collection) =>
-        callApi('/api/collections/' + collection.CollectionID, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedCollections.length === 0) return
+    setCollectionToDelete(selectedCollections[0])
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) refetchCollections()
+  const handleConfirmDelete = async () => {
+    if (!collectionToDelete) return
+
+    setDeleting(true)
+    try {
+      await callApi('/api/collections/' + collectionToDelete.CollectionID, 'DELETE')
+      setDeleteModalOpen(false)
+      setCollectionToDelete(null)
+      clear()
+      refetchCollections()
+    } catch (err) {
+      setFormError('Could not delete collection: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -264,12 +280,22 @@ function Collections() {
       <Modal
         open={open}
         title={editingId === null ? 'Add Collection' : 'Edit Collection'}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          resetForm()
+          setEditingId(null)
+          setOpen(false)
+        }}
       >
         <form
           onSubmit={handleSubmit}
           className="form-grid"
         >
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="collection-name">Name</label>
             <input
@@ -299,6 +325,7 @@ function Collections() {
               className="btn secondary"
               onClick={() => {
                 resetForm()
+                setEditingId(null)
                 setOpen(false)
               }}
             >
@@ -310,6 +337,37 @@ function Collections() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Collection"
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete <strong>{collectionToDelete?.Name}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Collection'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

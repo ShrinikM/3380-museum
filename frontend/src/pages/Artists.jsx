@@ -12,10 +12,16 @@ function Artists() {
 
   const [artists, setArtists] = useState([])
   const [loadError, setLoadError] = useState('')
+  const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [artistToDelete, setArtistToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
   const [formData, setFormData] = useState({
     FirstName: '',
     LastName: '',
@@ -47,6 +53,7 @@ function Artists() {
       ...formData,
       [e.target.name]: e.target.value,
     })
+    setFormError('')
   }
 
   const resetForm = () => {
@@ -57,11 +64,13 @@ function Artists() {
       DeathYear: '',
       Nationality: '',
     })
+    setFormError('')
   }
 
   const openAddModal = () => {
     resetForm()
     setEditingId(null)
+    setFormError('')
     setOpen(true)
   }
 
@@ -79,18 +88,20 @@ function Artists() {
     })
 
     setEditingId(artist.ArtistID)
+    setFormError('')
     setOpen(true)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
 
     if (
       !Number.isInteger(Number(formData.BirthYear)) ||
       Number(formData.BirthYear) < 1 ||
       Number(formData.BirthYear) > currentYear
     ) {
-      alert(`Birth Year must be between 1 and ${currentYear}.`)
+      setFormError(`Birth Year must be between 1 and ${currentYear}.`)
       return
     }
 
@@ -102,28 +113,28 @@ function Artists() {
         Number(formData.DeathYear) > currentYear
       )
     ) {
-      alert('Death Year must be a valid year between Birth Year and the current year.')
+      setFormError('Death Year must be a valid year between Birth Year and the current year.')
       return
     }
 
     const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
     if (!textPattern.test(formData.FirstName.trim())) {
-      alert(
+      setFormError(
         'First Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
     if (!textPattern.test(formData.LastName.trim())) {
-      alert(
+      setFormError(
         'Last Name can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
     }
 
     if (!textPattern.test(formData.Nationality.trim())) {
-      alert(
+      setFormError(
         'Nationality can only contain letters, spaces, hyphens, or apostrophes.'
       )
       return
@@ -148,7 +159,7 @@ function Artists() {
         )
       }
     } catch (err) {
-      alert(err.message)
+      setFormError(err.message)
       return
     }
 
@@ -175,21 +186,33 @@ function Artists() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filtered, (artist) => artist.ArtistID)
 
   const handleEditSelected = () => {
     openEditModal(selectedArtists[0])
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'artist',
-      (artist) => `${artist.FirstName} ${artist.LastName}`,
-      (artist) => callApi('/api/artists/' + artist.ArtistID, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedArtists.length === 0) return
+    setArtistToDelete(selectedArtists[0])
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) refetchArtists()
+  const handleConfirmDelete = async () => {
+    if (!artistToDelete) return
+
+    setDeleting(true)
+    try {
+      await callApi('/api/artists/' + artistToDelete.ArtistID, 'DELETE')
+      setDeleteModalOpen(false)
+      setArtistToDelete(null)
+      clear()
+      refetchArtists()
+    } catch (err) {
+      setFormError('Could not delete artist: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -334,6 +357,12 @@ function Artists() {
         }}
       >
         <form onSubmit={handleSubmit} className="form-grid">
+          {formError && (
+            <p className="form-error form-full" role="alert">
+              {formError}
+            </p>
+          )}
+
           <div className="form-group">
             <label htmlFor="artist-first-name">First Name</label>
             <input
@@ -415,6 +444,37 @@ function Artists() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Artist"
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete <strong>{artistToDelete?.FirstName} {artistToDelete?.LastName}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Artist'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

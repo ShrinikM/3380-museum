@@ -35,6 +35,11 @@ function Donations() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [donationToDelete, setDonationToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
   useEffect(() => {
     async function loadDonations() {
       try {
@@ -184,22 +189,36 @@ function Donations() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filteredDonations, (donation) => donation.DonationID)
 
   const handleEditSelected = () => {
     openEditModal(selectedDonations[0])
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'donation',
-      (donation) => `Donation ${donation.DonationID}`,
-      (donation) =>
-        callApi('/api/donations/' + donation.DonationID, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedDonations.length === 0) return
+    setDonationToDelete(selectedDonations[0])
+    setDeleteError('')
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) refetchDonations()
+  const handleConfirmDelete = async () => {
+    if (!donationToDelete) return
+
+    setDeleting(true)
+    setDeleteError('')
+
+    try {
+      await callApi('/api/donations/' + donationToDelete.DonationID, 'DELETE')
+      setDeleteModalOpen(false)
+      setDonationToDelete(null)
+      clear()
+      refetchDonations()
+    } catch (err) {
+      setDeleteError('Could not delete donation: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -444,6 +463,49 @@ function Donations() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Donation"
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+        }}
+      >
+        <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete donation <strong>#{String(donationToDelete?.DonationID || '').padStart(5, '0')}</strong> from <strong>{donationToDelete?.FirstName} {donationToDelete?.LastName}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Donation'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

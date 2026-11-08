@@ -64,6 +64,10 @@ function Tickets() {
   const [lookupMessage, setLookupMessage] = useState('')
   const [member, setMember] = useState(null)
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [ticketToDelete, setTicketToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
   const ticketTypes = Object.keys(ticketPrices).length > 0
     ? Object.keys(ticketPrices)
     : defaultTicketTypes
@@ -365,21 +369,33 @@ function Tickets() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filtered, (ticket) => ticket.TicketID)
 
   const handleEditSelected = () => {
     openEditModal(selectedTickets[0])
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'ticket',
-      (ticket) => `Ticket ${ticket.TicketID}`,
-      (ticket) => callApi('/api/tickets/' + ticket.TicketID, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedTickets.length === 0) return
+    setTicketToDelete(selectedTickets[0])
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) refetchTickets()
+  const handleConfirmDelete = async () => {
+    if (!ticketToDelete) return
+
+    setDeleting(true)
+    try {
+      await callApi('/api/tickets/' + ticketToDelete.TicketID, 'DELETE')
+      setDeleteModalOpen(false)
+      setTicketToDelete(null)
+      clear()
+      refetchTickets()
+    } catch (err) {
+      alert('Could not delete ticket: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -880,6 +896,37 @@ function Tickets() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Ticket"
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete ticket <strong>#{String(ticketToDelete?.TicketID || '').padStart(5, '0')}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Ticket'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

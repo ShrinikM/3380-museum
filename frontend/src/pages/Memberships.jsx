@@ -81,6 +81,10 @@ function Memberships() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [membershipToDelete, setMembershipToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
   useEffect(() => {
     async function loadMemberships() {
       try {
@@ -502,21 +506,33 @@ function Memberships() {
     isSelected,
     toggle,
     clear,
-    deleteSelected,
   } = useSelection(filtered, (member) => member.id)
 
   const handleEditSelected = () => {
     openEditModal(selectedMemberships[0])
   }
 
-  const handleDeleteSelected = async () => {
-    const deleted = await deleteSelected(
-      'membership',
-      (member) => `${member.firstName} ${member.lastName}`,
-      (member) => callApi('/api/memberships/' + member.id, 'DELETE')
-    )
+  const handleDeleteSelected = () => {
+    if (selectedMemberships.length === 0) return
+    setMembershipToDelete(selectedMemberships[0])
+    setDeleteModalOpen(true)
+  }
 
-    if (deleted) refetchMemberships()
+  const handleConfirmDelete = async () => {
+    if (!membershipToDelete) return
+
+    setDeleting(true)
+    try {
+      await callApi('/api/memberships/' + membershipToDelete.id, 'DELETE')
+      setDeleteModalOpen(false)
+      setMembershipToDelete(null)
+      clear()
+      refetchMemberships()
+    } catch (err) {
+      alert('Could not delete membership: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -1029,6 +1045,37 @@ function Memberships() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Membership"
+        onClose={() => setDeleteModalOpen(false)}
+      >
+        <div className="form-grid">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            Are you sure you want to delete the membership for <strong>{membershipToDelete?.firstName} {membershipToDelete?.lastName}</strong>? This action cannot be undone.
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Membership'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
