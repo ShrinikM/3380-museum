@@ -714,9 +714,6 @@ function Memberships() {
                     {member.firstName} {member.lastName}
                   </div>
                   <div className="cell-sub mono">{member.email}</div>
-                  {member.phone && (
-                    <div className="cell-sub mono">{member.phone}</div>
-                  )}
                   {member.type === 'Family' && member.familyMembers.length > 0 && (
                     <div className="cell-sub">
                       {member.familyMembers.length + 1} family members

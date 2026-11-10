@@ -32,20 +32,25 @@ const reportTypes = [
         prefix: '$',
       },
     ],
+<<<<<<< HEAD
     
     fixedStartColumns: [{ key: 'Month', label: 'Month' }],
+=======
+    // Month + Total stay in the table; picker only toggles the breakdown columns.
+    fixedStartColumns: [{ key: 'Month', label: 'Month', title: 'Month' }],
+>>>>>>> cefd400 (cleaned up reports)
     fixedEndColumns: [
-      { key: 'Revenue', label: 'Total Revenue', format: 'money' },
+      { key: 'Revenue', label: 'Total', format: 'money', title: 'Total Revenue' },
     ],
     columns: [
-      { key: 'TicketRevenue', label: 'Tickets', format: 'money' },
-      { key: 'GiftShopRevenue', label: 'Gift Shop', format: 'money' },
-      { key: 'CafeRevenue', label: 'Café', format: 'money' },
-      { key: 'MembershipRevenue', label: 'Memberships', format: 'money' },
-      { key: 'DonationRevenue', label: 'Donations', format: 'money' },
-      { key: 'TotalVisitors', label: 'Total Visitors' },
-      { key: 'AvgSpendPerVisitor', label: 'Avg Spend per Visitor', format: 'money' },
-      { key: 'MonthOverMonthGrowth', label: 'Monthly Growth', format: 'percent' },
+      { key: 'TicketRevenue', label: 'Tickets', format: 'money', title: 'Ticket Revenue' },
+      { key: 'GiftShopRevenue', label: 'Gift', format: 'money', title: 'Gift Shop Revenue' },
+      { key: 'CafeRevenue', label: 'Café', format: 'money', title: 'Café Revenue' },
+      { key: 'MembershipRevenue', label: 'Memb.', format: 'money', title: 'Membership Revenue' },
+      { key: 'DonationRevenue', label: 'Donat.', format: 'money', title: 'Donation Revenue' },
+      { key: 'TotalVisitors', label: 'Visitors', title: 'Total Visitors' },
+      { key: 'AvgSpendPerVisitor', label: 'Avg Spend', format: 'money', title: 'Avg Spend per Visitor' },
+      { key: 'MonthOverMonthGrowth', label: 'Growth', format: 'percent', title: 'Monthly Growth' },
     ],
   },
   {
@@ -68,24 +73,25 @@ const reportTypes = [
         prefix: '$',
       },
     ],
-    fixedStartColumns: [{ key: 'Name', label: 'Exhibition' }],
+    fixedStartColumns: [
+      { key: 'Name', label: 'Exhibition', title: 'Exhibition' },
+    ],
     fixedEndColumns: [
-      { key: 'Revenue', label: 'Total Revenue', format: 'money' },
+      { key: 'Revenue', label: 'Total', format: 'money', title: 'Total Revenue' },
     ],
     columns: [
-      { key: 'AdultTickets', label: 'Adult Tickets' },
-      { key: 'AdultRevenue', label: 'Adult Revenue', format: 'money' },
-      { key: 'SeniorTickets', label: 'Senior Tickets' },
-      { key: 'SeniorRevenue', label: 'Senior Revenue', format: 'money' },
-      { key: 'StudentTickets', label: 'Student Tickets' },
-      { key: 'StudentRevenue', label: 'Student Revenue', format: 'money' },
-      { key: 'ChildTickets', label: 'Child Tickets' },
-      { key: 'ChildRevenue', label: 'Child Revenue', format: 'money' },
-      { key: 'TicketsSold', label: 'Tickets Sold' },
-      { key: 'Capacity', label: 'Capacity' },
-      { key: 'SeatsLeft', label: 'Seats Left' },
-      { key: 'PercentFull', label: 'Percent Full', format: 'percent' },
-      { key: 'AvgTicketPrice', label: 'Avg Ticket Price', format: 'money' },
+      { key: 'AdultTickets', label: 'Adult #', title: 'Adult Tickets' },
+      { key: 'AdultRevenue', label: 'Adult $', format: 'money', title: 'Adult Revenue' },
+      { key: 'SeniorTickets', label: 'Senior #', title: 'Senior Tickets' },
+      { key: 'SeniorRevenue', label: 'Senior $', format: 'money', title: 'Senior Revenue' },
+      { key: 'StudentTickets', label: 'Student #', title: 'Student Tickets' },
+      { key: 'StudentRevenue', label: 'Student $', format: 'money', title: 'Student Revenue' },
+      { key: 'ChildTickets', label: 'Child #', title: 'Child Tickets' },
+      { key: 'ChildRevenue', label: 'Child $', format: 'money', title: 'Child Revenue' },
+      { key: 'TicketsSold', label: 'Sold', title: 'Tickets Sold' },
+      { key: 'Capacity', label: 'Cap.', title: 'Capacity' },
+      { key: 'PercentFull', label: 'Full %', format: 'percent', title: 'Percent Full' },
+      { key: 'AvgTicketPrice', label: 'Avg Price', format: 'money', title: 'Avg Ticket Price' },
     ],
   },
   {
@@ -122,23 +128,40 @@ const reportTypes = [
       { title: 'Gift Shop', store: 'Gift Shop' },
       { title: 'Café', store: 'Café' },
     ],
-    fixedStartColumns: [{ key: 'ItemName', label: 'Item' }],
+    fixedStartColumns: [{ key: 'ItemName', label: 'Item', title: 'Item' }],
     fixedEndColumns: [
-      { key: 'Revenue', label: 'Revenue', format: 'money' },
+      { key: 'Revenue', label: 'Revenue', format: 'money', title: 'Revenue' },
     ],
     columns: [
-      { key: 'Category', label: 'Category' },
-      { key: 'ListPrice', label: 'List Price', format: 'money' },
-      { key: 'SaleCount', label: 'Sales' },
-      { key: 'UnitsSold', label: 'Units Sold' },
-      { key: 'AvgSalePrice', label: 'Avg Sale Price', format: 'money' },
-      { key: 'PercentOfTotal', label: 'Share of Store Revenue', format: 'percent' },
+      { key: 'Category', label: 'Category', title: 'Category' },
+      { key: 'ListPrice', label: 'List $', format: 'money', title: 'List Price' },
+      { key: 'SaleCount', label: 'Sales', title: 'Sales' },
+      { key: 'UnitsSold', label: 'Units', title: 'Units Sold' },
+      { key: 'AvgSalePrice', label: 'Avg $', format: 'money', title: 'Avg Sale Price' },
+      { key: 'PercentOfTotal', label: 'Share %', format: 'percent', title: 'Share of Store Revenue' },
     ],
   },
 ]
 
 function findReport(id){
   return reportTypes.find((type)=>type.id === id)
+}
+
+function formatLocalDate(date){
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// First day of the month 11 months ago through today = exactly 12 calendar months.
+function getLast12MonthsRange(){
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth() - 11, 1)
+  return {
+    start: formatLocalDate(start),
+    end: formatLocalDate(today),
+  }
 }
 
 function getTableColumns(report, activeKeys){
@@ -148,6 +171,115 @@ function getTableColumns(report, activeKeys){
   const end = report.fixedEndColumns || []
 
   return start.concat(selected, end)
+}
+
+const revenueSources = [
+  'TicketRevenue',
+  'GiftShopRevenue',
+  'CafeRevenue',
+  'MembershipRevenue',
+  'DonationRevenue',
+]
+
+const ticketTypeRevenues = [
+  'AdultRevenue',
+  'SeniorRevenue',
+  'StudentRevenue',
+  'ChildRevenue',
+]
+
+const ticketTypeCounts = [
+  'AdultTickets',
+  'SeniorTickets',
+  'StudentTickets',
+  'ChildTickets',
+]
+
+function roundMoney(value){
+  return Math.round(Number(value || 0) * 100) / 100
+}
+
+function sumSelectedFields(row, keys){
+  let total = 0
+
+  for(const key of keys){
+    total = total + Number(row[key] || 0)
+  }
+
+  return total
+}
+
+// Recalculate totals / derived metrics from the columns the user included.
+function applyActiveColumns(reportType, rows, activeKeys){
+  const keys = activeKeys || []
+
+  if(reportType === 'revenue'){
+    const selectedSources = revenueSources.filter((key)=>keys.includes(key))
+    const adjusted = rows.map((row)=>{
+      const next = { ...row }
+
+      if(selectedSources.length > 0){
+        next.Revenue = roundMoney(sumSelectedFields(row, selectedSources))
+      }
+
+      const visitors = Number(row.TotalVisitors || 0)
+      next.AvgSpendPerVisitor = visitors > 0
+        ? roundMoney(next.Revenue / visitors)
+        : 0
+
+      return next
+    })
+
+    let prevRevenue = null
+
+    for(const row of adjusted){
+      if(prevRevenue === null || prevRevenue === 0){
+        row.MonthOverMonthGrowth = null
+      }
+      else{
+        row.MonthOverMonthGrowth =
+          Math.round(((row.Revenue - prevRevenue) / prevRevenue) * 1000) / 10
+      }
+
+      prevRevenue = row.Revenue
+    }
+
+    return adjusted
+  }
+
+  if(reportType === 'ticket-sales'){
+    const selectedRevenues = ticketTypeRevenues.filter((key)=>keys.includes(key))
+    const selectedCounts = ticketTypeCounts.filter((key)=>keys.includes(key))
+
+    return rows.map((row)=>{
+      const next = { ...row }
+
+      if(selectedRevenues.length > 0){
+        next.Revenue = roundMoney(sumSelectedFields(row, selectedRevenues))
+      }
+
+      if(selectedCounts.length > 0){
+        next.TicketsSold = sumSelectedFields(row, selectedCounts)
+      }
+
+      const capacity = Number(row.Capacity || 0)
+      next.PercentFull = capacity > 0
+        ? Math.round((next.TicketsSold / capacity) * 1000) / 10
+        : 0
+      next.AvgTicketPrice = next.TicketsSold > 0
+        ? roundMoney(next.Revenue / next.TicketsSold)
+        : 0
+
+      return next
+    })
+  }
+
+  if(reportType === 'giftshop-cafe'){
+    // Share % and averages stay row-level; if UnitsSold is hidden, charts/summary omit it.
+    return rows
+  }
+
+  return rows
 }
 
 function formatCell(value, format){
@@ -191,52 +323,91 @@ function averageField(rows, key){
   return sumField(rows, key) / rows.length
 }
 
-function getReportSummary(reportType, rows){
+function getReportSummary(reportType, rows, activeKeys){
+  const keys = activeKeys || []
+
   if(reportType === 'revenue'){
-    return [
+    const stats = [
       { label: 'Total Revenue', value: moneyText(sumField(rows, 'Revenue')) },
-      { label: 'Visitors', value: Math.round(sumField(rows, 'TotalVisitors')).toLocaleString() },
-      {
+    ]
+
+    if(keys.includes('TotalVisitors')){
+      stats.push({
+        label: 'Visitors',
+        value: Math.round(sumField(rows, 'TotalVisitors')).toLocaleString(),
+      })
+    }
+
+    if(keys.includes('AvgSpendPerVisitor')){
+      stats.push({
         label: 'Avg Spend / Visitor',
         value: moneyText(averageField(rows, 'AvgSpendPerVisitor')),
-      },
-      { label: 'Months', value: String(rows.length) },
-    ]
+      })
+    }
+
+    stats.push({ label: 'Months', value: String(rows.length) })
+    return stats
   }
 
   if(reportType === 'ticket-sales'){
     const ticketsSold = sumField(rows, 'TicketsSold')
     const capacity = sumField(rows, 'Capacity')
+    const stats = []
 
-    return [
-      { label: 'Tickets Sold', value: Math.round(ticketsSold).toLocaleString() },
-      { label: 'Ticket Revenue', value: moneyText(sumField(rows, 'Revenue')) },
-      {
+    if(keys.includes('TicketsSold') || ticketTypeCounts.some((key)=>keys.includes(key))){
+      stats.push({
+        label: 'Tickets Sold',
+        value: Math.round(ticketsSold).toLocaleString(),
+      })
+    }
+
+    stats.push({
+      label: 'Ticket Revenue',
+      value: moneyText(sumField(rows, 'Revenue')),
+    })
+
+    if(keys.includes('AdultTickets') || keys.includes('StudentTickets')){
+      stats.push({
         label: 'Adult / Student',
         value:
           Math.round(sumField(rows, 'AdultTickets')).toLocaleString() +
           ' / ' +
           Math.round(sumField(rows, 'StudentTickets')).toLocaleString(),
-      },
-      {
+      })
+    }
+
+    if(keys.includes('Capacity') || keys.includes('PercentFull') || keys.includes('TicketsSold')){
+      stats.push({
         label: 'Avg Fill',
         value: capacity > 0
           ? `${Math.round((ticketsSold / capacity) * 1000) / 10}%`
           : '0%',
-      },
-    ]
+      })
+    }
+
+    return stats
   }
 
   if(reportType === 'giftshop-cafe'){
     const giftShop = rows.filter((row)=>row.Store === 'Gift Shop')
     const cafe = rows.filter((row)=>row.Store === 'Café' || row.Store === 'Cafe')
-
-    return [
+    const stats = [
       { label: 'Total Sales', value: moneyText(sumField(rows, 'Revenue')) },
-      { label: 'Units Sold', value: Math.round(sumField(rows, 'UnitsSold')).toLocaleString() },
+    ]
+
+    if(keys.includes('UnitsSold')){
+      stats.push({
+        label: 'Units Sold',
+        value: Math.round(sumField(rows, 'UnitsSold')).toLocaleString(),
+      })
+    }
+
+    stats.push(
       { label: 'Gift Shop', value: moneyText(sumField(giftShop, 'Revenue')) },
       { label: 'Café', value: moneyText(sumField(cafe, 'Revenue')) },
-    ]
+    )
+
+    return stats
   }
 
   return [
@@ -327,7 +498,19 @@ function Reports(){
       }
     }
 
-    const query = selectedReport.usesDates ? `?start=${startDate}&end=${endDate}` : ''
+    let query = ''
+    let rangeStart = startDate
+    let rangeEnd = endDate
+
+    if(selectedReport.usesDates){
+      if(!startDate && !endDate){
+        const range = getLast12MonthsRange()
+        rangeStart = range.start
+        rangeEnd = range.end
+      }
+      query = `?start=${rangeStart}&end=${rangeEnd}`
+    }
+
     let data
 
     try{
@@ -343,8 +526,10 @@ function Reports(){
       reportType: reportType,
       name: selectedReport.name,
       format: reportFormat,
-      startDate: selectedReport.usesDates ? startDate || 'All dates' : '-',
-      endDate: selectedReport.usesDates ? endDate || 'All dates' : '-',
+      startDate: selectedReport.usesDates
+        ? startDate || `Last 12 months (${rangeStart})`
+        : '-',
+      endDate: selectedReport.usesDates ? endDate || rangeEnd : '-',
       runAt: new Date().toLocaleString(),
       rows: data,
       activeColumns: selectedColumns,
@@ -359,15 +544,20 @@ function Reports(){
   const exportReport = (item)=>{
     const report = findReport(item.reportType)
     const columns = getTableColumns(report, item.activeColumns)
+    const exportRows = applyActiveColumns(
+      item.reportType,
+      item.rows,
+      item.activeColumns || report.columns.map((col)=>col.key)
+    )
 
-    if(item.rows.length === 0){
+    if(exportRows.length === 0){
       setMessage('This report has no data to export.')
       return
     }
 
     const lines = [
-      columns.map((col)=>col.label),
-      ...item.rows.map((row)=>columns.map((col)=>row[col.key])),
+      columns.map((col)=>col.title || col.label),
+      ...exportRows.map((row)=>columns.map((col)=>row[col.key])),
     ]
 
     const csv = lines
@@ -430,6 +620,9 @@ function Reports(){
   const viewingReport = viewingItem ? findReport(viewingItem.reportType) : null
   const viewingKeys = viewingItem?.activeColumns || viewingReport?.columns.map((col)=>col.key) || []
   const viewingColumns = viewingReport ? getTableColumns(viewingReport, viewingKeys) : []
+  const viewingRows = viewingItem
+    ? applyActiveColumns(viewingItem.reportType, viewingItem.rows, viewingKeys)
+    : []
   const showCharts = viewingItem && viewingItem.format !== 'table' && viewingReport?.charts
 
   return (
@@ -541,7 +734,7 @@ function Reports(){
           </div>
 
           <div className="dash-stat-grid report-summary-grid">
-            {getReportSummary(viewingItem.reportType, viewingItem.rows).map((stat)=>(
+            {getReportSummary(viewingItem.reportType, viewingRows, viewingKeys).map((stat)=>(
               <div key={stat.label} className="card dash-stat-card">
                 <div className="dash-stat-label">{stat.label}</div>
                 <div className="dash-stat-value">{stat.value}</div>
@@ -555,8 +748,8 @@ function Reports(){
                 const chartKeys = viewingColumns.map((col)=>col.key)
                 const series = chart.series.filter((item)=>chartKeys.includes(item.key))
                 const rows = chart.store
-                  ? viewingItem.rows.filter((row)=>row.Store === chart.store)
-                  : viewingItem.rows
+                  ? viewingRows.filter((row)=>row.Store === chart.store)
+                  : viewingRows
 
                 if(series.length === 0){
                   return null
@@ -581,8 +774,8 @@ function Reports(){
 
           {(viewingReport.tableGroups || [{ title: 'Report data', store: null }]).map((group)=>{
             const groupRows = group.store
-              ? viewingItem.rows.filter((row)=>row.Store === group.store)
-              : viewingItem.rows
+              ? viewingRows.filter((row)=>row.Store === group.store)
+              : viewingRows
 
             return (
               <div key={group.title} className="report-table-group">
@@ -591,12 +784,18 @@ function Reports(){
                 )}
 
                 <div className="table-wrap">
-                  <table className="data-table">
+                  <table className="data-table report-table-compact">
                     <caption className="sr-only">{group.title}</caption>
                     <thead>
                       <tr>
                         {viewingColumns.map((column)=>(
-                          <th key={column.key} scope="col">{column.label}</th>
+                          <th
+                            key={column.key}
+                            scope="col"
+                            title={column.title || column.label}
+                          >
+                            {column.label}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -605,7 +804,7 @@ function Reports(){
                       {groupRows.map((row, index)=>(
                         <tr key={index}>
                           {viewingColumns.map((column)=>(
-                            <td key={column.key} className="report-cell">
+                            <td key={column.key} className="report-cell center-cell">
                               {formatCell(row[column.key], column.format)}
                             </td>
                           ))}

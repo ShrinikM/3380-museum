@@ -1672,6 +1672,34 @@ input[type='radio'] {
   overflow-wrap: anywhere;
 }
 
+.report-table-compact {
+  width: max-content;
+  min-width: 100%;
+}
+
+.report-table-compact th,
+.report-table-compact td {
+  padding: 8px 10px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-table-compact th:first-child,
+.report-table-compact td:first-child {
+  text-align: left;
+}
+
+.report-table-compact th {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.report-table-compact td.report-cell {
+  font-size: 13px;
+}
+
 /* Charts */
 
 .chart-card {
@@ -1805,6 +1833,35 @@ input[type='radio'] {
   padding: 8px 12px;
   font-size: 14px;
   cursor: pointer;
+}
+
+.dash-range-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dash-range-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.dash-range-btn:hover {
+  border-color: var(--foreground);
+  color: var(--foreground);
+}
+
+.dash-range-btn.active {
+  border-color: var(--primary);
+  background: var(--primary-tint);
+  color: var(--primary);
 }
 
 .dash-error {

@@ -58,6 +58,40 @@ function daysUntil(dateString) {
   return Math.round((target - now) / 86400000)
 }
 
+function formatLocalDate(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const rangeOptions = [
+  { id: '7d', label: '7 Days' },
+  { id: '30d', label: '30 Days' },
+  { id: '1m', label: '1 Month' },
+]
+
+function getRangeDates(rangeId) {
+  const end = new Date()
+  end.setHours(0, 0, 0, 0)
+
+  const start = new Date(end)
+
+  if (rangeId === '7d') {
+    start.setDate(start.getDate() - 6)
+  } else if (rangeId === '30d') {
+    start.setDate(start.getDate() - 29)
+  } else {
+    // Same day last month through today (e.g. Oct 10 → Nov 10)
+    start.setMonth(start.getMonth() - 1)
+  }
+
+  return {
+    start: formatLocalDate(start),
+    end: formatLocalDate(end),
+  }
+}
+
 function isLowStock(stock) {
   return stock <= LOW_STOCK
 }
@@ -89,17 +123,16 @@ function StatTile({ label, value }) {
 
 function Dashboard() {
   const { user } = useRole()
-  const today = new Date().toLocaleDateString('en-CA')
 
-  const [startDate, setStartDate] = useState(today.slice(0, 4) + '-01-01')
-  const [endDate, setEndDate] = useState(today)
+  const [rangeId, setRangeId] = useState('30d')
   const [dashboard, setDashboard] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [giftItems, setGiftItems] = useState([])
   const [giftLoading, setGiftLoading] = useState(true)
   const [giftError, setGiftError] = useState('')
 
-  const showDates = user?.role !== 'Staff'
+  const showRanges = user?.role !== 'Staff'
+  const { start: startDate, end: endDate } = getRangeDates(rangeId)
 
   const hour = new Date().getHours()
   let greeting = 'Good Evening'
@@ -110,10 +143,6 @@ function Dashboard() {
   }
 
   useEffect(() => {
-    if (!startDate || !endDate || startDate > endDate) {
-      return
-    }
-
     async function loadDashboard() {
       try {
         const data = await callApi(
@@ -502,32 +531,20 @@ function Dashboard() {
           <h1>CoogMuseum Dashboard</h1>
         )}
 
-        {showDates && (
-          <div className="dash-controls">
-            <div className="dash-control">
-              <label htmlFor="dash-start">Start Date</label>
-              <input
-                id="dash-start"
-                className="input"
-                type="date"
-                max={endDate || today}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-
-            <div className="dash-control">
-              <label htmlFor="dash-end">End Date</label>
-              <input
-                id="dash-end"
-                className="input"
-                type="date"
-                min={startDate}
-                max={today}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
+        {showRanges && (
+          <div className="dash-range-buttons" role="group" aria-label="Date range">
+            {rangeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={
+                  'dash-range-btn' + (rangeId === option.id ? ' active' : '')
+                }
+                onClick={() => setRangeId(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         )}
       </div>

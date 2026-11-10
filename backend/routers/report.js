@@ -20,6 +20,19 @@ function checkDate(value, fieldName) {
   return value;
 }
 
+function formatDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
+}
+
+function last12MonthsStart() {
+  const today = new Date();
+  // First day of the month 11 months ago => exactly 12 calendar months through this month.
+  return formatDateValue(new Date(today.getFullYear(), today.getMonth() - 11, 1));
+}
+
 function readDates(params) {
   const dates = { start: null, end: null };
 
@@ -31,6 +44,12 @@ function readDates(params) {
   }
   if (dates.start !== null && dates.end !== null && dates.start > dates.end) {
     throw makeError(400, "start cannot be after end");
+  }
+
+  // No date filter selected => last 12 calendar months only.
+  if (dates.start === null && dates.end === null) {
+    dates.start = last12MonthsStart();
+    dates.end = formatDateValue(new Date());
   }
 
   return dates;
