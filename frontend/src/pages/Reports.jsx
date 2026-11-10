@@ -32,13 +32,8 @@ const reportTypes = [
         prefix: '$',
       },
     ],
-<<<<<<< HEAD
-    
-    fixedStartColumns: [{ key: 'Month', label: 'Month' }],
-=======
     // Month + Total stay in the table; picker only toggles the breakdown columns.
     fixedStartColumns: [{ key: 'Month', label: 'Month', title: 'Month' }],
->>>>>>> cefd400 (cleaned up reports)
     fixedEndColumns: [
       { key: 'Revenue', label: 'Total', format: 'money', title: 'Total Revenue' },
     ],
