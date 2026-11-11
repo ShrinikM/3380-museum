@@ -43,9 +43,11 @@ export const ROLES = {
       '/artists',
       '/artworks',
       '/collections',
+      '/gift-shop',
       '/cafe',
     ],
   },
+
 
   Customer: {
     pages: ['/account'],
