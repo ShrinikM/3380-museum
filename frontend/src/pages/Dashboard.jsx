@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
-import { LOW_STOCK, STOCK_TARGET } from '../data/constants'
+import { STOCK_TARGET } from '../data/constants'
 import { Badge } from '../components/ui'
 
 
@@ -92,8 +92,10 @@ function getRangeDates(rangeId) {
   }
 }
 
-function isLowStock(stock) {
-  return stock <= LOW_STOCK
+function isLowStock(item) {
+  const level = Number(item.ReorderLevel)
+  const reorderLevel = Number.isFinite(level) ? level : 20
+  return Number(item.Stock) <= reorderLevel
 }
 
 function stockPercent(stock) {
@@ -411,7 +413,7 @@ function Dashboard() {
 
   function renderGiftShopPanel() {
     const sorted = [...giftItems].sort((a, b) => a.Stock - b.Stock)
-    const lowCount = giftItems.filter((item) => isLowStock(item.Stock)).length
+    const lowCount = giftItems.filter((item) => isLowStock(item)).length
     return (
       <Panel
         title="Gift Shop Status"
@@ -429,7 +431,7 @@ function Dashboard() {
         )}
         <div className="dash-activity-scroll">
           <div className="dash-list">
-                        {sorted.map((item) => (
+            {sorted.map((item) => (
               <div key={item.ItemID}>
                 <div className="dash-row">
                   <div>
@@ -439,8 +441,8 @@ function Dashboard() {
                   <div className="dash-row-value">
                     {formatNumber(item.Stock)} in stock
                     <Badge
-                      variant={isLowStock(item.Stock) ? 'low' : 'active'}
-                      label={isLowStock(item.Stock) ? 'Low stock' : 'In stock'}
+                      variant={isLowStock(item) ? 'low' : 'active'}
+                      label={isLowStock(item) ? 'Low stock' : 'In stock'}
                     />
                   </div>
                 </div>
@@ -450,7 +452,7 @@ function Dashboard() {
                     className="dash-progress-fill"
                     style={{
                       width: stockPercent(item.Stock) + '%',
-                      background: isLowStock(item.Stock)
+                      background: isLowStock(item)
                         ? 'var(--danger)'
                         : 'var(--success)',
                     }}

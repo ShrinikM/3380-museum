@@ -1,6 +1,3 @@
--- Run this in MySQL Workbench against the museum database.
--- Moves ticket list prices into the database and stores school email on student tickets.
-
 CREATE TABLE IF NOT EXISTS ticketprice (
   TicketType varchar(255) NOT NULL,
   Price decimal(8,2) NOT NULL,

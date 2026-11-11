@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Panel, Modal, SelectionActions } from './ui'
 import { useSelection } from '../hooks/useSelection'
 import { callApi } from '../api'
-import { PAYMENT_METHODS, LOW_STOCK } from '../data/constants'
+import { PAYMENT_METHODS } from '../data/constants'
+import { useRole } from '../context/role'
 
 const STORES = {
   giftshop: {
@@ -47,7 +48,16 @@ function toItem(item){
     ...item,
     Price: Number(item.Price),
     ...(item.Stock !== undefined ? { Stock: Number(item.Stock) } : {}),
+    ...(item.ReorderLevel !== undefined
+      ? { ReorderLevel: Number(item.ReorderLevel) }
+      : {}),
   }
+}
+
+function isLowStock(item){
+  const level = Number(item.ReorderLevel)
+  const reorderLevel = Number.isFinite(level) ? level : 20
+  return Number(item.Stock) <= reorderLevel
 }
 
 function toSale(sale){
@@ -67,6 +77,9 @@ function StorePage({ kind }){
   const isGiftShop = kind === 'giftshop'
   const base = `/api/store/${kind}`
   const today = localToday()
+  const { user, canEdit } = useRole()
+  const allowEdit = canEdit(isGiftShop ? '/gift-shop' : '/cafe')
+  const showSales = user?.role === 'Admin'
 
   const [items, setItems] = useState([])
   const [sales, setSales] = useState([])
@@ -85,15 +98,20 @@ function StorePage({ kind }){
   const [deleteError, setDeleteError] = useState('')
 
   const loadStoreData = useCallback(async()=>{
-    const [itemsData, salesData] = await Promise.all([
-      callApi(`${base}/items`, 'GET'),
-      callApi(`${base}/sales`, 'GET'),
-    ])
-
+    const itemsData = await callApi(`${base}/items`, 'GET')
     setItems(itemsData.map(toItem))
-    setSales(salesData.map(toSale))
+
+    if(showSales){
+      const salesData = await callApi(`${base}/sales`, 'GET')
+      setSales(salesData.map(toSale))
+    }
+    else{
+      setSales([])
+      setTab('items')
+    }
+
     setLoadError('')
-  }, [base])
+  }, [base, showSales])
 
   useEffect(()=>{
     loadStoreData().catch((error)=>setLoadError(error.message))
@@ -344,20 +362,24 @@ function StorePage({ kind }){
       <div className="page-header">
         <h1 className="page-title">{store.title}</h1>
 
-        <div className="page-header-actions">
-          <SelectionActions
-            count={selection.selectedRows.length}
-            onEdit={handleEditSelected}
-            onDelete={handleDeleteSelected}
-          />
+        {allowEdit && (
+          <div className="page-header-actions">
+            <SelectionActions
+              count={selection.selectedRows.length}
+              onEdit={handleEditSelected}
+              onDelete={handleDeleteSelected}
+            />
 
-          <button type="button" className="btn primary" onClick={openAddModal}>
-            {tab === 'items' ? 'Add Item' : 'Record Sale'}
-          </button>
-        </div>
+            {(tab === 'items' || showSales) && (
+              <button type="button" className="btn primary" onClick={openAddModal}>
+                {tab === 'items' ? 'Add Item' : 'Record Sale'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="grid-4 section-gap-sm">
+      <div className={(showSales ? 'grid-4' : 'grid-3') + ' section-gap-sm'}>
         <Panel className="summary-card">
           <div className="summary-value">{items.length.toLocaleString()}</div>
           <div className="summary-label">Items</div>
@@ -372,38 +394,49 @@ function StorePage({ kind }){
           <div className="summary-label">{isGiftShop ? 'Units in Stock' : 'Categories'}</div>
         </Panel>
 
-        <Panel className="summary-card">
-          <div className="summary-value">
-            {isGiftShop
-              ? items.filter((item)=>item.Stock < LOW_STOCK).length
-              : sales.length}
-          </div>
-          <div className="summary-label">{isGiftShop ? 'Low Stock Items' : 'Sales Recorded'}</div>
-        </Panel>
+        {isGiftShop && (
+          <Panel className="summary-card">
+            <div className="summary-value">
+              {items.filter((item)=>isLowStock(item)).length}
+            </div>
+            <div className="summary-label">Low Stock Items</div>
+          </Panel>
+        )}
 
-        <Panel className="summary-card">
-          <div className="summary-value">${revenue.toFixed(2)}</div>
-          <div className="summary-label">Revenue</div>
-        </Panel>
+        {showSales && !isGiftShop && (
+          <Panel className="summary-card">
+            <div className="summary-value">{sales.length}</div>
+            <div className="summary-label">Sales Recorded</div>
+          </Panel>
+        )}
+
+        {showSales && (
+          <Panel className="summary-card">
+            <div className="summary-value">${revenue.toFixed(2)}</div>
+            <div className="summary-label">Revenue</div>
+          </Panel>
+        )}
       </div>
 
-      <div className="tabs">
-        <button
-          type="button"
-          className={`tab${tab === 'items' ? ' active' : ''}`}
-          onClick={()=>switchTab('items')}
-        >
-          Items ({items.length})
-        </button>
+      {showSales && (
+        <div className="tabs">
+          <button
+            type="button"
+            className={`tab${tab === 'items' ? ' active' : ''}`}
+            onClick={()=>switchTab('items')}
+          >
+            Items ({items.length})
+          </button>
 
-        <button
-          type="button"
-          className={`tab${tab === 'sales' ? ' active' : ''}`}
-          onClick={()=>switchTab('sales')}
-        >
-          Sales ({sales.length})
-        </button>
-      </div>
+          <button
+            type="button"
+            className={`tab${tab === 'sales' ? ' active' : ''}`}
+            onClick={()=>switchTab('sales')}
+          >
+            Sales ({sales.length})
+          </button>
+        </div>
+      )}
 
       <div className="toolbar">
         <label htmlFor="store-search" className="sr-only">
@@ -427,15 +460,17 @@ function StorePage({ kind }){
         </p>
       )}
 
-      {tab === 'items' ? (
+      {tab === 'items' || !showSales ? (
         <div className="card table-wrap">
-          <table className={`data-table${itemSelection.selectedRows.length > 0 ? ' selecting' : ''}`}>
+          <table className={'data-table' + (allowEdit && itemSelection.selectedRows.length > 0 ? ' selecting' : '')}>
             <caption className="sr-only">{store.title} items</caption>
             <thead>
               <tr>
-                <th scope="col" className="select-col">
-                  <span className="sr-only">Select</span>
-                </th>
+                {allowEdit && (
+                  <th scope="col" className="select-col">
+                    <span className="sr-only">Select</span>
+                  </th>
+                )}
                 <th scope="col">Item</th>
                 <th scope="col">Category</th>
                 <th scope="col">Price</th>
@@ -450,14 +485,16 @@ function StorePage({ kind }){
                   key={item.ItemID}
                   className={itemSelection.isSelected(item.ItemID) ? 'selected-row' : ''}
                 >
-                  <td className="select-col">
-                    <input
-                      type="checkbox"
-                      checked={itemSelection.isSelected(item.ItemID)}
-                      onChange={()=>itemSelection.toggle(item.ItemID)}
-                      aria-label={`Select ${item.ItemName}`}
-                    />
-                  </td>
+                  {allowEdit && (
+                    <td className="select-col">
+                      <input
+                        type="checkbox"
+                        checked={itemSelection.isSelected(item.ItemID)}
+                        onChange={()=>itemSelection.toggle(item.ItemID)}
+                        aria-label={`Select ${item.ItemName}`}
+                      />
+                    </td>
+                  )}
                   <td className="strong">{item.ItemName}</td>
                   <td>{item.Category}</td>
                   <td className="mono">${item.Price.toFixed(2)}</td>
@@ -468,7 +505,7 @@ function StorePage({ kind }){
 
               {filteredItems.length === 0 && (
                 <tr>
-                  <td colSpan={isGiftShop ? 6 : 5} className="empty">No items found.</td>
+                  <td colSpan={(isGiftShop ? 5 : 4) + (allowEdit ? 1 : 0)} className="empty">No items found.</td>
                 </tr>
               )}
             </tbody>
@@ -476,13 +513,15 @@ function StorePage({ kind }){
         </div>
       ) : (
         <div className="card table-wrap">
-          <table className={`data-table${saleSelection.selectedRows.length > 0 ? ' selecting' : ''}`}>
+          <table className={'data-table' + (allowEdit && saleSelection.selectedRows.length > 0 ? ' selecting' : '')}>
             <caption className="sr-only">{store.title} sales</caption>
             <thead>
               <tr>
-                <th scope="col" className="select-col">
-                  <span className="sr-only">Select</span>
-                </th>
+                {allowEdit && (
+                  <th scope="col" className="select-col">
+                    <span className="sr-only">Select</span>
+                  </th>
+                )}
                 <th scope="col">Sale</th>
                 <th scope="col">Item</th>
                 <th scope="col">Quantity</th>
@@ -500,14 +539,16 @@ function StorePage({ kind }){
                   key={sale.SaleID}
                   className={saleSelection.isSelected(sale.SaleID) ? 'selected-row' : ''}
                 >
-                  <td className="select-col">
-                    <input
-                      type="checkbox"
-                      checked={saleSelection.isSelected(sale.SaleID)}
-                      onChange={()=>saleSelection.toggle(sale.SaleID)}
-                      aria-label={`Select sale ${sale.SaleID}`}
-                    />
-                  </td>
+                  {allowEdit && (
+                    <td className="select-col">
+                      <input
+                        type="checkbox"
+                        checked={saleSelection.isSelected(sale.SaleID)}
+                        onChange={()=>saleSelection.toggle(sale.SaleID)}
+                        aria-label={`Select sale ${sale.SaleID}`}
+                      />
+                    </td>
+                  )}
                   <td className="mono">#{String(sale.SaleID).padStart(5, '0')}</td>
                   <td>{sale.ItemName}</td>
                   <td className="mono">{sale.Quantity}</td>
@@ -521,7 +562,7 @@ function StorePage({ kind }){
 
               {filteredSales.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="empty">No sales found.</td>
+                  <td colSpan={8 + (allowEdit ? 1 : 0)} className="empty">No sales found.</td>
                 </tr>
               )}
             </tbody>

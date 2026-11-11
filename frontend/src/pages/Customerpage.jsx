@@ -50,6 +50,15 @@ const TICKET_STATUS = {
   Refunded: { label: 'Refunded', variant: 'completed' },
 }
 
+function ticketStatus(refundStatus) {
+  return (
+    TICKET_STATUS[refundStatus] || {
+      label: refundStatus || 'Unknown',
+      variant: 'expired',
+    }
+  )
+}
+
 const WAITLIST_STATUS = {
   Waiting: { label: 'Waiting', variant: 'upcoming' },
   Notified: { label: 'Spot opened', variant: 'active' },
@@ -890,8 +899,8 @@ function PurchasesTab({ purchases, onChanged }) {
                         : 'Not specified'}
                     </td>
                     <td>
-                      <span className={`badge badge-${TICKET_STATUS[ticket.RefundStatus].variant}`}>
-                        {TICKET_STATUS[ticket.RefundStatus].label}
+                      <span className={`badge badge-${ticketStatus(ticket.RefundStatus).variant}`}>
+                        {ticketStatus(ticket.RefundStatus).label}
                       </span>
                     </td>
                   </tr>

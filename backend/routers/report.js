@@ -29,7 +29,6 @@ function formatDateValue(date) {
 
 function last12MonthsStart() {
   const today = new Date();
-  // First day of the month 11 months ago => exactly 12 calendar months through this month.
   return formatDateValue(new Date(today.getFullYear(), today.getMonth() - 11, 1));
 }
 
@@ -46,7 +45,6 @@ function readDates(params) {
     throw makeError(400, "start cannot be after end");
   }
 
-  // No date filter selected => last 12 calendar months only.
   if (dates.start === null && dates.end === null) {
     dates.start = last12MonthsStart();
     dates.end = formatDateValue(new Date());
@@ -55,185 +53,195 @@ function readDates(params) {
   return dates;
 }
 
-function addRange(column, dates, conditions, values) {
+function dateFilter(column, dates, values) {
+  let sql = "";
+
   if (dates.start !== null) {
-    conditions.push(column + " >= ?");
+    sql = sql + " AND " + column + " >= ?";
     values.push(dates.start);
   }
   if (dates.end !== null) {
-    conditions.push(column + " <= ?");
+    sql = sql + " AND " + column + " <= ?";
     values.push(dates.end);
   }
+
+  return sql;
 }
 
-function joinConditions(conditions) {
-  if (conditions.length === 0) {
-    return "";
-  }
-  return " AND " + conditions.join(" AND ");
-}
-
-function getRange(column, dates) {
-  const conditions = [];
-  const values = [];
-  addRange(column, dates, conditions, values);
-
-  return { where: joinConditions(conditions), values: values };
-}
-
-async function getRevenueReport(params, body, staffId) {
+async function getRevenueReport(params) {
   const dates = readDates(params);
-  const tickets = getRange("ticket.SaleDate", dates);
-  const giftShop = getRange("sale.SaleDate", dates);
-  const cafe = getRange("sale.SaleDate", dates);
-  const memberships = getRange("term.StartDate", dates);
-  const donations = getRange("DonationDate", dates);
+  const values = [];
+  const ticketDates = dateFilter("ticket.SaleDate", dates, values);
+  const giftDates = dateFilter("sale.SaleDate", dates, values);
+  const cafeDates = dateFilter("sale.SaleDate", dates, values);
+  const memberDates = dateFilter("term.StartDate", dates, values);
+  const donationDates = dateFilter("DonationDate", dates, values);
 
   const [rows] = await pool.query(
     `SELECT
       Month,
-      SUM(TicketRevenue) AS TicketRevenue,
-      SUM(GiftShopRevenue) AS GiftShopRevenue,
-      SUM(CafeRevenue) AS CafeRevenue,
-      SUM(MembershipRevenue) AS MembershipRevenue,
-      SUM(DonationRevenue) AS DonationRevenue,
-      SUM(TicketRevenue + GiftShopRevenue + CafeRevenue + MembershipRevenue + DonationRevenue) AS Revenue,
-      SUM(Visitors) AS TotalVisitors
+      TicketRevenue,
+      GiftShopRevenue,
+      CafeRevenue,
+      MembershipRevenue,
+      DonationRevenue,
+      Revenue,
+      TotalVisitors,
+      CASE
+        WHEN TotalVisitors > 0 THEN ROUND(Revenue / TotalVisitors, 2)
+        ELSE 0
+      END AS AvgSpendPerVisitor,
+      CASE
+        WHEN PrevRevenue IS NULL OR PrevRevenue = 0 THEN 0
+        ELSE ROUND(((Revenue - PrevRevenue) / PrevRevenue) * 100, 1)
+      END AS MonthOverMonthGrowth
     FROM (
       SELECT
-        DATE_FORMAT(ticket.SaleDate, '%b %y') AS Month,
-        SUM(ticket.Price) AS TicketRevenue,
-        0 AS GiftShopRevenue,
-        0 AS CafeRevenue,
-        0 AS MembershipRevenue,
-        0 AS DonationRevenue,
-        COUNT(ticket.TicketID) AS Visitors,
-        MIN(ticket.SaleDate) AS SortDate
-      FROM ticket
-      JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
-      WHERE ticket.IsDeleted = 0
-        AND ticket.RefundStatus <> 'Refunded'
-        AND exhibition.IsDeleted = 0
-        AND exhibition.CancelledAt IS NULL` +
-      tickets.where +
+        Month,
+        TicketRevenue,
+        GiftShopRevenue,
+        CafeRevenue,
+        MembershipRevenue,
+        DonationRevenue,
+        Revenue,
+        TotalVisitors,
+        SortDate,
+        LAG(Revenue) OVER (ORDER BY SortDate) AS PrevRevenue
+      FROM (
+        SELECT
+          Month,
+          SUM(TicketRevenue) AS TicketRevenue,
+          SUM(GiftShopRevenue) AS GiftShopRevenue,
+          SUM(CafeRevenue) AS CafeRevenue,
+          SUM(MembershipRevenue) AS MembershipRevenue,
+          SUM(DonationRevenue) AS DonationRevenue,
+          SUM(
+            TicketRevenue + GiftShopRevenue + CafeRevenue +
+            MembershipRevenue + DonationRevenue
+          ) AS Revenue,
+          SUM(Visitors) AS TotalVisitors,
+          MIN(SortDate) AS SortDate
+        FROM (
+          SELECT
+            DATE_FORMAT(ticket.SaleDate, '%b %y') AS Month,
+            SUM(ticket.Price) AS TicketRevenue,
+            0 AS GiftShopRevenue,
+            0 AS CafeRevenue,
+            0 AS MembershipRevenue,
+            0 AS DonationRevenue,
+            COUNT(ticket.TicketID) AS Visitors,
+            MIN(ticket.SaleDate) AS SortDate
+          FROM ticket
+          JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
+          WHERE ticket.IsDeleted = 0
+            AND ticket.RefundStatus <> 'Refunded'
+            AND exhibition.IsDeleted = 0
+            AND exhibition.CancelledAt IS NULL` +
+      ticketDates +
       `
-      GROUP BY DATE_FORMAT(ticket.SaleDate, '%b %y')
+          GROUP BY DATE_FORMAT(ticket.SaleDate, '%b %y')
 
-      UNION ALL
+          UNION ALL
 
-      SELECT
-        DATE_FORMAT(sale.SaleDate, '%b %y') AS Month,
-        0 AS TicketRevenue,
-        SUM(sale.SalePrice * sale.Quantity) AS GiftShopRevenue,
-        0 AS CafeRevenue,
-        0 AS MembershipRevenue,
-        0 AS DonationRevenue,
-        0 AS Visitors,
-        MIN(sale.SaleDate) AS SortDate
-      FROM giftshopsale sale
-      JOIN giftshop item ON item.ItemID = sale.ItemID
-      WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` +
-      giftShop.where +
+          SELECT
+            DATE_FORMAT(sale.SaleDate, '%b %y') AS Month,
+            0 AS TicketRevenue,
+            SUM(sale.SalePrice * sale.Quantity) AS GiftShopRevenue,
+            0 AS CafeRevenue,
+            0 AS MembershipRevenue,
+            0 AS DonationRevenue,
+            0 AS Visitors,
+            MIN(sale.SaleDate) AS SortDate
+          FROM giftshopsale sale
+          JOIN giftshop item ON item.ItemID = sale.ItemID
+          WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` +
+      giftDates +
       `
-      GROUP BY DATE_FORMAT(sale.SaleDate, '%b %y')
+          GROUP BY DATE_FORMAT(sale.SaleDate, '%b %y')
 
-      UNION ALL
+          UNION ALL
 
-      SELECT
-        DATE_FORMAT(sale.SaleDate, '%b %y') AS Month,
-        0 AS TicketRevenue,
-        0 AS GiftShopRevenue,
-        SUM(sale.SalePrice * sale.Quantity) AS CafeRevenue,
-        0 AS MembershipRevenue,
-        0 AS DonationRevenue,
-        0 AS Visitors,
-        MIN(sale.SaleDate) AS SortDate
-      FROM cafesale sale
-      JOIN cafe item ON item.ItemID = sale.ItemID
-      WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` +
-      cafe.where +
+          SELECT
+            DATE_FORMAT(sale.SaleDate, '%b %y') AS Month,
+            0 AS TicketRevenue,
+            0 AS GiftShopRevenue,
+            SUM(sale.SalePrice * sale.Quantity) AS CafeRevenue,
+            0 AS MembershipRevenue,
+            0 AS DonationRevenue,
+            0 AS Visitors,
+            MIN(sale.SaleDate) AS SortDate
+          FROM cafesale sale
+          JOIN cafe item ON item.ItemID = sale.ItemID
+          WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` +
+      cafeDates +
       `
-      GROUP BY DATE_FORMAT(sale.SaleDate, '%b %y')
+          GROUP BY DATE_FORMAT(sale.SaleDate, '%b %y')
 
-      UNION ALL
+          UNION ALL
 
-      SELECT
-        DATE_FORMAT(term.StartDate, '%b %y') AS Month,
-        0 AS TicketRevenue,
-        0 AS GiftShopRevenue,
-        0 AS CafeRevenue,
-        SUM(term.Price) AS MembershipRevenue,
-        0 AS DonationRevenue,
-        0 AS Visitors,
-        MIN(term.StartDate) AS SortDate
-      FROM membershipterm term
-      JOIN membership ON membership.MembershipID = term.MembershipID
-      WHERE membership.IsDeleted = 0 AND term.CancelledAt IS NULL` +
-      memberships.where +
+          SELECT
+            DATE_FORMAT(term.StartDate, '%b %y') AS Month,
+            0 AS TicketRevenue,
+            0 AS GiftShopRevenue,
+            0 AS CafeRevenue,
+            SUM(term.Price) AS MembershipRevenue,
+            0 AS DonationRevenue,
+            0 AS Visitors,
+            MIN(term.StartDate) AS SortDate
+          FROM membershipterm term
+          JOIN membership ON membership.MembershipID = term.MembershipID
+          WHERE membership.IsDeleted = 0 AND term.CancelledAt IS NULL` +
+      memberDates +
       `
-      GROUP BY DATE_FORMAT(term.StartDate, '%b %y')
+          GROUP BY DATE_FORMAT(term.StartDate, '%b %y')
 
-      UNION ALL
+          UNION ALL
 
-      SELECT
-        DATE_FORMAT(DonationDate, '%b %y') AS Month,
-        0 AS TicketRevenue,
-        0 AS GiftShopRevenue,
-        0 AS CafeRevenue,
-        0 AS MembershipRevenue,
-        SUM(AmountDonated) AS DonationRevenue,
-        0 AS Visitors,
-        MIN(DonationDate) AS SortDate
-      FROM donations
-      WHERE IsDeleted = 0` +
-      donations.where +
+          SELECT
+            DATE_FORMAT(DonationDate, '%b %y') AS Month,
+            0 AS TicketRevenue,
+            0 AS GiftShopRevenue,
+            0 AS CafeRevenue,
+            0 AS MembershipRevenue,
+            SUM(AmountDonated) AS DonationRevenue,
+            0 AS Visitors,
+            MIN(DonationDate) AS SortDate
+          FROM donations
+          WHERE IsDeleted = 0` +
+      donationDates +
       `
-      GROUP BY DATE_FORMAT(DonationDate, '%b %y')
-    ) combined
-    GROUP BY Month
-    ORDER BY MIN(SortDate) ASC`,
-    tickets.values.concat(
-      giftShop.values,
-      cafe.values,
-      memberships.values,
-      donations.values
-    )
+          GROUP BY DATE_FORMAT(DonationDate, '%b %y')
+        ) combined
+        GROUP BY Month
+      ) monthly
+    ) ranked
+    ORDER BY SortDate ASC`,
+    values
   );
 
-  let prevRevenue = null;
-
-  for (const row of rows) {
-    row.TicketRevenue = Number(row.TicketRevenue);
-    row.GiftShopRevenue = Number(row.GiftShopRevenue);
-    row.CafeRevenue = Number(row.CafeRevenue);
-    row.MembershipRevenue = Number(row.MembershipRevenue);
-    row.DonationRevenue = Number(row.DonationRevenue);
-    row.Revenue = Number(row.Revenue);
-    row.TotalVisitors = Number(row.TotalVisitors);
-
-    if (row.TotalVisitors > 0) {
-      row.AvgSpendPerVisitor =
-        Math.round((row.Revenue / row.TotalVisitors) * 100) / 100;
-    } else {
-      row.AvgSpendPerVisitor = 0;
-    }
-
-    if (prevRevenue !== null && prevRevenue > 0) {
-      const growth = ((row.Revenue - prevRevenue) / prevRevenue) * 100;
-      row.MonthOverMonthGrowth = Math.round(growth * 10) / 10;
-    } else {
-      row.MonthOverMonthGrowth = 0;
-    }
-
-    prevRevenue = row.Revenue;
-  }
-
-  return { status: 200, data: rows };
+  return {
+    status: 200,
+    data: rows.map(function (row) {
+      return {
+        Month: row.Month,
+        TicketRevenue: Number(row.TicketRevenue),
+        GiftShopRevenue: Number(row.GiftShopRevenue),
+        CafeRevenue: Number(row.CafeRevenue),
+        MembershipRevenue: Number(row.MembershipRevenue),
+        DonationRevenue: Number(row.DonationRevenue),
+        Revenue: Number(row.Revenue),
+        TotalVisitors: Number(row.TotalVisitors),
+        AvgSpendPerVisitor: Number(row.AvgSpendPerVisitor),
+        MonthOverMonthGrowth: Number(row.MonthOverMonthGrowth),
+      };
+    }),
+  };
 }
 
-async function getTicketSalesReport(params, body, staffId) {
+async function getTicketSalesReport(params) {
   const dates = readDates(params);
-  const tickets = getRange("ticket.SaleDate", dates);
+  const values = [];
+  const ticketDates = dateFilter("ticket.SaleDate", dates, values);
 
   const [rows] = await pool.query(
     `SELECT
@@ -249,156 +257,211 @@ async function getTicketSalesReport(params, body, staffId) {
       SUM(CASE WHEN ticket.TicketType = 'Student' THEN 1 ELSE 0 END) AS StudentTickets,
       COALESCE(SUM(CASE WHEN ticket.TicketType = 'Student' THEN ticket.Price ELSE 0 END), 0) AS StudentRevenue,
       SUM(CASE WHEN ticket.TicketType = 'Child' THEN 1 ELSE 0 END) AS ChildTickets,
-      COALESCE(SUM(CASE WHEN ticket.TicketType = 'Child' THEN ticket.Price ELSE 0 END), 0) AS ChildRevenue
+      COALESCE(SUM(CASE WHEN ticket.TicketType = 'Child' THEN ticket.Price ELSE 0 END), 0) AS ChildRevenue,
+      GREATEST(exhibition.Capacity - COUNT(ticket.TicketID), 0) AS SeatsLeft,
+      CASE
+        WHEN exhibition.Capacity > 0
+          THEN ROUND((COUNT(ticket.TicketID) / exhibition.Capacity) * 100, 1)
+        ELSE 0
+      END AS PercentFull,
+      CASE
+        WHEN COUNT(ticket.TicketID) > 0
+          THEN ROUND(COALESCE(SUM(ticket.Price), 0) / COUNT(ticket.TicketID), 2)
+        ELSE 0
+      END AS AvgTicketPrice
     FROM exhibition
     LEFT JOIN ticket
       ON ticket.ExhibitionID = exhibition.ExhibitionID
       AND ticket.IsDeleted = 0
       AND ticket.RefundStatus <> 'Refunded'` +
-      tickets.where +
+      ticketDates +
       `
     WHERE exhibition.IsDeleted = 0
       AND exhibition.CancelledAt IS NULL
     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
     ORDER BY TicketsSold DESC, exhibition.Name`,
-    tickets.values
+    values
   );
 
-  for (const row of rows) {
-    row.TicketsSold = Number(row.TicketsSold);
-    row.Revenue = Number(row.Revenue);
-    row.Capacity = Number(row.Capacity);
-    row.AdultTickets = Number(row.AdultTickets);
-    row.AdultRevenue = Number(row.AdultRevenue);
-    row.SeniorTickets = Number(row.SeniorTickets);
-    row.SeniorRevenue = Number(row.SeniorRevenue);
-    row.StudentTickets = Number(row.StudentTickets);
-    row.StudentRevenue = Number(row.StudentRevenue);
-    row.ChildTickets = Number(row.ChildTickets);
-    row.ChildRevenue = Number(row.ChildRevenue);
-    row.SeatsLeft = Math.max(row.Capacity - row.TicketsSold, 0);
-
-    if (row.Capacity > 0) {
-      row.PercentFull = Math.round((row.TicketsSold / row.Capacity) * 1000) / 10;
-    } else {
-      row.PercentFull = 0;
-    }
-
-    if (row.TicketsSold > 0) {
-      row.AvgTicketPrice =
-        Math.round((row.Revenue / row.TicketsSold) * 100) / 100;
-    } else {
-      row.AvgTicketPrice = 0;
-    }
-  }
-
-  return { status: 200, data: rows };
+  return {
+    status: 200,
+    data: rows.map(function (row) {
+      return {
+        ExhibitionID: Number(row.ExhibitionID),
+        Name: row.Name,
+        Capacity: Number(row.Capacity),
+        TicketsSold: Number(row.TicketsSold),
+        Revenue: Number(row.Revenue),
+        AdultTickets: Number(row.AdultTickets),
+        AdultRevenue: Number(row.AdultRevenue),
+        SeniorTickets: Number(row.SeniorTickets),
+        SeniorRevenue: Number(row.SeniorRevenue),
+        StudentTickets: Number(row.StudentTickets),
+        StudentRevenue: Number(row.StudentRevenue),
+        ChildTickets: Number(row.ChildTickets),
+        ChildRevenue: Number(row.ChildRevenue),
+        SeatsLeft: Number(row.SeatsLeft),
+        PercentFull: Number(row.PercentFull),
+        AvgTicketPrice: Number(row.AvgTicketPrice),
+      };
+    }),
+  };
 }
 
 async function getItemRevenue(params, saleTable, itemTable, storeName) {
   const dates = readDates(params);
-  const sales = getRange("sale.SaleDate", dates);
+  const values = [];
+  const saleDates = dateFilter("sale.SaleDate", dates, values);
 
   const [rows] = await pool.query(
     `SELECT
-      item.ItemID,
-      item.ItemName,
-      item.Category,
-      item.Price AS ListPrice,
-      COUNT(sale.SaleID) AS SaleCount,
-      SUM(sale.Quantity) AS UnitsSold,
-      SUM(sale.SalePrice * sale.Quantity) AS Revenue
-    FROM ` +
+      Store,
+      ItemID,
+      ItemName,
+      Category,
+      ListPrice,
+      SaleCount,
+      UnitsSold,
+      Revenue,
+      AvgSalePrice,
+      CASE
+        WHEN StoreTotal > 0 THEN ROUND((Revenue / StoreTotal) * 100, 1)
+        ELSE 0
+      END AS PercentOfTotal
+    FROM (
+      SELECT
+        ? AS Store,
+        item.ItemID,
+        item.ItemName,
+        item.Category,
+        item.Price AS ListPrice,
+        COUNT(sale.SaleID) AS SaleCount,
+        COALESCE(SUM(sale.Quantity), 0) AS UnitsSold,
+        COALESCE(SUM(sale.SalePrice * sale.Quantity), 0) AS Revenue,
+        CASE
+          WHEN COALESCE(SUM(sale.Quantity), 0) > 0
+            THEN ROUND(
+              COALESCE(SUM(sale.SalePrice * sale.Quantity), 0) /
+              SUM(sale.Quantity),
+              2
+            )
+          ELSE 0
+        END AS AvgSalePrice,
+        SUM(COALESCE(SUM(sale.SalePrice * sale.Quantity), 0)) OVER () AS StoreTotal
+      FROM ` +
       saleTable +
       ` AS sale
-    JOIN ` +
+      JOIN ` +
       itemTable +
       ` AS item ON item.ItemID = sale.ItemID
-    WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` +
-      sales.where +
+      WHERE sale.IsDeleted = 0 AND item.IsDeleted = 0` +
+      saleDates +
       `
-    GROUP BY item.ItemID, item.ItemName, item.Category, item.Price
-    ORDER BY Revenue DESC, item.ItemName`,
-    sales.values
+      GROUP BY item.ItemID, item.ItemName, item.Category, item.Price
+    ) priced
+    ORDER BY Revenue DESC, ItemName`,
+    [storeName].concat(values)
   );
 
-  let total = 0;
-
-  for (const row of rows) {
-    row.Store = storeName;
-    row.ListPrice = Number(row.ListPrice);
-    row.SaleCount = Number(row.SaleCount);
-    row.UnitsSold = Number(row.UnitsSold);
-    row.Revenue = Number(row.Revenue);
-    total = total + row.Revenue;
-
-    if (row.UnitsSold > 0) {
-      row.AvgSalePrice =
-        Math.round((row.Revenue / row.UnitsSold) * 100) / 100;
-    } else {
-      row.AvgSalePrice = 0;
-    }
-  }
-
-  for (const row of rows) {
-    if (total > 0) {
-      row.PercentOfTotal = Math.round((row.Revenue / total) * 1000) / 10;
-    } else {
-      row.PercentOfTotal = 0;
-    }
-  }
-
-  return rows;
+  return rows.map(function (row) {
+    return {
+      Store: row.Store,
+      ItemID: Number(row.ItemID),
+      ItemName: row.ItemName,
+      Category: row.Category,
+      ListPrice: Number(row.ListPrice),
+      SaleCount: Number(row.SaleCount),
+      UnitsSold: Number(row.UnitsSold),
+      Revenue: Number(row.Revenue),
+      AvgSalePrice: Number(row.AvgSalePrice),
+      PercentOfTotal: Number(row.PercentOfTotal),
+    };
+  });
 }
 
-async function getStoreItemsReport(params, body, staffId) {
-  const giftShop = await getItemRevenue(params, "giftshopsale", "giftshop", "Gift Shop");
+async function getStoreItemsReport(params) {
+  const giftShop = await getItemRevenue(
+    params,
+    "giftshopsale",
+    "giftshop",
+    "Gift Shop"
+  );
   const cafe = await getItemRevenue(params, "cafesale", "cafe", "Café");
 
   return { status: 200, data: giftShop.concat(cafe) };
 }
 
-async function getReportSummaryStats(params, body, staffId) {
+async function getReportSummaryStats() {
   const [expiringRows] = await pool.query(
-    `SELECT COUNT(term.MembershipID) AS ExpiringSoon 
-    FROM membershipterm term
-    JOIN membership ON membership.MembershipID = term.MembershipID
-    WHERE membership.IsDeleted = 0 
-    AND term.EndDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
+    `SELECT COUNT(term.MembershipID) AS ExpiringSoon
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0
+       AND term.CancelledAt IS NULL
+       AND term.EndDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
   );
 
   const [exhibRows] = await pool.query(
-    `SELECT 
-      COALESCE(AVG((SELECT COUNT(TicketID) FROM ticket t WHERE t.ExhibitionID = exhibition.ExhibitionID AND t.IsDeleted = 0 AND t.RefundStatus <> 'Refunded') / NULLIF(Capacity, 0) * 100), 0) AS AvgCapacity
-    FROM exhibition 
-    WHERE IsDeleted = 0 AND Capacity > 0`
+    `SELECT COALESCE(
+        AVG(
+          (
+            SELECT COUNT(t.TicketID)
+            FROM ticket t
+            WHERE t.ExhibitionID = exhibition.ExhibitionID
+              AND t.IsDeleted = 0
+              AND t.RefundStatus <> 'Refunded'
+          ) / NULLIF(exhibition.Capacity, 0) * 100
+        ),
+        0
+      ) AS AvgCapacity
+     FROM exhibition
+     WHERE exhibition.IsDeleted = 0
+       AND exhibition.CancelledAt IS NULL
+       AND exhibition.Capacity > 0`
   );
 
   const [artRows] = await pool.query(
-    `SELECT COUNT(ArtworkID) AS TotalArtworks FROM artwork WHERE IsDeleted = 0`
+    `SELECT COUNT(ArtworkID) AS TotalArtworks
+     FROM artwork
+     WHERE IsDeleted = 0`
   );
 
   const [memberRows] = await pool.query(
-    `SELECT COUNT(DISTINCT term.MembershipID) AS ActiveMembers 
-    FROM membershipterm term
-    JOIN membership ON membership.MembershipID = term.MembershipID
-    WHERE membership.IsDeleted = 0 AND term.EndDate >= CURDATE()`
+    `SELECT COUNT(DISTINCT term.MembershipID) AS ActiveMembers
+     FROM membershipterm term
+     JOIN membership ON membership.MembershipID = term.MembershipID
+     WHERE membership.IsDeleted = 0
+       AND term.CancelledAt IS NULL
+       AND term.StartDate <= CURDATE()
+       AND term.EndDate >= CURDATE()`
   );
 
   return {
     status: 200,
     data: {
-      expiringSoon: Number(expiringRows[0]?.ExpiringSoon || 0),
-      avgCapacity: Math.round(Number(exhibRows[0]?.AvgCapacity || 0)),
-      totalArtworks: Number(artRows[0]?.TotalArtworks || 0),
-      activeMembers: Number(memberRows[0]?.ActiveMembers || 0),
+      expiringSoon: Number(expiringRows[0].ExpiringSoon || 0),
+      avgCapacity: Math.round(Number(exhibRows[0].AvgCapacity || 0)),
+      totalArtworks: Number(artRows[0].TotalArtworks || 0),
+      activeMembers: Number(memberRows[0].ActiveMembers || 0),
     },
   };
 }
 
 module.exports = [
   { method: "GET", path: "/api/reports/revenue", handler: getRevenueReport },
-  { method: "GET", path: "/api/reports/ticket-sales", handler: getTicketSalesReport },
-  { method: "GET", path: "/api/reports/giftshop-cafe", handler: getStoreItemsReport },
-  { method: "GET", path: "/api/reports/summary-stats", handler: getReportSummaryStats },
+  {
+    method: "GET",
+    path: "/api/reports/ticket-sales",
+    handler: getTicketSalesReport,
+  },
+  {
+    method: "GET",
+    path: "/api/reports/giftshop-cafe",
+    handler: getStoreItemsReport,
+  },
+  {
+    method: "GET",
+    path: "/api/reports/summary-stats",
+    handler: getReportSummaryStats,
+  },
 ];

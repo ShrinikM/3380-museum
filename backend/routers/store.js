@@ -238,7 +238,8 @@ async function checkMembership(connection, membershipID) {
 
 async function findItem(id, kind) {
   const store = getStore(kind);
-  const stockColumn = kind === "giftshop" ? ", i.Stock" : "";
+  const stockColumn =
+    kind === "giftshop" ? ", i.Stock, i.ReorderLevel" : "";
 
   const [rows] = await pool.query(
     `SELECT
@@ -260,7 +261,12 @@ async function findItem(id, kind) {
     ItemID: Number(item.ItemID),
     StaffID: Number(item.StaffID),
     Price: Number(item.Price),
-    ...(kind === "giftshop" ? { Stock: Number(item.Stock) } : {}),
+    ...(kind === "giftshop"
+      ? {
+          Stock: Number(item.Stock),
+          ReorderLevel: Number(item.ReorderLevel),
+        }
+      : {}),
   };
 }
 
@@ -310,7 +316,8 @@ async function findSale(id, kind) {
 // GET ITEMS
 async function getItems(params, body, kind) {
   const store = getStore(kind);
-  const stockColumn = kind === "giftshop" ? ", i.Stock" : "";
+  const stockColumn =
+    kind === "giftshop" ? ", i.Stock, i.ReorderLevel" : "";
 
   const [rows] = await pool.query(
     `SELECT
@@ -330,7 +337,12 @@ async function getItems(params, body, kind) {
       ItemID: Number(item.ItemID),
       StaffID: Number(item.StaffID),
       Price: Number(item.Price),
-      ...(kind === "giftshop" ? { Stock: Number(item.Stock) } : {}),
+      ...(kind === "giftshop"
+        ? {
+            Stock: Number(item.Stock),
+            ReorderLevel: Number(item.ReorderLevel),
+          }
+        : {}),
     })),
   };
 }
