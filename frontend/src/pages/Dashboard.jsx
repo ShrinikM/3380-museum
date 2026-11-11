@@ -66,8 +66,8 @@ function formatLocalDate(date) {
 }
 
 const rangeOptions = [
+  { id: '3d', label: '3 Days' },
   { id: '7d', label: '7 Days' },
-  { id: '30d', label: '30 Days' },
   { id: '1m', label: '1 Month' },
 ]
 
@@ -77,12 +77,11 @@ function getRangeDates(rangeId) {
 
   const start = new Date(end)
 
-  if (rangeId === '7d') {
+  if (rangeId === '3d') {
+    start.setDate(start.getDate() - 2)
+  } else if (rangeId === '7d') {
     start.setDate(start.getDate() - 6)
-  } else if (rangeId === '30d') {
-    start.setDate(start.getDate() - 29)
   } else {
-    // Same day last month through today (e.g. Oct 10 → Nov 10)
     start.setMonth(start.getMonth() - 1)
   }
 
@@ -126,7 +125,7 @@ function StatTile({ label, value }) {
 function Dashboard() {
   const { user } = useRole()
 
-  const [rangeId, setRangeId] = useState('30d')
+  const [rangeId, setRangeId] = useState('7d')
   const [dashboard, setDashboard] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [giftItems, setGiftItems] = useState([])
