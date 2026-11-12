@@ -16,7 +16,7 @@ const formatNames = {
 const reportTypes = [
   {
     id: 'revenue',
-    name: 'Revenue & Financial Trends',
+    name: 'Museum Revenue Report',
     formats: ['bar', 'pie'],
     labelKey: 'Month',
     usesDates: true,
@@ -50,7 +50,7 @@ const reportTypes = [
   },
   {
     id: 'ticket-sales',
-    name: 'Ticket Sales & Exhibition Capacity',
+    name: 'Top Exhibition by Attendance',
     formats: ['bar', 'pie'],
     labelKey: 'Name',
     usesDates: true,
@@ -91,7 +91,7 @@ const reportTypes = [
   },
   {
     id: 'giftshop-cafe',
-    name: 'Gift Shop & Café Sales',
+    name: 'Store Item Sales Performance',
     formats: ['bar', 'pie'],
     labelKey: 'ItemName',
     usesDates: true,
