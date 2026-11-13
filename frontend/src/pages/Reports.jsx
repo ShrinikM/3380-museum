@@ -16,7 +16,7 @@ const formatNames = {
 const reportTypes = [
   {
     id: 'revenue',
-    name: 'Revenue & Financial Trends',
+    name: 'Museum Revenue Report',
     formats: ['bar', 'pie'],
     labelKey: 'Month',
     usesDates: true,
@@ -50,7 +50,7 @@ const reportTypes = [
   },
   {
     id: 'ticket-sales',
-    name: 'Ticket Sales & Exhibition Capacity',
+    name: 'Top Exhibition by Attendance',
     formats: ['bar', 'pie'],
     labelKey: 'Name',
     usesDates: true,
@@ -91,7 +91,7 @@ const reportTypes = [
   },
   {
     id: 'giftshop-cafe',
-    name: 'Gift Shop & Café Sales',
+    name: 'Store Item Sales Performance',
     formats: ['bar', 'pie'],
     labelKey: 'ItemName',
     usesDates: true,
@@ -136,6 +136,42 @@ const reportTypes = [
       { key: 'PercentOfTotal', label: 'Share %', format: 'percent', title: 'Share of Store Revenue' },
     ],
   },
+]
+
+const storeSaleColumns = [
+  { key: 'SaleID', label: 'Sale #', title: 'Sale Number' },
+  { key: 'ItemName', label: 'Item', title: 'Item' },
+  { key: 'Quantity', label: 'Qty', title: 'Quantity' },
+  { key: 'Total', label: 'Total', format: 'money', title: 'Total' },
+  { key: 'SaleDate', label: 'Sale Date', title: 'Sale Date' },
+  { key: 'PaymentMethod', label: 'Payment', title: 'Payment Method' },
+  { key: 'CustomerName', label: 'Customer', title: 'Customer' },
+  { key: 'StaffName', label: 'Staff', title: 'Staff' },
+]
+
+const ticketTxnColumns = [
+  { key: 'TicketID', label: 'Ticket #', title: 'Ticket ID' },
+  { key: 'ExhibitionName', label: 'Exhibition', title: 'Exhibition' },
+  { key: 'TicketType', label: 'Type', title: 'Ticket Type' },
+  { key: 'Price', label: 'Price', format: 'money', title: 'Price' },
+  { key: 'SaleDate', label: 'Sale Date', title: 'Sale Date' },
+  { key: 'FirstName', label: 'First', title: 'First Name' },
+  { key: 'LastName', label: 'Last', title: 'Last Name' },
+  { key: 'Phone', label: 'Phone', title: 'Phone' },
+  { key: 'Email', label: 'Email', title: 'Email' },
+]
+
+const revenueSourceOptions = ['Tickets', 'Gift', 'Café', 'Members', 'Donations']
+
+const revenueTxnColumns = [
+  { key: 'TransactionID', label: 'Txn #', title: 'Transaction ID' },
+  { key: 'TransactionDate', label: 'Date', title: 'Transaction Date' },
+  { key: 'Detail', label: 'Detail', title: 'Detail' },
+  { key: 'Quantity', label: 'Qty', title: 'Quantity' },
+  { key: 'Amount', label: 'Amount', format: 'money', title: 'Amount' },
+  { key: 'PaymentMethod', label: 'Payment', title: 'Payment Method' },
+  { key: 'CustomerName', label: 'Customer', title: 'Customer' },
+  { key: 'StaffName', label: 'Staff', title: 'Staff' },
 ]
 
 function findReport(id){
@@ -410,6 +446,17 @@ function getReportSummary(reportType, rows, activeKeys){
   ]
 }
 
+function normalizeReportPayload(data){
+  if(Array.isArray(data)){
+    return { rows: data, transactions: null }
+  }
+
+  return {
+    rows: data.summary || [],
+    transactions: data.transactions || null,
+  }
+}
+
 function getSavedHistory(storageKey){
   try{
     const saved = JSON.parse(localStorage.getItem(storageKey)) || []
@@ -433,6 +480,8 @@ function Reports(){
   const [endDate, setEndDate] = useState('')
   const [history, setHistory] = useState(()=>getSavedHistory(storageKey))
   const [message, setMessage] = useState('')
+  const [storeSource, setStoreSource] = useState('Gift Shop')
+  const [revenueSource, setRevenueSource] = useState('Tickets')
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteMode, setDeleteMode] = useState('selected') 
@@ -516,6 +565,8 @@ function Reports(){
       return
     }
 
+    const payload = normalizeReportPayload(data)
+
     const newReport = {
       id: Date.now(),
       reportType: reportType,
@@ -526,7 +577,8 @@ function Reports(){
         : '-',
       endDate: selectedReport.usesDates ? endDate || rangeEnd : '-',
       runAt: new Date().toLocaleString(),
-      rows: data,
+      rows: payload.rows,
+      transactions: payload.transactions,
       activeColumns: selectedColumns,
     }
 
@@ -534,6 +586,8 @@ function Reports(){
     saveHistory(newHistory)
     setHistory(newHistory)
     setViewingId(newReport.id)
+    setStoreSource('Gift Shop')
+    setRevenueSource('Tickets')
   }
 
   const exportReport = (item)=>{
@@ -819,6 +873,179 @@ function Reports(){
               </div>
             )
           })}
+
+          {viewingItem.reportType === 'revenue' && viewingItem.transactions && (
+            <div className="report-table-group">
+              <div className="report-viewer-header">
+                <h3 className="report-table-title">Revenue Transactions</h3>
+                <div className="dash-range-buttons" role="group" aria-label="Revenue source">
+                  {revenueSourceOptions.map((source)=>(
+                    <button
+                      key={source}
+                      type="button"
+                      className={'dash-range-btn' + (revenueSource === source ? ' active' : '')}
+                      onClick={()=>setRevenueSource(source)}
+                    >
+                      {source}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="table-wrap">
+                <table className="data-table report-table-compact">
+                  <caption className="sr-only">{revenueSource} revenue transactions</caption>
+                  <thead>
+                    <tr>
+                      {(revenueSource === 'Tickets'
+                        ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
+                        : revenueTxnColumns
+                      ).map((column)=>(
+                        <th key={column.key} scope="col" title={column.title}>
+                          {column.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(viewingItem.transactions[revenueSource] || []).map((row)=>{
+                      const columns = revenueSource === 'Tickets'
+                        ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
+                        : revenueTxnColumns
+
+                      return (
+                        <tr key={revenueSource + '-' + row.TransactionID}>
+                          {columns.map((column)=>(
+                            <td key={column.key} className="report-cell center-cell">
+                              {column.key === 'TransactionID'
+                                ? `#${String(row.TransactionID).padStart(5, '0')}`
+                                : formatCell(row[column.key], column.format)}
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+
+                    {(viewingItem.transactions[revenueSource] || []).length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={
+                            (revenueSource === 'Tickets'
+                              ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
+                              : revenueTxnColumns
+                            ).length
+                          }
+                          className="empty"
+                        >
+                          No {revenueSource.toLowerCase()} transactions in this date range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {viewingItem.reportType === 'giftshop-cafe' && viewingItem.transactions && (
+            <div className="report-table-group">
+              <div className="report-viewer-header">
+                <h3 className="report-table-title">Sale Transactions</h3>
+                <div className="dash-range-buttons" role="group" aria-label="Store source">
+                  {['Gift Shop', 'Café'].map((source)=>(
+                    <button
+                      key={source}
+                      type="button"
+                      className={'dash-range-btn' + (storeSource === source ? ' active' : '')}
+                      onClick={()=>setStoreSource(source)}
+                    >
+                      {source}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="table-wrap">
+                <table className="data-table report-table-compact">
+                  <caption className="sr-only">{storeSource} sale transactions</caption>
+                  <thead>
+                    <tr>
+                      {storeSaleColumns.map((column)=>(
+                        <th key={column.key} scope="col" title={column.title}>
+                          {column.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(viewingItem.transactions[storeSource] || []).map((row)=>(
+                      <tr key={row.SaleID}>
+                        {storeSaleColumns.map((column)=>(
+                          <td key={column.key} className="report-cell center-cell">
+                            {column.key === 'SaleID'
+                              ? `#${String(row.SaleID).padStart(5, '0')}`
+                              : formatCell(row[column.key], column.format)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+
+                    {(viewingItem.transactions[storeSource] || []).length === 0 && (
+                      <tr>
+                        <td colSpan={storeSaleColumns.length} className="empty">
+                          No {storeSource.toLowerCase()} sales in this date range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {viewingItem.reportType === 'ticket-sales' && Array.isArray(viewingItem.transactions) && (
+            <div className="report-table-group">
+              <h3 className="report-table-title">Ticket Transactions</h3>
+              <div className="table-wrap">
+                <table className="data-table report-table-compact">
+                  <caption className="sr-only">Ticket transactions</caption>
+                  <thead>
+                    <tr>
+                      {ticketTxnColumns.map((column)=>(
+                        <th key={column.key} scope="col" title={column.title}>
+                          {column.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingItem.transactions.map((row)=>(
+                      <tr key={row.TicketID}>
+                        {ticketTxnColumns.map((column)=>(
+                          <td key={column.key} className="report-cell center-cell">
+                            {column.key === 'TicketID'
+                              ? `#${String(row.TicketID).padStart(5, '0')}`
+                              : formatCell(
+                                  row[column.key] === '' ? null : row[column.key],
+                                  column.format
+                                )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+
+                    {viewingItem.transactions.length === 0 && (
+                      <tr>
+                        <td colSpan={ticketTxnColumns.length} className="empty">
+                          No ticket sales in this date range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

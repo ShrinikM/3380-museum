@@ -219,22 +219,171 @@ async function getRevenueReport(params) {
     values
   );
 
+  const summary = rows.map(function (row) {
+    return {
+      Month: row.Month,
+      TicketRevenue: Number(row.TicketRevenue),
+      GiftShopRevenue: Number(row.GiftShopRevenue),
+      CafeRevenue: Number(row.CafeRevenue),
+      MembershipRevenue: Number(row.MembershipRevenue),
+      DonationRevenue: Number(row.DonationRevenue),
+      Revenue: Number(row.Revenue),
+      TotalVisitors: Number(row.TotalVisitors),
+      AvgSpendPerVisitor: Number(row.AvgSpendPerVisitor),
+      MonthOverMonthGrowth: Number(row.MonthOverMonthGrowth),
+    };
+  });
+
+  const ticketValues = [];
+  const giftValues = [];
+  const cafeValues = [];
+  const memberValues = [];
+  const donationValues = [];
+  const ticketTxnDates = dateFilter("ticket.SaleDate", dates, ticketValues);
+  const giftTxnDates = dateFilter("sale.SaleDate", dates, giftValues);
+  const cafeTxnDates = dateFilter("sale.SaleDate", dates, cafeValues);
+  const memberTxnDates = dateFilter("term.StartDate", dates, memberValues);
+  const donationTxnDates = dateFilter("DonationDate", dates, donationValues);
+
+  const [ticketTxns] = await pool.query(
+    `SELECT
+      ticket.TicketID AS TransactionID,
+      DATE_FORMAT(ticket.SaleDate, '%Y-%m-%d') AS TransactionDate,
+      CONCAT(exhibition.Name, ' - ', ticket.TicketType) AS Detail,
+      1 AS Quantity,
+      ticket.Price AS Amount,
+      '' AS PaymentMethod,
+      TRIM(CONCAT(COALESCE(buyer.FirstName, ''), ' ', COALESCE(buyer.LastName, ''))) AS CustomerName,
+      '' AS StaffName
+    FROM ticket
+    JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
+    LEFT JOIN customer buyer ON buyer.CustomerID = ticket.CustomerID
+    WHERE ticket.IsDeleted = 0
+      AND ticket.RefundStatus <> 'Refunded'
+      AND exhibition.IsDeleted = 0
+      AND exhibition.CancelledAt IS NULL` +
+      ticketTxnDates +
+      `
+    ORDER BY ticket.SaleDate DESC, ticket.TicketID DESC`,
+    ticketValues
+  );
+
+  const [giftTxns] = await pool.query(
+    `SELECT
+      sale.SaleID AS TransactionID,
+      DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS TransactionDate,
+      item.ItemName AS Detail,
+      sale.Quantity AS Quantity,
+      sale.SalePrice * sale.Quantity AS Amount,
+      sale.PaymentMethod AS PaymentMethod,
+      TRIM(CONCAT(COALESCE(buyer.FirstName, ''), ' ', COALESCE(buyer.LastName, ''))) AS CustomerName,
+      CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName
+    FROM giftshopsale sale
+    JOIN giftshop item ON item.ItemID = sale.ItemID
+    JOIN staff ON staff.StaffID = sale.StaffID
+    LEFT JOIN membership member ON member.MembershipID = sale.MembershipID
+    LEFT JOIN customer buyer
+      ON buyer.CustomerID = COALESCE(sale.CustomerID, member.CustomerID)
+    WHERE sale.IsDeleted = 0
+      AND item.IsDeleted = 0` +
+      giftTxnDates +
+      `
+    ORDER BY sale.SaleDate DESC, sale.SaleID DESC`,
+    giftValues
+  );
+
+  const [cafeTxns] = await pool.query(
+    `SELECT
+      sale.SaleID AS TransactionID,
+      DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS TransactionDate,
+      item.ItemName AS Detail,
+      sale.Quantity AS Quantity,
+      sale.SalePrice * sale.Quantity AS Amount,
+      sale.PaymentMethod AS PaymentMethod,
+      TRIM(CONCAT(COALESCE(buyer.FirstName, ''), ' ', COALESCE(buyer.LastName, ''))) AS CustomerName,
+      CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName
+    FROM cafesale sale
+    JOIN cafe item ON item.ItemID = sale.ItemID
+    JOIN staff ON staff.StaffID = sale.StaffID
+    LEFT JOIN membership member ON member.MembershipID = sale.MembershipID
+    LEFT JOIN customer buyer ON buyer.CustomerID = member.CustomerID
+    WHERE sale.IsDeleted = 0
+      AND item.IsDeleted = 0` +
+      cafeTxnDates +
+      `
+    ORDER BY sale.SaleDate DESC, sale.SaleID DESC`,
+    cafeValues
+  );
+
+  const [memberTxns] = await pool.query(
+    `SELECT
+      term.TermID AS TransactionID,
+      DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS TransactionDate,
+      CONCAT(term.MembershipType, ' membership') AS Detail,
+      1 AS Quantity,
+      term.Price AS Amount,
+      term.PaymentMethod AS PaymentMethod,
+      TRIM(CONCAT(COALESCE(customer.FirstName, ''), ' ', COALESCE(customer.LastName, ''))) AS CustomerName,
+      '' AS StaffName
+    FROM membershipterm term
+    JOIN membership ON membership.MembershipID = term.MembershipID
+    LEFT JOIN customer ON customer.CustomerID = membership.CustomerID
+    WHERE membership.IsDeleted = 0
+      AND term.CancelledAt IS NULL` +
+      memberTxnDates +
+      `
+    ORDER BY term.StartDate DESC, term.TermID DESC`,
+    memberValues
+  );
+
+  const [donationTxns] = await pool.query(
+    `SELECT
+      donations.DonationID AS TransactionID,
+      DATE_FORMAT(donations.DonationDate, '%Y-%m-%d') AS TransactionDate,
+      'Donation' AS Detail,
+      1 AS Quantity,
+      donations.AmountDonated AS Amount,
+      donations.PaymentMethod AS PaymentMethod,
+      TRIM(CONCAT(donations.FirstName, ' ', donations.LastName)) AS CustomerName,
+      '' AS StaffName
+    FROM donations
+    WHERE donations.IsDeleted = 0` +
+      donationTxnDates +
+      `
+    ORDER BY donations.DonationDate DESC, donations.DonationID DESC`,
+    donationValues
+  );
+
+  function mapRevenueTxn(row) {
+    return {
+      TransactionID: Number(row.TransactionID),
+      TransactionDate: row.TransactionDate,
+      Detail: row.Detail,
+      Quantity: Number(row.Quantity),
+      Amount: Number(row.Amount),
+      PaymentMethod: row.PaymentMethod || "-",
+      CustomerName:
+        row.CustomerName && row.CustomerName.trim() !== ""
+          ? row.CustomerName
+          : "Walk-in",
+      StaffName: row.StaffName && row.StaffName.trim() !== ""
+        ? row.StaffName
+        : "-",
+    };
+  }
+
   return {
     status: 200,
-    data: rows.map(function (row) {
-      return {
-        Month: row.Month,
-        TicketRevenue: Number(row.TicketRevenue),
-        GiftShopRevenue: Number(row.GiftShopRevenue),
-        CafeRevenue: Number(row.CafeRevenue),
-        MembershipRevenue: Number(row.MembershipRevenue),
-        DonationRevenue: Number(row.DonationRevenue),
-        Revenue: Number(row.Revenue),
-        TotalVisitors: Number(row.TotalVisitors),
-        AvgSpendPerVisitor: Number(row.AvgSpendPerVisitor),
-        MonthOverMonthGrowth: Number(row.MonthOverMonthGrowth),
-      };
-    }),
+    data: {
+      summary: summary,
+      transactions: {
+        Tickets: ticketTxns.map(mapRevenueTxn),
+        Gift: giftTxns.map(mapRevenueTxn),
+        Café: cafeTxns.map(mapRevenueTxn),
+        Members: memberTxns.map(mapRevenueTxn),
+        Donations: donationTxns.map(mapRevenueTxn),
+      },
+    },
   };
 }
 
@@ -283,28 +432,74 @@ async function getTicketSalesReport(params) {
     values
   );
 
+  const summary = rows.map(function (row) {
+    return {
+      ExhibitionID: Number(row.ExhibitionID),
+      Name: row.Name,
+      Capacity: Number(row.Capacity),
+      TicketsSold: Number(row.TicketsSold),
+      Revenue: Number(row.Revenue),
+      AdultTickets: Number(row.AdultTickets),
+      AdultRevenue: Number(row.AdultRevenue),
+      SeniorTickets: Number(row.SeniorTickets),
+      SeniorRevenue: Number(row.SeniorRevenue),
+      StudentTickets: Number(row.StudentTickets),
+      StudentRevenue: Number(row.StudentRevenue),
+      ChildTickets: Number(row.ChildTickets),
+      ChildRevenue: Number(row.ChildRevenue),
+      SeatsLeft: Number(row.SeatsLeft),
+      PercentFull: Number(row.PercentFull),
+      AvgTicketPrice: Number(row.AvgTicketPrice),
+    };
+  });
+
+  const txnValues = [];
+  const txnDates = dateFilter("ticket.SaleDate", dates, txnValues);
+
+  const [txnRows] = await pool.query(
+    `SELECT
+      ticket.TicketID,
+      exhibition.Name AS ExhibitionName,
+      ticket.TicketType,
+      ticket.Price,
+      DATE_FORMAT(ticket.SaleDate, '%Y-%m-%d') AS SaleDate,
+      buyer.FirstName,
+      buyer.LastName,
+      buyer.Phone,
+      buyer.Email
+    FROM ticket
+    JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
+    LEFT JOIN customer buyer ON buyer.CustomerID = ticket.CustomerID
+    WHERE ticket.IsDeleted = 0
+      AND ticket.RefundStatus <> 'Refunded'
+      AND exhibition.IsDeleted = 0
+      AND exhibition.CancelledAt IS NULL` +
+      txnDates +
+      `
+    ORDER BY ticket.SaleDate DESC, ticket.TicketID DESC`,
+    txnValues
+  );
+
+  const transactions = txnRows.map(function (row) {
+    return {
+      TicketID: Number(row.TicketID),
+      ExhibitionName: row.ExhibitionName,
+      TicketType: row.TicketType,
+      Price: Number(row.Price),
+      SaleDate: row.SaleDate,
+      FirstName: row.FirstName || "",
+      LastName: row.LastName || "",
+      Phone: row.Phone || "",
+      Email: row.Email || "",
+    };
+  });
+
   return {
     status: 200,
-    data: rows.map(function (row) {
-      return {
-        ExhibitionID: Number(row.ExhibitionID),
-        Name: row.Name,
-        Capacity: Number(row.Capacity),
-        TicketsSold: Number(row.TicketsSold),
-        Revenue: Number(row.Revenue),
-        AdultTickets: Number(row.AdultTickets),
-        AdultRevenue: Number(row.AdultRevenue),
-        SeniorTickets: Number(row.SeniorTickets),
-        SeniorRevenue: Number(row.SeniorRevenue),
-        StudentTickets: Number(row.StudentTickets),
-        StudentRevenue: Number(row.StudentRevenue),
-        ChildTickets: Number(row.ChildTickets),
-        ChildRevenue: Number(row.ChildRevenue),
-        SeatsLeft: Number(row.SeatsLeft),
-        PercentFull: Number(row.PercentFull),
-        AvgTicketPrice: Number(row.AvgTicketPrice),
-      };
-    }),
+    data: {
+      summary: summary,
+      transactions: transactions,
+    },
   };
 }
 
@@ -379,6 +574,56 @@ async function getItemRevenue(params, saleTable, itemTable, storeName) {
   });
 }
 
+async function getStoreSaleTransactions(params, saleTable, itemTable, buyerExpr) {
+  const dates = readDates(params);
+  const values = [];
+  const saleDates = dateFilter("sale.SaleDate", dates, values);
+
+  const [rows] = await pool.query(
+    `SELECT
+      sale.SaleID,
+      item.ItemName,
+      sale.Quantity,
+      sale.SalePrice * sale.Quantity AS Total,
+      DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS SaleDate,
+      sale.PaymentMethod,
+      CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName,
+      CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName
+    FROM ` +
+      saleTable +
+      ` AS sale
+    JOIN ` +
+      itemTable +
+      ` AS item ON item.ItemID = sale.ItemID
+    JOIN staff ON staff.StaffID = sale.StaffID
+    LEFT JOIN membership member ON member.MembershipID = sale.MembershipID
+    LEFT JOIN customer buyer ON buyer.CustomerID = ` +
+      buyerExpr +
+      `
+    WHERE sale.IsDeleted = 0
+      AND item.IsDeleted = 0` +
+      saleDates +
+      `
+    ORDER BY sale.SaleDate DESC, sale.SaleID DESC`,
+    values
+  );
+
+  return rows.map(function (row) {
+    return {
+      SaleID: Number(row.SaleID),
+      ItemName: row.ItemName,
+      Quantity: Number(row.Quantity),
+      Total: Number(row.Total),
+      SaleDate: row.SaleDate,
+      PaymentMethod: row.PaymentMethod,
+      CustomerName: row.CustomerName && row.CustomerName.trim() !== ""
+        ? row.CustomerName
+        : "Walk-in",
+      StaffName: row.StaffName,
+    };
+  });
+}
+
 async function getStoreItemsReport(params) {
   const giftShop = await getItemRevenue(
     params,
@@ -387,8 +632,29 @@ async function getStoreItemsReport(params) {
     "Gift Shop"
   );
   const cafe = await getItemRevenue(params, "cafesale", "cafe", "Café");
+  const giftTxns = await getStoreSaleTransactions(
+    params,
+    "giftshopsale",
+    "giftshop",
+    "COALESCE(sale.CustomerID, member.CustomerID)"
+  );
+  const cafeTxns = await getStoreSaleTransactions(
+    params,
+    "cafesale",
+    "cafe",
+    "member.CustomerID"
+  );
 
-  return { status: 200, data: giftShop.concat(cafe) };
+  return {
+    status: 200,
+    data: {
+      summary: giftShop.concat(cafe),
+      transactions: {
+        "Gift Shop": giftTxns,
+        Café: cafeTxns,
+      },
+    },
+  };
 }
 
 async function getReportSummaryStats() {
@@ -446,6 +712,7 @@ async function getReportSummaryStats() {
     },
   };
 }
+
 
 module.exports = [
   { method: "GET", path: "/api/reports/revenue", handler: getRevenueReport },
