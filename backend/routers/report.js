@@ -252,12 +252,13 @@ async function getRevenueReport(params) {
       CONCAT(exhibition.Name, ' - ', ticket.TicketType) AS Detail,
       1 AS Quantity,
       ticket.Price AS Amount,
-      '' AS PaymentMethod,
+      COALESCE(ticket.PaymentMethod, 'Not recorded') AS PaymentMethod,
       TRIM(CONCAT(COALESCE(buyer.FirstName, ''), ' ', COALESCE(buyer.LastName, ''))) AS CustomerName,
-      '' AS StaffName
+      COALESCE(CONCAT(seller.FirstName, ' ', seller.LastName), 'Online') AS StaffName
     FROM ticket
     JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
     LEFT JOIN customer buyer ON buyer.CustomerID = ticket.CustomerID
+    LEFT JOIN staff seller ON seller.StaffID = ticket.CreatedBy
     WHERE ticket.IsDeleted = 0
       AND ticket.RefundStatus <> 'Refunded'
       AND exhibition.IsDeleted = 0
@@ -324,10 +325,11 @@ async function getRevenueReport(params) {
       term.Price AS Amount,
       term.PaymentMethod AS PaymentMethod,
       TRIM(CONCAT(COALESCE(customer.FirstName, ''), ' ', COALESCE(customer.LastName, ''))) AS CustomerName,
-      '' AS StaffName
+      COALESCE(CONCAT(seller.FirstName, ' ', seller.LastName), 'Online') AS StaffName
     FROM membershipterm term
     JOIN membership ON membership.MembershipID = term.MembershipID
     LEFT JOIN customer ON customer.CustomerID = membership.CustomerID
+    LEFT JOIN staff seller ON seller.StaffID = term.CreatedBy
     WHERE membership.IsDeleted = 0
       AND term.CancelledAt IS NULL` +
       memberTxnDates +
@@ -345,8 +347,9 @@ async function getRevenueReport(params) {
       donations.AmountDonated AS Amount,
       donations.PaymentMethod AS PaymentMethod,
       TRIM(CONCAT(donations.FirstName, ' ', donations.LastName)) AS CustomerName,
-      '' AS StaffName
+      COALESCE(CONCAT(seller.FirstName, ' ', seller.LastName), 'Online') AS StaffName
     FROM donations
+    LEFT JOIN staff seller ON seller.StaffID = donations.CreatedBy
     WHERE donations.IsDeleted = 0` +
       donationTxnDates +
       `
