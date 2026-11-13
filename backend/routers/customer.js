@@ -49,13 +49,22 @@ function checkPositiveId(value, label) {
   return id;
 }
 
+const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/;
+
 function checkName(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
     throw makeError(400, `${label} is required`);
   }
 
-  if (value.trim().length > 255) {
-    throw makeError(400, `${label} must be 255 characters or fewer`);
+  if (value.trim().length > 100) {
+    throw makeError(400, `${label} must be 100 characters or fewer`);
+  }
+
+  if (!namePattern.test(value.trim())) {
+    throw makeError(
+      400,
+      `${label} can only contain letters, spaces, hyphens, or apostrophes`
+    );
   }
 
   return value.trim();
@@ -797,6 +806,7 @@ async function getPurchases(params, body, customerId) {
        e.CancellationReason,
        t.TicketType,
        t.Price,
+       t.PaymentMethod,
        CASE WHEN t.IsDeleted = 1 THEN 'Refunded' ELSE t.RefundStatus END AS RefundStatus,
        t.NotificationStatus,
        DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate,
@@ -1063,9 +1073,14 @@ function checkTicketOrder(body, ticketTypes) {
     throw makeError(400, "Please choose at least one ticket");
   }
 
+  if (!onlinePayments.includes(body.PaymentMethod)) {
+    throw makeError(400, "Please choose a payment method");
+  }
+
   return {
     ExhibitionID: exhibitionID,
     VisitDate: body.VisitDate,
+    PaymentMethod: body.PaymentMethod,
     Counts: counts,
     Count: total,
   };
@@ -1165,13 +1180,14 @@ async function addTickets(params, body, customerId) {
 
         await connection.query(
           `INSERT INTO ticket
-            (TicketType, Price, SaleDate, VisitDate,
+            (TicketType, Price, PaymentMethod, SaleDate, VisitDate,
              ExhibitionID, MembershipID, CustomerID, SchoolEmail,
              CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-           VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+           VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
           [
             type,
             price,
+            order.PaymentMethod,
             order.VisitDate,
             order.ExhibitionID,
             membershipID,

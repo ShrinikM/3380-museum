@@ -115,7 +115,7 @@ function Staff() {
       Role: item.Role || 'Staff',
       Department: item.Department || 'Curatorial',
       Email: item.Email || '',
-      PhoneNumber: item.PhoneNumber || '',
+      PhoneNumber: (item.PhoneNumber || '').replace(/\D/g, ''),
       StartDate: item.StartDate || '',
       EndDate: item.EndDate || '',
     })
@@ -135,7 +135,7 @@ function Staff() {
     const firstName = formData.FirstName.trim()
     const lastName = formData.LastName.trim()
     const email = formData.Email.trim()
-    const phone = formData.PhoneNumber.trim()
+    const phone = formData.PhoneNumber.replace(/\D/g, '')
 
     if (!textPattern.test(firstName)) {
       setFormError(
@@ -156,8 +156,8 @@ function Staff() {
       return
     }
 
-    if (!/^[0-9+()\- ]{7,20}$/.test(phone)) {
-      setFormError('Please enter a valid phone number.')
+    if (phone.length !== 10) {
+      setFormError('Phone number must have 10 digits.')
       return
     }
 
@@ -458,11 +458,17 @@ function Staff() {
               id="staff-phone"
               name="PhoneNumber"
               type="tel"
+              inputMode="numeric"
               autoComplete="tel"
+              maxLength={10}
+              placeholder="10 digits"
               value={formData.PhoneNumber}
-              onChange={handleChange}
-              pattern="[0-9+()\- ]{7,20}"
-              title="Use 7 to 20 digits, spaces, dashes, plus signs, or parentheses."
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  PhoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10),
+                })
+              }
               required
             />
           </div>

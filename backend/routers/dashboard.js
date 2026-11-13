@@ -318,7 +318,9 @@ async function getAssignedExhibitions(staffId) {
        collection.Name AS CollectionName,
        DATE_FORMAT(exhibition.StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(exhibition.EndDate, '%Y-%m-%d') AS EndDate,
+       DATE_FORMAT(exhibition.CancelledAt, '%Y-%m-%d') AS CancelledAt,
        CASE
+         WHEN exhibition.CancelledAt IS NOT NULL THEN 'cancelled'
          WHEN exhibition.StartDate <= CURDATE() THEN 'active'
          ELSE 'upcoming'
        END AS Status

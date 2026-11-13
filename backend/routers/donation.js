@@ -21,12 +21,17 @@ function makeError(status, message) {
   return error;
 }
 
-function checkText(value, fieldName) {
+const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/;
+
+function checkName(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
-    throw makeError(400, fieldName + " is required");
+    throw makeError(400, label + " is required");
   }
-  if (value.trim().length > 255) {
-    throw makeError(400, fieldName + " must be 255 characters or fewer");
+  if (value.trim().length > 100) {
+    throw makeError(400, label + " must be 100 characters or fewer");
+  }
+  if (!namePattern.test(value.trim())) {
+    throw makeError(400, label + " can only contain letters, spaces, hyphens, or apostrophes");
   }
   return value.trim();
 }
@@ -35,16 +40,16 @@ function checkAmount(value) {
   const amount = Number(value);
 
   if (value === undefined || value === null || value === "" || !Number.isFinite(amount)) {
-    throw makeError(400, "AmountDonated must be a number");
+    throw makeError(400, "Please enter a donation amount");
   }
   if (amount <= 0) {
-    throw makeError(400, "AmountDonated must be greater than 0");
+    throw makeError(400, "Amount must be greater than $0");
   }
   if (amount > 999999.99) {
-    throw makeError(400, "AmountDonated cannot be more than 999999.99");
+    throw makeError(400, "Amount cannot be more than $999,999.99");
   }
   if (Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) {
-    throw makeError(400, "AmountDonated can have no more than two decimal places");
+    throw makeError(400, "Amount can have no more than two decimal places");
   }
 
   return amount;
@@ -52,20 +57,20 @@ function checkAmount(value) {
 
 function checkDate(value, fieldName) {
   if (typeof value !== "string") {
-    throw makeError(400, fieldName + " must be a date like 2026-01-31");
+    throw makeError(400, "Please select a valid " + fieldName);
   }
 
   const date = new Date(value);
   if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw makeError(400, fieldName + " must be a real date like 2026-01-31");
+    throw makeError(400, "Please select a valid " + fieldName);
   }
 
   const today = new Date().toISOString().slice(0, 10);
   if (value > today) {
-    throw makeError(400, fieldName + " cannot be in the future");
+    throw makeError(400, "The " + fieldName + " cannot be in the future");
   }
   if (value < "1000-01-01") {
-    throw makeError(400, fieldName + " cannot be before 1000-01-01");
+    throw makeError(400, "Please select a valid " + fieldName);
   }
 
   return value;
@@ -74,19 +79,19 @@ function checkDate(value, fieldName) {
 function checkDonation(body) {
   const donation = {};
 
-  donation.FirstName = checkText(body.FirstName, "FirstName");
-  donation.LastName = checkText(body.LastName, "LastName");
+  donation.FirstName = checkName(body.FirstName, "First name");
+  donation.LastName = checkName(body.LastName, "Last name");
   donation.AmountDonated = checkAmount(body.AmountDonated);
 
-  donation.PaymentMethod = checkText(body.PaymentMethod, "PaymentMethod");
+  donation.PaymentMethod = body.PaymentMethod;
   if (!paymentMethods.includes(donation.PaymentMethod)) {
-    throw makeError(400, "PaymentMethod must be Cash, Credit Card, Debit Card, Check or Bank Transfer");
+    throw makeError(400, "Please select a payment method");
   }
 
   if (body.DonationDate === undefined || body.DonationDate === null || body.DonationDate === "") {
-    throw makeError(400, "DonationDate is required");
+    throw makeError(400, "Donation date is required");
   }
-  donation.DonationDate = checkDate(body.DonationDate, "DonationDate");
+  donation.DonationDate = checkDate(body.DonationDate, "donation date");
 
   return donation;
 }

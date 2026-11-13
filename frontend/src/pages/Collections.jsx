@@ -20,6 +20,7 @@ function Collections() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [collectionToDelete, setCollectionToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const [formData, setFormData] = useState({
     Name: '',
@@ -139,6 +140,7 @@ function Collections() {
   const handleDeleteSelected = () => {
     if (selectedCollections.length === 0) return
     setCollectionToDelete(selectedCollections[0])
+    setDeleteError('')
     setDeleteModalOpen(true)
   }
 
@@ -153,7 +155,7 @@ function Collections() {
       clear()
       refetchCollections()
     } catch (err) {
-      setFormError('Could not delete collection: ' + err.message)
+      setDeleteError('Could not delete collection: ' + err.message)
     } finally {
       setDeleting(false)
     }
@@ -345,6 +347,12 @@ function Collections() {
         onClose={() => setDeleteModalOpen(false)}
       >
         <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
             Are you sure you want to delete <strong>{collectionToDelete?.Name}</strong>? This action cannot be undone.
           </p>

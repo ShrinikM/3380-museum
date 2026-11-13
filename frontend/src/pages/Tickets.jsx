@@ -18,8 +18,12 @@ const emptyForm = {
   TicketType: '',
   Price: '',
   SaleDate: '',
+  VisitDate: '',
+  PaymentMethod: '',
   MembershipID: '',
 }
+
+const paymentMethods = ['Cash', 'Credit Card', 'Debit Card', 'Mobile Pay']
 
 function getMemberDiscount(member, ticketType) {
   if (!member || !ticketType) {
@@ -276,6 +280,8 @@ function Tickets() {
       TicketType: ticket.TicketType,
       Price: String(ticket.Price),
       SaleDate: ticket.SaleDate ? ticket.SaleDate.split('T')[0] : '',
+      VisitDate: ticket.VisitDate || '',
+      PaymentMethod: ticket.PaymentMethod || '',
       MembershipID: ticket.MembershipID ? String(ticket.MembershipID) : '',
     })
 
@@ -300,6 +306,10 @@ function Tickets() {
     setEditingId(null)
     setOpen(false)
   }
+
+  const formExhibition = exhibitions.find(
+    (item) => Number(item.ExhibitionID) === Number(formData.ExhibitionID)
+  )
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -337,6 +347,29 @@ function Tickets() {
       return
     }
 
+    if (!formData.VisitDate) {
+      setFormError('Please select a Visit Date.')
+      return
+    }
+
+    if (
+      formData.VisitDate < selectedExhibition.StartDate ||
+      formData.VisitDate > selectedExhibition.EndDate
+    ) {
+      setFormError('Visit Date must be within the exhibition dates.')
+      return
+    }
+
+    if (formData.VisitDate < formData.SaleDate) {
+      setFormError('Visit Date cannot be before the Sale Date.')
+      return
+    }
+
+    if (!paymentMethods.includes(formData.PaymentMethod)) {
+      setFormError('Please select a payment method.')
+      return
+    }
+
     const price = Number(formData.Price)
 
     if (!Number.isFinite(price) || price <= 0) {
@@ -348,6 +381,8 @@ function Tickets() {
       ExhibitionID: Number(formData.ExhibitionID),
       TicketType: formData.TicketType,
       SaleDate: formData.SaleDate,
+      VisitDate: formData.VisitDate,
+      PaymentMethod: formData.PaymentMethod,
       MembershipID: formData.MembershipID
         ? Number(formData.MembershipID)
         : null,
@@ -682,10 +717,18 @@ function Tickets() {
                     />
                   </td>
 
-                  <td className="mono">${ticket.Price.toFixed(2)}</td>
+                  <td className="mono">
+                    ${ticket.Price.toFixed(2)}
+                    {ticket.PaymentMethod && (
+                      <div className="cell-sub">{ticket.PaymentMethod}</div>
+                    )}
+                  </td>
 
                   <td className="mono">
                     {ticket.SaleDate ? ticket.SaleDate.split('T')[0] : '-'}
+                    {ticket.VisitDate && (
+                      <div className="cell-sub">Visit {ticket.VisitDate}</div>
+                    )}
                   </td>
 
                   <td>
@@ -790,6 +833,7 @@ function Tickets() {
                 .filter(
                   (item) =>
                     item.Status === 'active' ||
+                    item.Status === 'upcoming' ||
                     String(item.ExhibitionID) === formData.ExhibitionID
                 )
                 .map((item) => (
@@ -844,6 +888,38 @@ function Tickets() {
               max={today}
               required
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="ticket-visit-date">Visit Date</label>
+            <input
+              id="ticket-visit-date"
+              name="VisitDate"
+              type="date"
+              value={formData.VisitDate}
+              onChange={handleChange}
+              min={formExhibition?.StartDate}
+              max={formExhibition?.EndDate}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="ticket-payment">Payment Method</label>
+            <select
+              id="ticket-payment"
+              name="PaymentMethod"
+              value={formData.PaymentMethod}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Payment Method</option>
+              {paymentMethods.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group form-full">

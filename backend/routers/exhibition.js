@@ -1,4 +1,3 @@
-
 const pool = require("../db");
 
 const selectExhibitions = `
@@ -306,8 +305,19 @@ async function getExhibitions() {
   };
 }
 
+function localToday() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 async function addExhibition(params, body, staffId) {
   const exhibition = checkExhibition(body);
+
+  if (exhibition.StartDate < localToday()) {
+    throw makeError(400, "A new exhibition cannot start in the past");
+  }
 
   await checkDuplicateName(exhibition.Name);
   await checkCollection(exhibition.CollectionID);
@@ -317,7 +327,7 @@ async function addExhibition(params, body, staffId) {
     `INSERT INTO exhibition
       (Name, Description, StartDate, EndDate, Capacity, CollectionID,
        CreatedAt, UpdatedAt, CreatedBy)
-     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL)`,
+     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
     [
       exhibition.Name,
       exhibition.Description,
@@ -325,6 +335,7 @@ async function addExhibition(params, body, staffId) {
       exhibition.EndDate,
       exhibition.Capacity,
       exhibition.CollectionID,
+      staffId,
     ]
   );
 
@@ -350,6 +361,41 @@ async function updateExhibition(params, body, staffId) {
 
   if (existing.Status === "cancelled") {
     throw makeError(400, "A cancelled exhibition cannot be edited");
+  }
+
+  // Sold tickets must still fall inside the exhibition's new dates
+  const [outside] = await pool.query(
+    `SELECT
+       COUNT(*) AS Total,
+       DATE_FORMAT(MIN(VisitDate), '%Y-%m-%d') AS FirstVisit,
+       DATE_FORMAT(MAX(VisitDate), '%Y-%m-%d') AS LastVisit
+     FROM ticket
+     WHERE ExhibitionID = ?
+       AND IsDeleted = 0
+       AND RefundStatus <> 'Refunded'
+       AND VisitDate IS NOT NULL
+       AND (VisitDate < ? OR VisitDate > ?)`,
+    [id, exhibition.StartDate, exhibition.EndDate]
+  );
+
+  if (Number(outside[0].Total) > 0) {
+    const count = Number(outside[0].Total);
+    const range =
+      outside[0].FirstVisit === outside[0].LastVisit
+        ? outside[0].FirstVisit
+        : `${outside[0].FirstVisit} to ${outside[0].LastVisit}`;
+
+    throw makeError(
+      400,
+      `${count} sold ${count === 1 ? "ticket has a visit date" : "tickets have visit dates"} (${range}) outside the new dates. Keep the dates that cover these visits.`
+    );
+  }
+
+  if (exhibition.Capacity < Number(existing.Tickets)) {
+    throw makeError(
+      400,
+      `Capacity cannot be lower than the ${existing.Tickets} tickets already sold`
+    );
   }
 
   await checkDuplicateName(exhibition.Name, id);
@@ -473,5 +519,6 @@ module.exports = [
     method: "DELETE",
     path: "/api/exhibitions/:id",
     handler: deleteExhibition,
+    needsActor: true,
   },
 ];

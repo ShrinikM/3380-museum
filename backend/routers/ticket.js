@@ -11,7 +11,9 @@ const selectTickets = `
     t.TicketID,
     t.TicketType,
     t.Price,
+    t.PaymentMethod,
     DATE_FORMAT(t.SaleDate, '%Y-%m-%d') AS SaleDate,
+    DATE_FORMAT(t.VisitDate, '%Y-%m-%d') AS VisitDate,
     t.ExhibitionID,
     e.Name AS ExhibitionName,
     t.MembershipID,
@@ -35,6 +37,18 @@ const selectTickets = `
   ${joinCurrentTerm("m", "LEFT JOIN")}
   WHERE t.IsDeleted = 0
 `;
+
+const paymentMethods = ["Cash", "Credit Card", "Debit Card", "Mobile Pay"];
+
+function isRealDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(value + "T00:00:00.000Z");
+
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
 
 function makeError(status, message) {
   const error = new Error(message);
@@ -72,26 +86,26 @@ function checkTicket(body, ticketPrices) {
     throw makeError(400, "Please select a valid exhibition");
   }
 
-  if (
-    typeof body.SaleDate !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(body.SaleDate)
-  ) {
-    throw makeError(400, "SaleDate must use YYYY-MM-DD format");
-  }
-
-  const date = new Date(body.SaleDate + "T00:00:00.000Z");
-
-  if (
-    Number.isNaN(date.getTime()) ||
-    date.toISOString().slice(0, 10) !== body.SaleDate
-  ) {
-    throw makeError(400, "SaleDate must be a valid date");
+  if (!isRealDate(body.SaleDate)) {
+    throw makeError(400, "Please select a valid sale date");
   }
 
   const today = new Date().toISOString().slice(0, 10);
 
   if (body.SaleDate > today) {
-    throw makeError(400, "SaleDate cannot be in the future");
+    throw makeError(400, "Sale date cannot be in the future");
+  }
+
+  if (!isRealDate(body.VisitDate)) {
+    throw makeError(400, "Please select a valid visit date");
+  }
+
+  if (body.VisitDate < body.SaleDate) {
+    throw makeError(400, "Visit date cannot be before the sale date");
+  }
+
+  if (!paymentMethods.includes(body.PaymentMethod)) {
+    throw makeError(400, "Please select a payment method");
   }
 
   let membershipID = null;
@@ -113,6 +127,8 @@ function checkTicket(body, ticketPrices) {
     TicketType: body.TicketType,
     Price: ticketPrices[body.TicketType],
     SaleDate: body.SaleDate,
+    VisitDate: body.VisitDate,
+    PaymentMethod: body.PaymentMethod,
     MembershipID: membershipID,
     CustomerID: null,
   };
@@ -122,7 +138,10 @@ function checkTicket(body, ticketPrices) {
 
 async function checkReferences(ticket) {
   const [exhibitions] = await pool.query(
-    `SELECT ExhibitionID
+    `SELECT
+       ExhibitionID,
+       DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate,
+       DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate
      FROM exhibition
      WHERE ExhibitionID = ? AND IsDeleted = 0`,
     [ticket.ExhibitionID]
@@ -130,6 +149,13 @@ async function checkReferences(ticket) {
 
   if (exhibitions.length === 0) {
     throw makeError(400, "The selected exhibition does not exist");
+  }
+
+  if (
+    ticket.VisitDate < exhibitions[0].StartDate ||
+    ticket.VisitDate > exhibitions[0].EndDate
+  ) {
+    throw makeError(400, "Visit date must be within the exhibition dates");
   }
 
   if (ticket.MembershipID !== null) {
@@ -223,7 +249,7 @@ async function getPrices() {
   };
 }
 
-async function addTicket(params, body) {
+async function addTicket(params, body, staffId) {
   const ticketPrices = await getTicketPrices();
   const ticket = checkTicket(body, ticketPrices);
 
@@ -231,16 +257,19 @@ async function addTicket(params, body) {
 
   const [result] = await pool.query(
     `INSERT INTO ticket
-      (TicketType, Price, SaleDate, ExhibitionID, MembershipID, CustomerID,
-       CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0)`,
+      (TicketType, Price, PaymentMethod, SaleDate, VisitDate, ExhibitionID,
+       MembershipID, CustomerID, CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, 0)`,
     [
       ticket.TicketType,
       ticket.Price,
+      ticket.PaymentMethod,
       ticket.SaleDate,
+      ticket.VisitDate,
       ticket.ExhibitionID,
       ticket.MembershipID,
       ticket.CustomerID,
+      staffId,
     ]
   );
 
@@ -265,7 +294,9 @@ async function updateTicket(params, body) {
     `UPDATE ticket
      SET TicketType = ?,
          Price = ?,
+         PaymentMethod = ?,
          SaleDate = ?,
+         VisitDate = ?,
          ExhibitionID = ?,
          MembershipID = ?,
          CustomerID = COALESCE(?, CustomerID),
@@ -274,7 +305,9 @@ async function updateTicket(params, body) {
     [
       ticket.TicketType,
       ticket.Price,
+      ticket.PaymentMethod,
       ticket.SaleDate,
+      ticket.VisitDate,
       ticket.ExhibitionID,
       ticket.MembershipID,
       ticket.CustomerID,
@@ -450,25 +483,30 @@ module.exports = [
     method: "POST",
     path: "/api/tickets/exhibition/:id/notify",
     handler: sendNotices,
+    needsActor: true,
   },
   {
     method: "POST",
     path: "/api/tickets/exhibition/:id/refund",
     handler: refundTickets,
+    needsActor: true,
   },
   {
     method: "POST",
     path: "/api/tickets",
     handler: addTicket,
+    needsActor: true,
   },
   {
     method: "PUT",
     path: "/api/tickets/:id",
     handler: updateTicket,
+    needsActor: true,
   },
   {
     method: "DELETE",
     path: "/api/tickets/:id",
     handler: deleteTicket,
+    needsActor: true,
   },
 ];

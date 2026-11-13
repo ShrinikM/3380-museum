@@ -37,30 +37,41 @@ function checkText(value, fieldName) {
 function checkEmail(value) {
   const email = checkText(value, "Email");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw makeError(400, "Email must be a valid email address");
+    throw makeError(400, "Please enter a valid email address");
   }
   return email;
 }
 
+// Same rule as customers and members: exactly 10 digits, stored as digits only
 function checkPhone(value) {
-  const phone = checkText(value, "PhoneNumber");
-  if (!/^[0-9+()\- ]{7,20}$/.test(phone)) {
-    throw makeError(400, "PhoneNumber must be 7 to 20 digits, spaces, dashes, plus signs or parentheses");
+  const phone = checkText(value, "Phone number").replace(/\D/g, "");
+  if (phone.length !== 10) {
+    throw makeError(400, "Phone number must have 10 digits");
   }
   return phone;
 }
 
+const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/;
+
+function checkName(value, label) {
+  const name = checkText(value, label);
+  if (!namePattern.test(name)) {
+    throw makeError(400, label + " can only contain letters, spaces, hyphens, or apostrophes");
+  }
+  return name;
+}
+
 function checkDate(value, fieldName) {
   if (typeof value !== "string") {
-    throw makeError(400, fieldName + " must be a date like 2026-01-31");
+    throw makeError(400, "Please select a valid " + fieldName);
   }
 
   const date = new Date(value);
   if (isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw makeError(400, fieldName + " must be a real date like 2026-01-31");
+    throw makeError(400, "Please select a valid " + fieldName);
   }
   if (value < "1900-01-01") {
-    throw makeError(400, fieldName + " cannot be before 1900-01-01");
+    throw makeError(400, "Please select a valid " + fieldName);
   }
 
   return value;
@@ -69,27 +80,27 @@ function checkDate(value, fieldName) {
 function checkStaff(body) {
   const staff = {};
 
-  staff.FirstName = checkText(body.FirstName, "FirstName");
-  staff.LastName = checkText(body.LastName, "LastName");
+  staff.FirstName = checkName(body.FirstName, "First name");
+  staff.LastName = checkName(body.LastName, "Last name");
   staff.Department = checkText(body.Department, "Department");
   staff.Email = checkEmail(body.Email);
   staff.PhoneNumber = checkPhone(body.PhoneNumber);
 
   staff.Role = checkText(body.Role, "Role");
   if (!roles.includes(staff.Role)) {
-    throw makeError(400, "Role must be Admin or Staff");
+    throw makeError(400, "Please select a role");
   }
 
   if (body.StartDate === undefined || body.StartDate === null || body.StartDate === "") {
-    throw makeError(400, "StartDate is required");
+    throw makeError(400, "Start date is required");
   }
-  staff.StartDate = checkDate(body.StartDate, "StartDate");
+  staff.StartDate = checkDate(body.StartDate, "start date");
 
   staff.EndDate = null;
   if (body.EndDate !== undefined && body.EndDate !== null && body.EndDate !== "") {
-    staff.EndDate = checkDate(body.EndDate, "EndDate");
+    staff.EndDate = checkDate(body.EndDate, "end date");
     if (staff.EndDate < staff.StartDate) {
-      throw makeError(400, "EndDate cannot be before StartDate");
+      throw makeError(400, "End date cannot be before the start date");
     }
   }
 

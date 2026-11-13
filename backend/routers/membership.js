@@ -1,5 +1,6 @@
 const pool = require("../db");
 const { joinCurrentTerm, termStatus } = require("../terms");
+const { membershipPlans } = require("../prices");
 
 const APPROVED_SCHOOL_DOMAINS = ["cougarnet.uh.edu"];
 
@@ -137,9 +138,7 @@ function validateMembership(body) {
     MembershipType,
     StartDate,
     EndDate,
-    Price,
     PaymentMethod,
-    DiscountPercent,
     FamilyMembers = [],
   } = body;
 
@@ -188,15 +187,8 @@ function validateMembership(body) {
     throw makeError(400, "Invalid payment method.");
   }
 
-  if (
-    !Number.isFinite(Number(Price)) ||
-    Number(Price) <= 0 ||
-    !Number.isFinite(Number(DiscountPercent)) ||
-    Number(DiscountPercent) < 0 ||
-    Number(DiscountPercent) > 100
-  ) {
-    throw makeError(400, "Invalid price or discount.");
-  }
+  // Price and discount always come from the plan, never from the form
+  const plan = membershipPlans[MembershipType];
 
   validateDate(StartDate, "start date");
   validateDate(EndDate, "end date");
@@ -397,9 +389,9 @@ function validateMembership(body) {
     MembershipType,
     StartDate,
     EndDate,
-    Price: Number(Price),
+    Price: plan.Price,
     PaymentMethod,
-    DiscountPercent: Number(DiscountPercent),
+    DiscountPercent: plan.DiscountPercent,
     FamilyMembers: validatedFamilyMembers,
   };
 }
@@ -509,7 +501,7 @@ async function insertFamilyMembers(connection, membershipId, members) {
   }
 }
 
-async function addMembership(params, body) {
+async function addMembership(params, body, staffId) {
   const membership = validateMembership(body);
   const connection = await pool.getConnection();
 
@@ -540,8 +532,9 @@ async function addMembership(params, body) {
            DateOfBirth,
            CreatedAt,
            UpdatedAt,
+           CreatedBy,
            IsDeleted
-         ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), 0)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, 0)`,
         [
           membership.FirstName,
           membership.LastName,
@@ -549,6 +542,7 @@ async function addMembership(params, body) {
           membership.Phone,
           membership.SchoolEmail,
           membership.DateOfBirth,
+          staffId,
         ]
       );
 
@@ -596,9 +590,10 @@ async function addMembership(params, body) {
            CustomerID,
            CreatedAt,
            UpdatedAt,
+           CreatedBy,
            IsDeleted
-         ) VALUES (?, NOW(), NOW(), 0)`,
-        [customerId]
+         ) VALUES (?, NOW(), NOW(), ?, 0)`,
+        [customerId, staffId]
       );
 
       membershipId = result.insertId;
@@ -621,8 +616,9 @@ async function addMembership(params, body) {
          Price,
          DiscountPercent,
          PaymentMethod,
-         CreatedAt
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+         CreatedAt,
+         CreatedBy
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)`,
       [
         membershipId,
         membership.MembershipType,
@@ -631,6 +627,7 @@ async function addMembership(params, body) {
         membership.Price,
         membership.DiscountPercent,
         membership.PaymentMethod,
+        staffId,
       ]
     );
 
@@ -841,15 +838,18 @@ module.exports = [
     method: "POST",
     path: "/api/memberships",
     handler: addMembership,
+    needsActor: true,
   },
   {
     method: "PUT",
     path: "/api/memberships/:id",
     handler: updateMembership,
+    needsActor: true,
   },
   {
     method: "DELETE",
     path: "/api/memberships/:id",
     handler: deleteMembership,
+    needsActor: true,
   },
 ];

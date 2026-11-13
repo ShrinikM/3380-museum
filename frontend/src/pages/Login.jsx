@@ -4,6 +4,7 @@ import { useRole } from '../context/role'
 
 const HAND = '/images/coog-hand.png'
 const HERO_IMAGE = '/images/rumskib.jpeg' 
+const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
 function Login() {
   const { login, loginCustomer, registerCustomer } = useRole()
@@ -13,6 +14,7 @@ function Login() {
   )
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -22,6 +24,7 @@ function Login() {
 
   const switchMode = () => {
     setMode(mode === 'login' ? 'register' : 'login')
+    setConfirmPassword('')
     setError('')
   }
 
@@ -30,6 +33,31 @@ function Login() {
     setError('')
 
     if (mode === 'register') {
+      if (!NAME_PATTERN.test(firstName.trim())) {
+        setError('First name can only contain letters, spaces, hyphens, or apostrophes.')
+        return
+      }
+
+      if (!NAME_PATTERN.test(lastName.trim())) {
+        setError('Last name can only contain letters, spaces, hyphens, or apostrophes.')
+        return
+      }
+
+      if (phone !== '' && phone.length !== 10) {
+        setError('Phone number must have 10 digits.')
+        return
+      }
+
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters.')
+        return
+      }
+
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.')
+        return
+      }
+
       setBusy(true)
 
       try {
@@ -143,6 +171,7 @@ function Login() {
                   <input
                     id="register-first"
                     autoComplete="given-name"
+                    maxLength={100}
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     required
@@ -154,6 +183,7 @@ function Login() {
                   <input
                     id="register-last"
                     autoComplete="family-name"
+                    maxLength={100}
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     required
@@ -165,6 +195,7 @@ function Login() {
                   <input
                     id="register-email"
                     type="email"
+                    maxLength={255}
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -201,6 +232,20 @@ function Login() {
                 required
               />
             </div>
+
+            {mode === 'register' && (
+              <div className="form-group">
+                <label htmlFor="register-confirm-password">Confirm password</label>
+                <input
+                  id="register-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            )}
 
             {error && <p className="login-error">{error}</p>}
 

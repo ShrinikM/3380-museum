@@ -389,18 +389,26 @@ function Dashboard() {
                 <strong>{item.Name}</strong>
                 <p>
                   {item.CollectionName} -{' '}
-                  {item.Status === 'active'
-                    ? daysUntil(item.EndDate) + ' days left'
-                    : 'opens in ' + daysUntil(item.StartDate) + ' days'}
+                  {item.Status === 'cancelled'
+                    ? 'cancelled on ' + item.CancelledAt
+                    : item.Status === 'active'
+                      ? daysUntil(item.EndDate) + ' days left'
+                      : 'opens in ' + daysUntil(item.StartDate) + ' days'}
                 </p>
               </div>
               <div className="dash-row-value">
-                {item.Status === 'active'
-                  ? 'Ends ' + item.EndDate
-                  : 'Opens ' + item.StartDate}
+                {item.Status === 'cancelled'
+                  ? 'Was ' + item.StartDate + ' - ' + item.EndDate
+                  : item.Status === 'active'
+                    ? 'Ends ' + item.EndDate
+                    : 'Opens ' + item.StartDate}
                 <Badge
-                  variant={item.Status === 'active' ? 'active' : 'upcoming'}
-                  label={item.Status === 'active' ? 'Active' : 'Upcoming'}
+                  variant={item.Status}
+                  label={
+                    item.Status === 'cancelled'
+                      ? 'Cancelled'
+                      : item.Status === 'active' ? 'Active' : 'Upcoming'
+                  }
                 />
               </div>
             </div>

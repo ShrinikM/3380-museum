@@ -408,13 +408,14 @@ async function addItem(params, body, kind, actorId) {
        (ItemName, Category, StaffID, Price,
         CreatedAt, UpdatedAt, CreatedBy, IsDeleted
         ${kind === "giftshop" ? ", Stock" : ""})
-       VALUES (?, ?, ?, ?, NOW(), NOW(), NULL, 0
+       VALUES (?, ?, ?, ?, NOW(), NOW(), ?, 0
         ${kind === "giftshop" ? ", ?" : ""})`,
       [
         item.ItemName,
         item.Category,
         item.StaffID,
         item.Price,
+        actorId,
         ...(kind === "giftshop" ? [item.Stock] : []),
       ]
     );
@@ -524,7 +525,7 @@ async function deleteItem(params, body, kind) {
 }
 
 // CREATE SALE
-async function addSale(params, body, kind) {
+async function addSale(params, body, kind, actorId) {
   const store = getStore(kind);
   const sale = checkSale(body);
   const connection = await pool.getConnection();
@@ -562,7 +563,7 @@ async function addSale(params, body, kind) {
         PaymentMethod, CreatedAt, UpdatedAt, CreatedBy,
         IsDeleted, MembershipID
         ${kind === "giftshop" ? ", CustomerID" : ""})
-       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, 0, ?
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, 0, ?
         ${kind === "giftshop" ? ", ?" : ""})`,
       [
         sale.ItemID,
@@ -575,6 +576,7 @@ async function addSale(params, body, kind) {
         sale.StaffID,
         sale.SaleDate,
         sale.PaymentMethod,
+        actorId,
         sale.MembershipID,
         ...(kind === "giftshop" ? [customerID] : []),
       ]
@@ -798,6 +800,7 @@ function routesFor(kind) {
       method: "DELETE",
       path: `${base}/items/:id`,
       handler: (params, body) => deleteItem(params, body, kind),
+      needsActor: true,
     },
     {
       method: "GET",
@@ -807,17 +810,20 @@ function routesFor(kind) {
     {
       method: "POST",
       path: `${base}/sales`,
-      handler: (params, body) => addSale(params, body, kind),
+      handler: (params, body, actorId) => addSale(params, body, kind, actorId),
+      needsActor: true,
     },
     {
       method: "PUT",
       path: `${base}/sales/:id`,
       handler: (params, body) => updateSale(params, body, kind),
+      needsActor: true,
     },
     {
       method: "DELETE",
       path: `${base}/sales/:id`,
       handler: (params, body) => deleteSale(params, body, kind),
+      needsActor: true,
     },
   ];
 }

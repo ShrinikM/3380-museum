@@ -908,7 +908,7 @@ function Memberships() {
               max="999999.99"
               step="0.01"
               value={formData.price}
-              onChange={handleChange}
+              readOnly
               required
             />
           </div>

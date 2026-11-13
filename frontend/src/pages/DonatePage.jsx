@@ -5,6 +5,8 @@ import './DonatePage.css'
 const IMAGE = `${import.meta.env.BASE_URL}images/terrace.jpeg`
 const AMOUNTS = [500, 250, 100, 50, 25, 10]
 const MIN_AMOUNT = 10
+const MAX_AMOUNT = 999999.99
+const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 const PAYMENTS = ['Credit Card', 'Debit Card', 'Bank Transfer']
 
 const emptyForm = {
@@ -51,8 +53,23 @@ function DonatePage(){
       return
     }
 
+    if(amount > MAX_AMOUNT){
+      setError('The maximum online donation is $999,999.99.')
+      return
+    }
+
+    if(Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001){
+      setError('Amount can have no more than two decimal places.')
+      return
+    }
+
     if(!form.FirstName.trim() || !form.LastName.trim()){
       setError('Please enter your first and last name.')
+      return
+    }
+
+    if(!NAME_PATTERN.test(form.FirstName.trim()) || !NAME_PATTERN.test(form.LastName.trim())){
+      setError('Names can only contain letters, spaces, hyphens, or apostrophes.')
       return
     }
 
@@ -127,6 +144,7 @@ function DonatePage(){
               <input
                 type="number"
                 min="10"
+                max="999999.99"
                 step="0.01"
                 placeholder="Other amount (min $10)"
                 aria-label="Other amount"
@@ -146,12 +164,12 @@ function DonatePage(){
             <div className="dn-row">
               <div className="form-group">
                 <label htmlFor="dn-first">First name</label>
-                <input id="dn-first" name="FirstName" value={form.FirstName} onChange={handleChange} autoComplete="given-name" />
+                <input id="dn-first" name="FirstName" maxLength={100} value={form.FirstName} onChange={handleChange} autoComplete="given-name" />
               </div>
 
               <div className="form-group">
                 <label htmlFor="dn-last">Last name</label>
-                <input id="dn-last" name="LastName" value={form.LastName} onChange={handleChange} autoComplete="family-name" />
+                <input id="dn-last" name="LastName" maxLength={100} value={form.LastName} onChange={handleChange} autoComplete="family-name" />
               </div>
 
               <div className="form-group">

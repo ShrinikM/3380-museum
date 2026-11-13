@@ -16,6 +16,7 @@ const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
 const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
+const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
 function canBuyStudentTickets(membership) {
   if (membership === null || membership.Status?.toLowerCase() !== 'active') {
@@ -554,6 +555,21 @@ function DetailsTab({ account, onUpdated }) {
     e.preventDefault()
     setDetailsError('')
 
+    if (!NAME_PATTERN.test(firstName.trim())) {
+      setDetailsError('First name can only contain letters, spaces, hyphens, or apostrophes.')
+      return
+    }
+
+    if (!NAME_PATTERN.test(lastName.trim())) {
+      setDetailsError('Last name can only contain letters, spaces, hyphens, or apostrophes.')
+      return
+    }
+
+    if (phone.trim() !== '' && phone.replace(/\D/g, '').length !== 10) {
+      setDetailsError('Phone number must have 10 digits.')
+      return
+    }
+
     if (!currentPassword) {
       setDetailsError('Please enter your current password to update your details.')
       return
@@ -619,6 +635,7 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-first-name"
                 type="text"
+                maxLength={100}
                 value={firstName}
                 onChange={(e)=>setFirstName(e.target.value)}
                 required
@@ -629,6 +646,7 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-last-name"
                 type="text"
+                maxLength={100}
                 value={lastName}
                 onChange={(e)=>setLastName(e.target.value)}
                 required
@@ -642,6 +660,7 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-email"
                 type="email"
+                maxLength={255}
                 value={email}
                 onChange={(e)=>setEmail(e.target.value)}
                 required
@@ -652,8 +671,11 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-phone"
                 type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="10 digits"
                 value={phone}
-                onChange={(e)=>setPhone(e.target.value)}
+                onChange={(e)=>setPhone(e.target.value.replace(/\D/g, ''))}
               />
             </div>
           </div>
@@ -866,6 +888,7 @@ function PurchasesTab({ purchases, onChanged }) {
                   <th scope="col">Exhibition</th>
                   <th scope="col">Type</th>
                   <th scope="col">Price</th>
+                  <th scope="col">Payment</th>
                   <th scope="col">Bought</th>
                   <th scope="col">Visit Date</th>
                   <th scope="col">Status</th>
@@ -892,6 +915,7 @@ function PurchasesTab({ purchases, onChanged }) {
                     <td className="strong">{ticket.ExhibitionName}</td>
                     <td>{ticket.TicketType}</td>
                     <td>{money(ticket.Price)}</td>
+                    <td>{ticket.PaymentMethod || '-'}</td>
                     <td>{formatDate(ticket.SaleDate)}</td>
                     <td>
                       {ticket.VisitDate
@@ -1002,6 +1026,7 @@ function TicketsTab({ data, account, onBought }) {
   const [exhibitionId, setExhibitionId] = useState(null)
   const [counts, setCounts] = useState({})
   const [visitDate, setVisitDate] = useState('')
+  const [ticketPayment, setTicketPayment] = useState('')
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
   const [waiting, setWaiting] = useState(false)
@@ -1173,6 +1198,11 @@ function TicketsTab({ data, account, onBought }) {
       return
     }
 
+    if (!ONLINE_PAYMENTS.includes(ticketPayment)) {
+      setError('Please choose a payment method.')
+      return
+    }
+
     if ((counts.Student || 0) > 0 && askForStudentEmail && !schoolEmailOk) {
       setPendingStudentCount(null)
       setPendingWaitlistJoin(false)
@@ -1188,12 +1218,14 @@ function TicketsTab({ data, account, onBought }) {
       const result = await callApi('/api/customer/tickets', 'POST', {
         ExhibitionID: exhibitionId,
         VisitDate: visitDate,
+        PaymentMethod: ticketPayment,
         Tickets: counts,
         SchoolEmail: askForStudentEmail ? schoolEmail : undefined,
       })
 
       setCounts({})
       setVisitDate('')
+      setTicketPayment('')
       setExhibitionId(null)
       setSchoolEmail('')
       setSchoolEmailOk(false)
@@ -1448,6 +1480,25 @@ function TicketsTab({ data, account, onBought }) {
               <div className="cp-total">
                 <span>Total</span>
                 <strong>{money(totalPrice)}</strong>
+              </div>
+            )}
+
+            {!isWaitlistMode && (
+              <div className="form-group">
+                <label htmlFor="ticket-payment">Payment</label>
+                <select
+                  id="ticket-payment"
+                  value={ticketPayment}
+                  onChange={(event) => {
+                    setTicketPayment(event.target.value)
+                    setError('')
+                  }}
+                >
+                  <option value="">Choose a payment method</option>
+                  {ONLINE_PAYMENTS.map((method) => (
+                    <option key={method} value={method}>{method}</option>
+                  ))}
+                </select>
               </div>
             )}
 

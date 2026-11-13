@@ -21,6 +21,7 @@ function Artists() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [artistToDelete, setArtistToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const [formData, setFormData] = useState({
     FirstName: '',
@@ -195,6 +196,7 @@ function Artists() {
   const handleDeleteSelected = () => {
     if (selectedArtists.length === 0) return
     setArtistToDelete(selectedArtists[0])
+    setDeleteError('')
     setDeleteModalOpen(true)
   }
 
@@ -209,7 +211,7 @@ function Artists() {
       clear()
       refetchArtists()
     } catch (err) {
-      setFormError('Could not delete artist: ' + err.message)
+      setDeleteError('Could not delete artist: ' + err.message)
     } finally {
       setDeleting(false)
     }
@@ -452,6 +454,12 @@ function Artists() {
         onClose={() => setDeleteModalOpen(false)}
       >
         <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
             Are you sure you want to delete <strong>{artistToDelete?.FirstName} {artistToDelete?.LastName}</strong>? This action cannot be undone.
           </p>

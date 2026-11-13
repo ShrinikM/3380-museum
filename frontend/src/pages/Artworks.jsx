@@ -25,6 +25,7 @@ function Artworks() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [artworkToDelete, setArtworkToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const [formData, setFormData] = useState({
     Title: '',
@@ -167,6 +168,7 @@ function Artworks() {
   const handleDeleteSelected = () => {
     if (selectedArtworks.length === 0) return
     setArtworkToDelete(selectedArtworks[0])
+    setDeleteError('')
     setDeleteModalOpen(true)
   }
 
@@ -181,7 +183,7 @@ function Artworks() {
       clear()
       refetchArtworks()
     } catch (err) {
-      setFormError('Could not delete artwork: ' + err.message)
+      setDeleteError('Could not delete artwork: ' + err.message)
     } finally {
       setDeleting(false)
     }
@@ -472,6 +474,12 @@ function Artworks() {
         onClose={() => setDeleteModalOpen(false)}
       >
         <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
             Are you sure you want to delete <strong>{artworkToDelete?.Title}</strong>? This action cannot be undone.
           </p>

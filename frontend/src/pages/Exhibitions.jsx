@@ -4,6 +4,13 @@ import { useRole } from '../context/role'
 import { callApi } from '../api'
 import { useSelection } from '../hooks/useSelection'
 
+function localToday() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
 function Exhibitions() {
   const { canEdit } = useRole()
   const allowEdit = canEdit('/exhibitions')
@@ -28,6 +35,7 @@ function Exhibitions() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [exhibitionToDelete, setExhibitionToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const [warningModalOpen, setWarningModalOpen] = useState(false)
 
@@ -209,6 +217,11 @@ function Exhibitions() {
       return
     }
 
+    if (editingId === null && formData.StartDate < localToday()) {
+      setFormError('A new exhibition cannot start in the past.')
+      return
+    }
+
     if (formData.EndDate <= formData.StartDate) {
       setFormError('End Date must be after Start Date.')
       return
@@ -220,6 +233,17 @@ function Exhibitions() {
       capacity > 1400
     ) {
       setFormError('Capacity must be a whole number between 1 and 1400.')
+      return
+    }
+
+    const editing = exhibitions.find(
+      (exhibition) => exhibition.ExhibitionID === editingId
+    )
+
+    if (editing && capacity < editing.Tickets) {
+      setFormError(
+        `Capacity cannot be lower than the ${editing.Tickets} tickets already sold.`
+      )
       return
     }
 
@@ -344,6 +368,7 @@ function Exhibitions() {
   const handleDeleteSelected = () => {
     if (selectedExhibitions.length === 0) return
     setExhibitionToDelete(selectedExhibitions[0])
+    setDeleteError('')
     setDeleteModalOpen(true)
   }
 
@@ -358,7 +383,7 @@ function Exhibitions() {
       clear()
       setReloadCount((count) => count + 1)
     } catch (err) {
-      setFormError('Could not delete exhibition: ' + err.message)
+      setDeleteError('Could not delete exhibition: ' + err.message)
     } finally {
       setDeleting(false)
     }
@@ -658,6 +683,7 @@ function Exhibitions() {
               type="date"
               value={formData.StartDate}
               onChange={handleChange}
+              min={editingId === null ? localToday() : undefined}
               required
             />
           </div>
@@ -826,6 +852,12 @@ function Exhibitions() {
         onClose={() => setDeleteModalOpen(false)}
       >
         <div className="form-grid">
+          {deleteError && (
+            <p className="form-error form-full" role="alert">
+              {deleteError}
+            </p>
+          )}
+
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
             Are you sure you want to delete <strong>{exhibitionToDelete?.Name}</strong>? This action cannot be undone.
           </p>
