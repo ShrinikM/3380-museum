@@ -3,6 +3,9 @@ const {
   getTicketPrices,
   getTicketTypes,
   getMembershipTicketDiscount,
+  getMembershipLimits,
+  countMemberDiscounts,
+  countReservedSeats,
 } = require("../prices");
 const { joinCurrentTerm, activeTerm } = require("../terms");
 
@@ -136,7 +139,7 @@ function checkTicket(body, ticketPrices) {
 
 
 
-async function checkReferences(ticket) {
+async function checkReferences(ticket, ticketPrices, skipTicketId = null) {
   const [exhibitions] = await pool.query(
     `SELECT
        ExhibitionID,
@@ -192,11 +195,24 @@ async function checkReferences(ticket) {
       );
     }
 
-    const discount = getMembershipTicketDiscount(
+    let discount = getMembershipTicketDiscount(
       membership.MembershipType,
       membership.DiscountPercent,
       ticket.TicketType
     );
+
+    const used = await countMemberDiscounts(
+      pool,
+      ticket.MembershipID,
+      ticket.VisitDate,
+      ticketPrices,
+      skipTicketId
+    );
+    const limit = getMembershipLimits(membership.MembershipType)[ticket.TicketType] || 0;
+
+    if (used[ticket.TicketType] >= limit) {
+      discount = 0;
+    }
 
     ticket.CustomerID = Number(membership.CustomerID);
 
@@ -253,7 +269,25 @@ async function addTicket(params, body, staffId) {
   const ticketPrices = await getTicketPrices();
   const ticket = checkTicket(body, ticketPrices);
 
-  await checkReferences(ticket);
+  await checkReferences(ticket, ticketPrices);
+
+  const [capacity] = await pool.query(
+    `SELECT
+       e.Capacity - (
+         SELECT COUNT(*) FROM ticket t
+         WHERE t.ExhibitionID = e.ExhibitionID
+           AND t.IsDeleted = 0
+           AND t.RefundStatus <> 'Refunded'
+       ) AS Open
+     FROM exhibition e
+     WHERE e.ExhibitionID = ?`,
+    [ticket.ExhibitionID]
+  );
+  const reserved = await countReservedSeats(pool, ticket.ExhibitionID, ticket.CustomerID);
+
+  if (Number(capacity[0].Open) - reserved <= 0) {
+    throw makeError(400, "No seats left. Remaining seats are held for the waitlist.");
+  }
 
   const [result] = await pool.query(
     `INSERT INTO ticket
@@ -288,7 +322,7 @@ async function updateTicket(params, body) {
     throw makeError(404, "Ticket not found");
   }
 
-  await checkReferences(ticket);
+  await checkReferences(ticket, ticketPrices, id);
 
   await pool.query(
     `UPDATE ticket

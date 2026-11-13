@@ -4,6 +4,8 @@ const {
   getTicketTypes,
   membershipPlans,
   getMembershipLimits,
+  countMemberDiscounts,
+  countReservedSeats,
   getMembershipTicketDiscount,
   membershipTypes,
 } = require("../prices");
@@ -816,7 +818,7 @@ async function getPurchases(params, body, customerId) {
        t.IsDeleted = 0
          AND t.RefundStatus = 'None'
          AND e.CancelledAt IS NULL
-         AND e.EndDate >= CURDATE() AS CanRefund
+         AND COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS CanRefund
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
@@ -964,6 +966,12 @@ async function getExhibitions(params, body, customerId) {
            WHERE t.ExhibitionID = e.ExhibitionID
              AND t.IsDeleted = 0
              AND t.RefundStatus <> 'Refunded'
+         ) - (
+           SELECT COUNT(*)
+           FROM waitlist r
+           WHERE r.ExhibitionID = e.ExhibitionID
+             AND r.Status = 'Notified'
+             AND r.CustomerID <> ?
          ),
          0
        ) AS Remaining,
@@ -977,7 +985,8 @@ async function getExhibitions(params, body, customerId) {
      WHERE e.IsDeleted = 0
        AND e.CancelledAt IS NULL
        AND e.EndDate >= CURDATE()
-     ORDER BY e.StartDate, e.Name`
+     ORDER BY e.StartDate, e.Name`,
+    [customerId]
   );
 
   const [waitlist] = await pool.query(
@@ -1143,7 +1152,12 @@ async function addTickets(params, body, customerId) {
     }
 
     const sold = await countSold(connection, order.ExhibitionID);
-    const remaining = Number(exhibition.Capacity) - sold;
+    const reserved = await countReservedSeats(
+      connection,
+      order.ExhibitionID,
+      customerId
+    );
+    const remaining = Number(exhibition.Capacity) - sold - reserved;
 
     if (order.Count > remaining) {
       throw makeError(
@@ -1154,12 +1168,12 @@ async function addTickets(params, body, customerId) {
 
     let total = 0;
 
-    const discountedCounts = {
-      Adult: 0,
-      Child: 0,
-      Student: 0,
-      Senior: 0,
-    };
+    const discountedCounts = await countMemberDiscounts(
+      connection,
+      membershipID,
+      order.VisitDate,
+      ticketPrices
+    );
 
     for (const type of Object.keys(order.Counts)) {
       for (let i = 0; i < order.Counts[type]; i++) {
@@ -1260,7 +1274,7 @@ async function refundTicket(params, body, customerId) {
            t.Price,
            t.RefundStatus,
            e.CancelledAt IS NULL
-             AND e.EndDate >= CURDATE() AS CanRefund
+             AND COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS CanRefund
          FROM ticket t
          JOIN exhibition e
            ON e.ExhibitionID = t.ExhibitionID
@@ -1284,11 +1298,10 @@ async function refundTicket(params, body, customerId) {
       if (Number(ticket.CanRefund) !== 1) {
         throw makeError(
           400,
-          "Tickets can only be refunded while the exhibition is still open"
+          "Tickets can be refunded until the day before your visit"
         );
       }
 
-      // Soft-delete frees the seat for the waitlist trigger.
       await connection.query(
         `UPDATE ticket
          SET IsDeleted = 1, UpdatedAt = NOW()
@@ -1380,8 +1393,9 @@ async function joinWaitlist(params, body, customerId) {
     }
 
     const sold = await countSold(connection, exhibitionID);
+    const reserved = await countReservedSeats(connection, exhibitionID, customerId);
 
-    if (sold < Number(exhibitions[0].Capacity)) {
+    if (sold + reserved < Number(exhibitions[0].Capacity)) {
       throw makeError(400, "Tickets are still available for this exhibition");
     }
 

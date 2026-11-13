@@ -48,9 +48,12 @@ function getRanges(params) {
 
 async function getRevenue(start, end) {
   const [rows] = await pool.query(
-    `SELECT 'Tickets' AS Source, COALESCE(SUM(Price), 0) AS Revenue
+    `SELECT 'Tickets' AS Source, COALESCE(SUM(ticket.Price), 0) AS Revenue
      FROM ticket
-     WHERE IsDeleted = 0 AND RefundStatus <> 'Refunded' AND SaleDate >= ? AND SaleDate <= ?
+     JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
+     WHERE ticket.IsDeleted = 0 AND ticket.RefundStatus <> 'Refunded'
+       AND exhibition.IsDeleted = 0 AND exhibition.CancelledAt IS NULL
+       AND ticket.SaleDate >= ? AND ticket.SaleDate <= ?
      UNION ALL
      SELECT 'Gift Shop' AS Source, COALESCE(SUM(SalePrice * Quantity), 0) AS Revenue
      FROM giftshopsale
@@ -63,7 +66,8 @@ async function getRevenue(start, end) {
      SELECT 'Memberships' AS Source, COALESCE(SUM(term.Price), 0) AS Revenue
      FROM membershipterm term
      JOIN membership ON membership.MembershipID = term.MembershipID
-     WHERE membership.IsDeleted = 0 AND term.StartDate >= ? AND term.StartDate <= ?
+     WHERE membership.IsDeleted = 0 AND term.CancelledAt IS NULL
+       AND term.StartDate >= ? AND term.StartDate <= ?
      UNION ALL
      SELECT 'Donations' AS Source, COALESCE(SUM(AmountDonated), 0) AS Revenue
      FROM donations

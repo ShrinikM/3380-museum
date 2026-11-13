@@ -171,21 +171,53 @@ function Tickets() {
     return matchesSearch && matchesType && matchesExhibition
   })
 
+  const usedMemberDiscounts = (found, type, visitDate) => {
+    if (!found || !type || !visitDate) {
+      return 0
+    }
+
+    return tickets.filter((ticket) =>
+      Number(ticket.MembershipID) === Number(found.MembershipID) &&
+      ticket.VisitDate === visitDate &&
+      ticket.TicketType === type &&
+      ticket.TicketID !== editingId &&
+      ticket.RefundStatus !== 'Refunded' &&
+      Number(ticket.Price) < Number(ticketPrices[type])
+    ).length
+  }
+
+  const priceFor = (found, type, visitDate) => {
+    if (!type) {
+      return ''
+    }
+
+    const limits = membershipTicketLimits[found?.MembershipType] || {}
+    const discount = usedMemberDiscounts(found, type, visitDate) < (limits[type] || 0)
+      ? getMemberDiscount(found, type)
+      : 0
+
+    return getPrice(ticketPrices, type, discount)
+  }
+
   const handleChange = (e) => {
+    const { name, value } = e.target
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
+      ...(name === 'VisitDate'
+        ? { Price: priceFor(member, formData.TicketType, value) }
+        : {}),
     })
   }
 
   const handleTypeChange = (e) => {
     const value = e.target.value
-    const discount = getMemberDiscount(member, value)
 
     setFormData({
       ...formData,
       TicketType: value,
-      Price: value ? getPrice(ticketPrices, value, discount) : '',
+      Price: priceFor(member, value, formData.VisitDate),
     })
   }
 
@@ -232,13 +264,7 @@ function Tickets() {
       setFormData({
         ...formData,
         MembershipID: String(found.MembershipID),
-        Price: formData.TicketType
-          ? getPrice(
-              ticketPrices,
-              formData.TicketType,
-              getMemberDiscount(found, formData.TicketType)
-            )
-          : '',
+        Price: priceFor(found, formData.TicketType, formData.VisitDate),
       })
     } catch (err) {
       setLookupMessage(err.message)

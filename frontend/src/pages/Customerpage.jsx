@@ -16,6 +16,7 @@ const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
 const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
+const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
 function canBuyStudentTickets(membership) {
   if (membership === null || membership.Status?.toLowerCase() !== 'active') {
@@ -174,7 +175,7 @@ function MembershipTab({ account, onChanged }) {
     try {
       await callApi('/api/customer/membership/cancel', 'POST')
       setCancelModalOpen(false)
-      onChanged('Your membership has been cancelled.')
+      onChanged('Your membership has been cancelled and your payment will be refunded.')
     }
     catch (cancelError) {
       setCancelError(cancelError.message)
@@ -505,7 +506,7 @@ function MembershipTab({ account, onChanged }) {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to cancel your membership? This action cannot be undone.
+            Are you sure you want to cancel your membership? Your payment will be refunded and this cannot be undone.
           </p>
 
           <div className="form-actions">
@@ -552,6 +553,21 @@ function DetailsTab({ account, onUpdated }) {
   const handleSaveDetails = async (e) => {
     e.preventDefault()
     setDetailsError('')
+
+    if (!NAME_PATTERN.test(firstName.trim())) {
+      setDetailsError('First name can only contain letters, spaces, hyphens, or apostrophes.')
+      return
+    }
+
+    if (!NAME_PATTERN.test(lastName.trim())) {
+      setDetailsError('Last name can only contain letters, spaces, hyphens, or apostrophes.')
+      return
+    }
+
+    if (phone.trim() !== '' && phone.replace(/\D/g, '').length !== 10) {
+      setDetailsError('Phone number must have 10 digits.')
+      return
+    }
 
     if (!currentPassword) {
       setDetailsError('Please enter your current password to update your details.')
@@ -618,6 +634,7 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-first-name"
                 type="text"
+                maxLength={100}
                 value={firstName}
                 onChange={(e)=>setFirstName(e.target.value)}
                 required
@@ -628,6 +645,7 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-last-name"
                 type="text"
+                maxLength={100}
                 value={lastName}
                 onChange={(e)=>setLastName(e.target.value)}
                 required
@@ -651,8 +669,11 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-phone"
                 type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="10 digits"
                 value={phone}
-                onChange={(e)=>setPhone(e.target.value)}
+                onChange={(e)=>setPhone(e.target.value.replace(/\D/g, ''))}
               />
             </div>
           </div>
@@ -865,6 +886,7 @@ function PurchasesTab({ purchases, onChanged }) {
                   <th scope="col">Exhibition</th>
                   <th scope="col">Type</th>
                   <th scope="col">Price</th>
+                  <th scope="col">Payment</th>
                   <th scope="col">Bought</th>
                   <th scope="col">Visit Date</th>
                   <th scope="col">Status</th>
@@ -891,6 +913,7 @@ function PurchasesTab({ purchases, onChanged }) {
                     <td className="strong">{ticket.ExhibitionName}</td>
                     <td>{ticket.TicketType}</td>
                     <td>{money(ticket.Price)}</td>
+                    <td>{ticket.PaymentMethod || '-'}</td>
                     <td>{formatDate(ticket.SaleDate)}</td>
                     <td>
                       {ticket.VisitDate
@@ -997,10 +1020,11 @@ function PurchasesTab({ purchases, onChanged }) {
   )
 }
 
-function TicketsTab({ data, account, onBought }) {
+function TicketsTab({ data, account, purchases, onBought }) {
   const [exhibitionId, setExhibitionId] = useState(null)
   const [counts, setCounts] = useState({})
   const [visitDate, setVisitDate] = useState('')
+  const [ticketPayment, setTicketPayment] = useState('')
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
   const [waiting, setWaiting] = useState(false)
@@ -1053,8 +1077,33 @@ function TicketsTab({ data, account, onBought }) {
     }
   }
 
+  const usedDiscounts = {
+    Adult: 0,
+    Child: 0,
+    Student: 0,
+    Senior: 0,
+  }
+
+  if (visitDate) {
+    for (const ticket of purchases?.tickets || []) {
+      if (
+        ticket.VisitDate === visitDate &&
+        ticket.RefundStatus !== 'Refunded' &&
+        Number(ticket.Price) < Number(prices[ticket.TicketType])
+      ) {
+        usedDiscounts[ticket.TicketType] = (usedDiscounts[ticket.TicketType] || 0) + 1
+      }
+    }
+  }
+
+  const discountsLeft = {}
+
+  for (const type of Object.keys(discountedLimit)) {
+    discountsLeft[type] = Math.max(discountedLimit[type] - (usedDiscounts[type] || 0), 0)
+  }
+
   const priceFor = (type, index = 0) => {
-    const discount = index < (discountedLimit[type] || 0)
+    const discount = index < (discountsLeft[type] || 0)
       ? (discounts?.[type] ?? 0)
       : 0
 
@@ -1172,6 +1221,11 @@ function TicketsTab({ data, account, onBought }) {
       return
     }
 
+    if (!ONLINE_PAYMENTS.includes(ticketPayment)) {
+      setError('Please choose a payment method.')
+      return
+    }
+
     if ((counts.Student || 0) > 0 && askForStudentEmail && !schoolEmailOk) {
       setPendingStudentCount(null)
       setPendingWaitlistJoin(false)
@@ -1187,12 +1241,14 @@ function TicketsTab({ data, account, onBought }) {
       const result = await callApi('/api/customer/tickets', 'POST', {
         ExhibitionID: exhibitionId,
         VisitDate: visitDate,
+        PaymentMethod: ticketPayment,
         Tickets: counts,
         SchoolEmail: askForStudentEmail ? schoolEmail : undefined,
       })
 
       setCounts({})
       setVisitDate('')
+      setTicketPayment('')
       setExhibitionId(null)
       setSchoolEmail('')
       setSchoolEmailOk(false)
@@ -1395,7 +1451,11 @@ function TicketsTab({ data, account, onBought }) {
                 const count = counts[type] || 0
                 const memberLimit = isWaitlistMode
                   ? 0
-                  : discountedLimit[type] || 0
+                  : discountsLeft[type] || 0
+                const discountUsedUp =
+                  !isWaitlistMode &&
+                  (discountedLimit[type] || 0) > 0 &&
+                  memberLimit === 0
                 const memberCount = Math.min(count, memberLimit)
                 const regularCount = count - memberCount
                 const memberPrice = priceFor(type, 0)
@@ -1430,6 +1490,16 @@ function TicketsTab({ data, account, onBought }) {
                           money(regularPrice)
                         )}
                       </div>
+                      {memberLimit > 0 && !isWaitlistMode && (
+                        <div className="cp-price">
+                          Member price for {memberLimit} {memberLimit === 1 ? 'ticket' : 'tickets'} on this day
+                        </div>
+                      )}
+                      {discountUsedUp && (
+                        <div className="cp-price">
+                          Member discount already used for this day
+                        </div>
+                      )}
                     </div>
 
                     <Stepper
@@ -1447,6 +1517,25 @@ function TicketsTab({ data, account, onBought }) {
               <div className="cp-total">
                 <span>Total</span>
                 <strong>{money(totalPrice)}</strong>
+              </div>
+            )}
+
+            {!isWaitlistMode && (
+              <div className="form-group">
+                <label htmlFor="ticket-payment">Payment</label>
+                <select
+                  id="ticket-payment"
+                  value={ticketPayment}
+                  onChange={(event) => {
+                    setTicketPayment(event.target.value)
+                    setError('')
+                  }}
+                >
+                  <option value="">Choose a payment method</option>
+                  {ONLINE_PAYMENTS.map((method) => (
+                    <option key={method} value={method}>{method}</option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -1933,7 +2022,7 @@ function CustomerPage() {
       {!loadError && account === null && <p className="cp-empty">Loading...</p>}
 
       {account && tab === 'membership' && <MembershipTab account={account} onChanged={handleBought} />}
-      {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} account={account} onBought={handleBought} />}
+      {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} account={account} purchases={purchases} onBought={handleBought} />}
       {shopItems && tab === 'shop' && (
         <ShopTab items={shopItems} account={account} onBought={handleBought} />
       )}

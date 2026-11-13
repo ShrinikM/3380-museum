@@ -27,7 +27,6 @@ const membershipPlans = {
   },
 };
 
-// How many tickets of each type get the membership discount.
 const membershipTicketLimits = {
   Dual: { Adult: 2 },
   Family: { Adult: 2, Child: 2 },
@@ -84,7 +83,49 @@ function getMembershipTicketDiscount(membershipType, discountPercent, ticketType
   return Number(discountPercent) || 0;
 }
 
+async function countMemberDiscounts(db, membershipId, visitDate, ticketPrices, skipTicketId = null) {
+  const used = { Adult: 0, Child: 0, Student: 0, Senior: 0 };
+
+  if (membershipId === null || !visitDate) {
+    return used;
+  }
+
+  const [rows] = await db.query(
+    `SELECT TicketType, Price
+     FROM ticket
+     WHERE MembershipID = ?
+       AND VisitDate = ?
+       AND IsDeleted = 0
+       AND RefundStatus <> 'Refunded'
+       AND NOT (TicketID <=> ?)`,
+    [membershipId, visitDate, skipTicketId]
+  );
+
+  for (const row of rows) {
+    if (Number(row.Price) < Number(ticketPrices[row.TicketType])) {
+      used[row.TicketType] = (used[row.TicketType] || 0) + 1;
+    }
+  }
+
+  return used;
+}
+
+async function countReservedSeats(db, exhibitionId, customerId = null) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS Total
+     FROM waitlist
+     WHERE ExhibitionID = ?
+       AND Status = 'Notified'
+       AND NOT (CustomerID <=> ?)`,
+    [exhibitionId, customerId]
+  );
+
+  return Number(rows[0].Total);
+}
+
 module.exports = {
+  countMemberDiscounts,
+  countReservedSeats,
   getTicketPrices,
   getTicketTypes,
   membershipPlans,
