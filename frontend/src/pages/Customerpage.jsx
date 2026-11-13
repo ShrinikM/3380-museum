@@ -16,7 +16,6 @@ const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
 const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
-const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
 function canBuyStudentTickets(membership) {
   if (membership === null || membership.Status?.toLowerCase() !== 'active') {
@@ -160,7 +159,6 @@ function MembershipTab({ account, onChanged }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Custom cancel modal states
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelError, setCancelError] = useState('')
 
@@ -555,21 +553,6 @@ function DetailsTab({ account, onUpdated }) {
     e.preventDefault()
     setDetailsError('')
 
-    if (!NAME_PATTERN.test(firstName.trim())) {
-      setDetailsError('First name can only contain letters, spaces, hyphens, or apostrophes.')
-      return
-    }
-
-    if (!NAME_PATTERN.test(lastName.trim())) {
-      setDetailsError('Last name can only contain letters, spaces, hyphens, or apostrophes.')
-      return
-    }
-
-    if (phone.trim() !== '' && phone.replace(/\D/g, '').length !== 10) {
-      setDetailsError('Phone number must have 10 digits.')
-      return
-    }
-
     if (!currentPassword) {
       setDetailsError('Please enter your current password to update your details.')
       return
@@ -635,7 +618,6 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-first-name"
                 type="text"
-                maxLength={100}
                 value={firstName}
                 onChange={(e)=>setFirstName(e.target.value)}
                 required
@@ -646,7 +628,6 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-last-name"
                 type="text"
-                maxLength={100}
                 value={lastName}
                 onChange={(e)=>setLastName(e.target.value)}
                 required
@@ -660,7 +641,6 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-email"
                 type="email"
-                maxLength={255}
                 value={email}
                 onChange={(e)=>setEmail(e.target.value)}
                 required
@@ -671,11 +651,8 @@ function DetailsTab({ account, onUpdated }) {
               <input
                 id="edit-phone"
                 type="tel"
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="10 digits"
                 value={phone}
-                onChange={(e)=>setPhone(e.target.value.replace(/\D/g, ''))}
+                onChange={(e)=>setPhone(e.target.value)}
               />
             </div>
           </div>
@@ -888,7 +865,6 @@ function PurchasesTab({ purchases, onChanged }) {
                   <th scope="col">Exhibition</th>
                   <th scope="col">Type</th>
                   <th scope="col">Price</th>
-                  <th scope="col">Payment</th>
                   <th scope="col">Bought</th>
                   <th scope="col">Visit Date</th>
                   <th scope="col">Status</th>
@@ -915,7 +891,6 @@ function PurchasesTab({ purchases, onChanged }) {
                     <td className="strong">{ticket.ExhibitionName}</td>
                     <td>{ticket.TicketType}</td>
                     <td>{money(ticket.Price)}</td>
-                    <td>{ticket.PaymentMethod || '-'}</td>
                     <td>{formatDate(ticket.SaleDate)}</td>
                     <td>
                       {ticket.VisitDate
@@ -1026,7 +1001,6 @@ function TicketsTab({ data, account, onBought }) {
   const [exhibitionId, setExhibitionId] = useState(null)
   const [counts, setCounts] = useState({})
   const [visitDate, setVisitDate] = useState('')
-  const [ticketPayment, setTicketPayment] = useState('')
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
   const [waiting, setWaiting] = useState(false)
@@ -1198,11 +1172,6 @@ function TicketsTab({ data, account, onBought }) {
       return
     }
 
-    if (!ONLINE_PAYMENTS.includes(ticketPayment)) {
-      setError('Please choose a payment method.')
-      return
-    }
-
     if ((counts.Student || 0) > 0 && askForStudentEmail && !schoolEmailOk) {
       setPendingStudentCount(null)
       setPendingWaitlistJoin(false)
@@ -1218,14 +1187,12 @@ function TicketsTab({ data, account, onBought }) {
       const result = await callApi('/api/customer/tickets', 'POST', {
         ExhibitionID: exhibitionId,
         VisitDate: visitDate,
-        PaymentMethod: ticketPayment,
         Tickets: counts,
         SchoolEmail: askForStudentEmail ? schoolEmail : undefined,
       })
 
       setCounts({})
       setVisitDate('')
-      setTicketPayment('')
       setExhibitionId(null)
       setSchoolEmail('')
       setSchoolEmailOk(false)
@@ -1483,25 +1450,6 @@ function TicketsTab({ data, account, onBought }) {
               </div>
             )}
 
-            {!isWaitlistMode && (
-              <div className="form-group">
-                <label htmlFor="ticket-payment">Payment</label>
-                <select
-                  id="ticket-payment"
-                  value={ticketPayment}
-                  onChange={(event) => {
-                    setTicketPayment(event.target.value)
-                    setError('')
-                  }}
-                >
-                  <option value="">Choose a payment method</option>
-                  {ONLINE_PAYMENTS.map((method) => (
-                    <option key={method} value={method}>{method}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {isWaitlistMode && myWaitlistEntries.length > 0 && (
               <div className="cp-waitlist" style={{ marginBottom: '1rem' }}>
                 {myWaitlistEntries.map((entry) => (
@@ -1745,11 +1693,19 @@ function ShopTab({ items, account, onBought }) {
   )
 }
 
-function Notices({ purchases, waitlist, onLeave, onGo }) {
+function Notices({ purchases, waitlist, account, onLeave, onGo }) {
+  const acknowledgedKey = `acknowledged_alerts_${account?.customer?.CustomerID || 'guest'}`
+  const acknowledgedData = JSON.parse(localStorage.getItem(acknowledgedKey) || '{"exhibitions": [], "refunds": []}')
+
   const cancelled = []
 
   for (const ticket of purchases.tickets) {
-    if (ticket.RefundStatus !== 'Pending' || ticket.NotificationStatus !== 'Sent') {
+    const isCancelledExhibition = ticket.ExhibitionStatus === 'cancelled' || ticket.RefundStatus === 'Pending' || ticket.CancellationReason
+    if (!isCancelledExhibition) {
+      continue
+    }
+
+    if (acknowledgedData.exhibitions.includes(ticket.ExhibitionName)) {
       continue
     }
 
@@ -1761,7 +1717,7 @@ function Notices({ purchases, waitlist, onLeave, onGo }) {
     else {
       cancelled.push({
         name: ticket.ExhibitionName,
-        reason: ticket.CancellationReason,
+        reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
         count: 1,
       })
     }
@@ -1777,10 +1733,7 @@ function Notices({ purchases, waitlist, onLeave, onGo }) {
     <div className="cp-notices">
       {cancelled.map((item) => (
         <p key={item.name} className="cp-notice" role="status">
-          <strong>{item.name}</strong> was cancelled
-          {item.reason ? ` (${item.reason})` : ''}.
-          {' '}
-          Your {item.count} {item.count === 1 ? 'ticket is' : 'tickets are'} being refunded.
+          <strong>{item.name}</strong> was cancelled.
         </p>
       ))}
 
@@ -1818,6 +1771,9 @@ function CustomerPage() {
   const [loadError, setLoadError] = useState('')
   const [message, setMessage] = useState('')
 
+  const [customerModalOpen, setCustomerModalOpen] = useState(false)
+  const [customerAlerts, setCustomerAlerts] = useState({ cancelledExhibitions: [], refundedTickets: [] })
+
   const loadAll = useCallback(async () => {
     try {
       const [accountData, exhibitionData, items, purchaseData] = await Promise.all([
@@ -1841,6 +1797,74 @@ function CustomerPage() {
   useEffect(() => {
     loadAll()
   }, [loadAll])
+
+  useEffect(() => {
+    if (!purchases || !ticketData) return
+
+    const acknowledgedKey = `acknowledged_alerts_${account?.customer?.CustomerID || 'guest'}`
+    const acknowledgedData = JSON.parse(localStorage.getItem(acknowledgedKey) || '{"exhibitions": [], "refunds": []}')
+
+    const cancelled = []
+    for (const ticket of purchases.tickets) {
+      const isCancelledExhibition = ticket.ExhibitionStatus === 'cancelled' || ticket.RefundStatus === 'Pending' || ticket.CancellationReason
+      if (!isCancelledExhibition) {
+        continue
+      }
+
+      if (acknowledgedData.exhibitions.includes(ticket.ExhibitionName)) {
+        continue
+      }
+
+      const existing = cancelled.find((item) => item.name === ticket.ExhibitionName)
+      if (existing) {
+        existing.count = existing.count + 1
+      } else {
+        cancelled.push({
+          name: ticket.ExhibitionName,
+          reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
+          count: 1,
+        })
+      }
+    }
+
+    const refundedTix = (purchases.tickets || []).filter(
+      (tix) => tix.RefundStatus === 'Refunded' && !acknowledgedData.refunds.includes(tix.TicketID)
+    )
+
+    if (cancelled.length > 0 || refundedTix.length > 0) {
+      setCustomerAlerts({
+        cancelledExhibitions: cancelled,
+        refundedTickets: refundedTix,
+      })
+      setCustomerModalOpen(true)
+    }
+  }, [purchases, ticketData, account])
+
+  const handleAcknowledgeAlerts = () => {
+    const acknowledgedKey = `acknowledged_alerts_${account?.customer?.CustomerID || 'guest'}`
+    const currentStored = JSON.parse(localStorage.getItem(acknowledgedKey) || '{"exhibitions": [], "refunds": []}')
+
+    const newExhibitions = [
+      ...new Set([
+        ...currentStored.exhibitions,
+        ...customerAlerts.cancelledExhibitions.map((ex) => ex.name)
+      ])
+    ]
+
+    const newRefunds = [
+      ...new Set([
+        ...currentStored.refunds,
+        ...customerAlerts.refundedTickets.map((tix) => tix.TicketID)
+      ])
+    ]
+
+    localStorage.setItem(
+      acknowledgedKey,
+      JSON.stringify({ exhibitions: newExhibitions, refunds: newRefunds })
+    )
+
+    setCustomerModalOpen(false)
+  }
 
   const switchTab = (id) => {
     setTab(id)
@@ -1896,6 +1920,7 @@ function CustomerPage() {
         <Notices
           purchases={purchases}
           waitlist={ticketData.waitlist}
+          account={account}
           onLeave={handleLeave}
           onGo={() => switchTab('tickets')}
         />
@@ -1914,6 +1939,54 @@ function CustomerPage() {
       )}
       {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} onChanged={handleBought} />}
       {account && tab === 'details' && <DetailsTab account={account} onUpdated={handleBought} />}
+
+      <Modal
+        open={customerModalOpen}
+        title="Action Required"
+        onClose={handleAcknowledgeAlerts}
+      >
+        <div className="form-grid">
+          <p style={{ fontSize: '14px', color: 'var(--muted-foreground)', margin: '0 0 12px', gridColumn: '1 / -1' }}>
+            There are important updates regarding your bookings or exhibition schedule:
+          </p>
+
+          {customerAlerts.cancelledExhibitions?.length > 0 && (
+            <div style={{ gridColumn: '1 / -1', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '15px', color: '#dc2626', marginBottom: '6px' }}>Cancelled Exhibitions</h3>
+              <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                {customerAlerts.cancelledExhibitions.map((ex) => (
+                  <li key={ex.name} style={{ fontSize: '14px', marginBottom: '4px' }}>
+                    <strong>{ex.name}</strong> was cancelled.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {customerAlerts.refundedTickets?.length > 0 && (
+            <div style={{ gridColumn: '1 / -1', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '15px', color: '#dc2626', marginBottom: '6px' }}>Processed Refunds</h3>
+              <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                {customerAlerts.refundedTickets.map((tix) => (
+                  <li key={tix.TicketID} style={{ fontSize: '14px' }}>
+                    <strong>{tix.ExhibitionName || 'Ticket'}</strong> - Refund status: Processed
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="form-actions" style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleAcknowledgeAlerts}
+            >
+              Acknowledge & Close
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

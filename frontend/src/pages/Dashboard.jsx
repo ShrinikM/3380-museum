@@ -14,7 +14,7 @@ import {
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { STOCK_TARGET } from '../data/constants'
-import { Badge } from '../components/ui'
+import { Badge, Modal } from '../components/ui'
 
 
 const colors = ['#1a3c6e', '#c8962e', '#1a7b4e', '#b0271a', '#6b6a78']
@@ -132,6 +132,8 @@ function Dashboard() {
   const [giftLoading, setGiftLoading] = useState(true)
   const [giftError, setGiftError] = useState('')
 
+  const [staffModalOpen, setStaffModalOpen] = useState(false)
+
   const showRanges = user?.role !== 'Staff'
   const { start: startDate, end: endDate } = getRangeDates(rangeId)
 
@@ -173,10 +175,14 @@ function Dashboard() {
           throw new Error('The server returned an invalid gift shop response.')
         }
         if (!cancelled) {
-          setGiftItems(
-            data.map((item) => ({ ...item, Stock: Number(item.Stock) }))
-          )
+          const mappedItems = data.map((item) => ({ ...item, Stock: Number(item.Stock) }))
+          setGiftItems(mappedItems)
           setGiftError('')
+
+          const lowStockItems = mappedItems.filter((item) => isLowStock(item))
+          if (lowStockItems.length > 0) {
+            setStaffModalOpen(true)
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -195,6 +201,10 @@ function Dashboard() {
       cancelled = true
     }
   }, [user])
+
+  const handleAcknowledgeStaffAlerts = () => {
+    setStaffModalOpen(false)
+  }
 
   function renderRevenuePanel() {
     let total = 0
@@ -502,7 +512,7 @@ function Dashboard() {
   }
 
   function renderPanels() {
-    if (dashboard.role === 'Staff') {
+    if (user?.role === 'Staff') {
       return (
         <>
           {renderAssignedExhibitionsPanel()}
@@ -527,6 +537,8 @@ function Dashboard() {
       </>
     )
   }
+
+  const lowStockList = giftItems.filter((item) => isLowStock(item))
 
   return (
     <div className="page dashboard-page">
@@ -585,6 +597,38 @@ function Dashboard() {
           {renderPanels()}
         </>
       )}
+
+      <Modal
+        open={staffModalOpen}
+        title="Action Required: Low Stock Alert"
+        onClose={handleAcknowledgeStaffAlerts}
+      >
+        <div className="form-grid">
+          <p style={{ fontSize: '14px', color: 'var(--muted-foreground)', margin: '0 0 12px', gridColumn: '1 / -1' }}>
+            There are gift shop items running low on stock that require your attention:
+          </p>
+
+          <div style={{ gridColumn: '1 / -1', marginBottom: '12px' }}>
+            <ul style={{ paddingLeft: '20px', margin: 0 }}>
+              {lowStockList.map((item) => (
+                <li key={item.ItemID} style={{ fontSize: '14px', marginBottom: '6px' }}>
+                  <strong>{item.ItemName}</strong> has {item.Stock} left. Please place an order as soon as possible.
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="form-actions" style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleAcknowledgeStaffAlerts}
+            >
+              Acknowledge & Close
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
