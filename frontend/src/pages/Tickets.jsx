@@ -7,13 +7,6 @@ import { TablePager, usePagedList } from '../components/TablePager'
 
 const defaultTicketTypes = ['Adult', 'Senior', 'Student', 'Child']
 
-const membershipTicketLimits = {
-  Dual: { Adult: 2 },
-  Family: { Adult: 2, Child: 2 },
-  Student: { Adult: 2 },
-  Senior: { Senior: 2 },
-}
-
 const emptyForm = {
   ExhibitionID: '',
   TicketType: '',
@@ -24,13 +17,12 @@ const emptyForm = {
   MembershipID: '',
 }
 
-
-function getMemberDiscount(member, ticketType) {
+function getMemberDiscount(member, ticketType, membershipLimits) {
   if (!member || !ticketType) {
     return 0
   }
 
-  const limits = membershipTicketLimits[member.MembershipType] || {}
+  const limits = membershipLimits[member.MembershipType] || {}
 
   if (!limits[ticketType]) {
     return 0
@@ -55,6 +47,7 @@ function Tickets() {
   const [waitlists, setWaitlists] = useState([])
   const [exhibitions, setExhibitions] = useState([])
   const [ticketPrices, setTicketPrices] = useState({})
+  const [membershipLimits, setMembershipLimits] = useState({})
   const [paymentMethods, setPaymentMethods] = useState([])
   const [loadError, setLoadError] = useState('')
   const [formError, setFormError] = useState('')
@@ -85,15 +78,23 @@ function Tickets() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [ticketsData, exhibitionsData, refundsData, waitlistData, pricesData, paymentData] =
-          await Promise.all([
-            callApi('/api/tickets', 'GET'),
-            callApi('/api/exhibitions', 'GET'),
-            callApi('/api/tickets/refunds', 'GET'),
-            callApi('/api/tickets/waitlist', 'GET'),
-            callApi('/api/ticket-prices', 'GET'),
-            callApi('/api/payment-methods?for=ticket', 'GET'),
-          ])
+        const [
+          ticketsData,
+          exhibitionsData,
+          refundsData,
+          waitlistData,
+          pricesData,
+          plansData,
+          paymentData,
+        ] = await Promise.all([
+          callApi('/api/tickets', 'GET'),
+          callApi('/api/exhibitions', 'GET'),
+          callApi('/api/tickets/refunds', 'GET'),
+          callApi('/api/tickets/waitlist', 'GET'),
+          callApi('/api/ticket-prices', 'GET'),
+          callApi('/api/membership-prices', 'GET'),
+          callApi('/api/payment-methods?for=ticket', 'GET'),
+        ])
 
         setTickets(
           ticketsData.map((ticket) => ({
@@ -106,6 +107,11 @@ function Tickets() {
         setRefunds(refundsData)
         setWaitlists(waitlistData)
         setTicketPrices(pricesData)
+        setMembershipLimits(
+          Object.fromEntries(
+            plansData.map((plan) => [plan.MembershipType, plan.TicketLimits || {}])
+          )
+        )
         setPaymentMethods(paymentData)
         setLoadError('')
       } catch (err) {
@@ -202,10 +208,10 @@ function Tickets() {
       return ''
     }
 
-    const limits = membershipTicketLimits[found?.MembershipType] || {}
+    const limits = membershipLimits[found?.MembershipType] || {}
     const discount =
       usedMemberDiscounts(found, type, visitDate, exhibitionId) < (limits[type] || 0)
-        ? getMemberDiscount(found, type)
+        ? getMemberDiscount(found, type, membershipLimits)
         : 0
 
     return getPrice(ticketPrices, type, discount)

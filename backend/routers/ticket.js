@@ -3,6 +3,7 @@ const { getPaymentMethods } = require("../paymentMethods");
 const {
   getTicketPrices,
   getTicketTypes,
+  getMembershipPlans,
   getMembershipTicketDiscount,
   getMembershipLimits,
   countMemberDiscounts,
@@ -184,6 +185,7 @@ async function checkReferences(ticket, ticketPrices, skipTicketId = null) {
     }
 
     const membership = memberships[0];
+    const plans = await getMembershipPlans();
 
     if (
       ticket.TicketType === "Student" &&
@@ -196,6 +198,7 @@ async function checkReferences(ticket, ticketPrices, skipTicketId = null) {
     }
 
     let discount = getMembershipTicketDiscount(
+      plans,
       membership.MembershipType,
       membership.DiscountPercent,
       ticket.TicketType
@@ -209,7 +212,9 @@ async function checkReferences(ticket, ticketPrices, skipTicketId = null) {
       skipTicketId,
       ticket.ExhibitionID
     );
-    const limit = getMembershipLimits(membership.MembershipType)[ticket.TicketType] || 0;
+    const limit =
+      getMembershipLimits(plans, membership.MembershipType)[ticket.TicketType] ||
+      0;
 
     if (used[ticket.TicketType] >= limit) {
       discount = 0;

@@ -1,7 +1,7 @@
 const pool = require("../db");
 const { getPaymentMethods } = require("../paymentMethods");
 const { joinCurrentTerm, termStatus } = require("../terms");
-const { membershipPlans } = require("../prices");
+const { getMembershipPlans } = require("../prices");
 
 const APPROVED_SCHOOL_DOMAINS = ["cougarnet.uh.edu"];
 
@@ -128,7 +128,7 @@ function validateSchoolEmail(schoolEmail, membershipType) {
   return email;
 }
 
-function validateMembership(body, allowedPayments) {
+async function validateMembership(body, allowedPayments) {
   const {
     FirstName,
     LastName,
@@ -143,12 +143,8 @@ function validateMembership(body, allowedPayments) {
     FamilyMembers = [],
   } = body;
 
-  const allowedTypes = [
-    "Dual",
-    "Family",
-    "Student",
-    "Senior",
-  ];
+  const plans = await getMembershipPlans();
+  const allowedTypes = Object.keys(plans);
 
   if (
     typeof FirstName !== "string" ||
@@ -181,7 +177,7 @@ function validateMembership(body, allowedPayments) {
     throw makeError(400, "Invalid payment method.");
   }
 
-  const plan = membershipPlans[MembershipType];
+  const plan = plans[MembershipType];
 
   validateDate(StartDate, "start date");
   validateDate(EndDate, "end date");
@@ -448,6 +444,18 @@ async function addFamilyMembersToMemberships(rows, query = pool) {
   }));
 }
 
+async function getMembershipPrices() {
+  const plans = await getMembershipPlans();
+
+  return {
+    status: 200,
+    data: Object.keys(plans).map((type) => ({
+      MembershipType: type,
+      ...plans[type],
+    })),
+  };
+}
+
 async function getMemberships() {
   const [rows] = await pool.query(
     selectMemberships + " ORDER BY c.LastName, c.FirstName"
@@ -496,7 +504,7 @@ async function insertFamilyMembers(connection, membershipId, members) {
 
 async function addMembership(params, body, staffId) {
   const allowedPayments = await getPaymentMethods("membership");
-  const membership = validateMembership(body, allowedPayments);
+  const membership = await validateMembership(body, allowedPayments);
   const connection = await pool.getConnection();
 
   try {
@@ -655,7 +663,7 @@ async function addMembership(params, body, staffId) {
 async function updateMembership(params, body) {
   const id = checkId(params);
   const allowedPayments = await getPaymentMethods("membership");
-  const membership = validateMembership(body, allowedPayments);
+  const membership = await validateMembership(body, allowedPayments);
 
   await findMembership(id);
 
@@ -840,6 +848,11 @@ async function deleteMembership(params) {
 }
 
 module.exports = [
+  {
+    method: "GET",
+    path: "/api/membership-prices",
+    handler: getMembershipPrices,
+  },
   {
     method: "GET",
     path: "/api/memberships",

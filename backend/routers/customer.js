@@ -2,20 +2,17 @@ const pool = require("../db");
 const {
   getTicketPrices,
   getTicketTypes,
-  membershipPlans,
+  getMembershipPlans,
+  getMembershipTypes,
   getMembershipLimits,
   countMemberDiscounts,
   countReservedSeats,
   getMembershipTicketDiscount,
-  membershipTypes,
 } = require("../prices");
+const { getPaymentMethods } = require("../paymentMethods");
 const { joinCurrentTerm, termStatus } = require("../terms");
 const { hashPassword, checkPassword } = require("../passwords");
 const { startSession, endSessions } = require("../sessions");
-
-const onlinePayments = ["Credit Card", "Debit Card", "Mobile Pay"];
-
-const membershipPayments = ["Credit Card", "Debit Card"];
 
 const waitlistLimit = 10;
 
@@ -499,12 +496,13 @@ async function checkStudentTicketAccess(membership, counts, schoolEmail, exhibit
   return email;
 }
 
-function getTicketDiscount(membership, ticketType) {
+function getTicketDiscount(membership, ticketType, plans) {
   if (membership === null || membership.Status !== "active") {
     return 0;
   }
 
   return getMembershipTicketDiscount(
+    plans,
     membership.MembershipType,
     membership.DiscountPercent,
     ticketType
@@ -512,12 +510,13 @@ function getTicketDiscount(membership, ticketType) {
 }
 
 
-function getStoreDiscount(membership, kind) {
+async function getStoreDiscount(membership, kind) {
   if (membership === null || membership.Status !== "active") {
     return 0;
   }
 
-  const plan = membershipPlans[membership.MembershipType];
+  const plans = await getMembershipPlans();
+  const plan = plans[membership.MembershipType];
 
   if (!plan) {
     return 0;
@@ -565,10 +564,11 @@ async function countSold(connection, exhibitionId, visitDate) {
 async function getAccount(params, body, customerId) {
   const customer = await findCustomer(customerId);
   const membership = await findMembership(customerId);
+  const plans = await getMembershipPlans();
   const plan =
     membership === null
       ? null
-      : membershipPlans[membership.MembershipType] || null;
+      : plans[membership.MembershipType] || null;
 
   if (membership !== null && plan !== null) {
     membership.GiftShopDiscount = Number(plan.GiftShopDiscount);
@@ -581,9 +581,9 @@ async function getAccount(params, body, customerId) {
       customer: customer,
       membership: membership,
       terms: membership === null ? [] : await findTerms(membership.MembershipID),
-      plans: membershipTypes.map((type) => ({
+      plans: getMembershipTypes(plans).map((type) => ({
         MembershipType: type,
-        ...membershipPlans[type],
+        ...plans[type],
       })),
     },
   };
@@ -637,12 +637,12 @@ function todayStamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function checkRenewal(body) {
-  if (!membershipTypes.includes(body.MembershipType)) {
+function checkRenewal(body, plans, paymentMethods) {
+  if (!getMembershipTypes(plans).includes(body.MembershipType)) {
     throw makeError(400, "Please select a membership plan");
   }
 
-  if (!membershipPayments.includes(body.PaymentMethod)) {
+  if (!paymentMethods.includes(body.PaymentMethod)) {
     throw makeError(400, "Please select a valid payment method");
   }
 
@@ -698,7 +698,9 @@ function checkRenewal(body) {
 
 async function renewMembership(params, body, customerId) {
   await findCustomer(customerId);
-  const renewal = checkRenewal(body);
+  const plans = await getMembershipPlans();
+  const paymentMethods = await getPaymentMethods("online_membership");
+  const renewal = checkRenewal(body, plans, paymentMethods);
   const membership = await findMembership(customerId);
 
   if (
@@ -709,7 +711,7 @@ async function renewMembership(params, body, customerId) {
     throw makeError(400, `You are already on the ${renewal.MembershipType} plan`);
   }
 
-  const plan = membershipPlans[renewal.MembershipType];
+  const plan = plans[renewal.MembershipType];
   const connection = await pool.getConnection();
 
   try {
@@ -966,6 +968,7 @@ async function getExhibitions(params, body, customerId) {
   await findCustomer(customerId);
   const membership = await findMembership(customerId);
   const ticketPrices = await getTicketPrices();
+  const plans = await getMembershipPlans();
   const visitDate =
     typeof params.visitDate === "string" && isValidDate(params.visitDate)
       ? params.visitDate
@@ -1093,7 +1096,7 @@ async function getExhibitions(params, body, customerId) {
       discounts: Object.fromEntries(
         getTicketTypes(ticketPrices).map((type) => [
           type,
-          getTicketDiscount(membership, type),
+          getTicketDiscount(membership, type, plans),
         ])
       ),
       waitlistLimit: waitlistLimit,
@@ -1103,7 +1106,7 @@ async function getExhibitions(params, body, customerId) {
 
 
 
-function checkTicketOrder(body, ticketTypes) {
+function checkTicketOrder(body, ticketTypes, paymentMethods) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw makeError(400, "Invalid ticket order");
   }
@@ -1149,7 +1152,7 @@ function checkTicketOrder(body, ticketTypes) {
     throw makeError(400, "Please choose at least one ticket");
   }
 
-  if (!onlinePayments.includes(body.PaymentMethod)) {
+  if (!paymentMethods.includes(body.PaymentMethod)) {
     throw makeError(400, "Please choose a payment method");
   }
 
@@ -1169,7 +1172,9 @@ async function addTickets(params, body, customerId) {
 
   const ticketPrices = await getTicketPrices();
   const ticketTypes = getTicketTypes(ticketPrices);
-  const order = checkTicketOrder(body, ticketTypes);
+  const paymentMethods = await getPaymentMethods("online");
+  const plans = await getMembershipPlans();
+  const order = checkTicketOrder(body, ticketTypes, paymentMethods);
   const membership = await findMembership(customerId);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
@@ -1252,10 +1257,10 @@ async function addTickets(params, body, customerId) {
 
     for (const type of Object.keys(order.Counts)) {
       for (let i = 0; i < order.Counts[type]; i++) {
-        let discount = getTicketDiscount(membership, type);
+        let discount = getTicketDiscount(membership, type, plans);
 
         if (membership !== null && membership.Status === "active") {
-          const limits = getMembershipLimits(membership.MembershipType);
+          const limits = getMembershipLimits(plans, membership.MembershipType);
           const limit = limits[type] || 0;
 
           if (discountedCounts[type] >= limit) {
@@ -1587,8 +1592,8 @@ async function getShop() {
   };
 }
 
-function checkShopOrder(body) {
-  if (!onlinePayments.includes(body.PaymentMethod)) {
+function checkShopOrder(body, paymentMethods) {
+  if (!paymentMethods.includes(body.PaymentMethod)) {
     throw makeError(400, "Please select a valid payment method");
   }
 
@@ -1633,7 +1638,8 @@ function checkShopOrder(body) {
 
 async function addShopOrder(params, body, customerId) {
   await findCustomer(customerId);
-  const order = checkShopOrder(body);
+  const paymentMethods = await getPaymentMethods("online");
+  const order = checkShopOrder(body, paymentMethods);
   const membership = await findMembership(customerId);
   const membershipID = getActiveMembershipID(membership);
   const connection = await pool.getConnection();
@@ -1662,7 +1668,7 @@ async function addShopOrder(params, body, customerId) {
         throw makeError(400, `Not enough stock for ${item.ItemName}`);
       }
 
-      const shopDiscount = getStoreDiscount(membership, "giftshop");
+      const shopDiscount = await getStoreDiscount(membership, "giftshop");
       const salePrice = money(
         Number(item.Price) * (1 - shopDiscount / 100)
       );

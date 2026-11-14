@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { callApi } from '../api'
 import './DonatePage.css'
 
@@ -7,7 +7,6 @@ const AMOUNTS = [500, 250, 100, 50, 25, 10]
 const MIN_AMOUNT = 10
 const MAX_AMOUNT = 999999.99
 const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
-const PAYMENTS = ['Credit Card', 'Debit Card', 'Bank Transfer']
 
 const emptyForm = {
   FirstName: '',
@@ -23,11 +22,18 @@ function DonatePage(){
   const [preset, setPreset] = useState(null)
   const [custom, setCustom] = useState('')
   const [form, setForm] = useState(emptyForm)
+  const [paymentMethods, setPaymentMethods] = useState([])
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(null)
 
   const amount = custom !== '' ? Number(custom) : preset
+
+  useEffect(() => {
+    callApi('/api/payment-methods?for=online_donation', 'GET')
+      .then(setPaymentMethods)
+      .catch(() => setPaymentMethods([]))
+  }, [])
 
   const handleChange = (e)=>{
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -176,7 +182,7 @@ function DonatePage(){
                 <label htmlFor="dn-payment">Payment method</label>
                 <select id="dn-payment" name="PaymentMethod" value={form.PaymentMethod} onChange={handleChange}>
                   <option value="">Choose one</option>
-                  {PAYMENTS.map((method)=>(
+                  {paymentMethods.map((method)=>(
                     <option key={method} value={method}>{method}</option>
                   ))}
                 </select>

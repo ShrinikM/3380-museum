@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useRole } from '../context/role'
-import { DEFAULT_TICKET_PRICES, DEFAULT_MEMBERSHIP_PRICES } from '../data/constants'
+import { callApi } from '../api'
 import './AboutPage.css'
 import './Plans.css'
 
@@ -24,52 +25,43 @@ const HOURS = [
   { day: 'Sunday', time: '12 pm - 9 pm' },
 ]
 
-const PLANS = [
-  {
-    type: 'Dual',
-    price: 75,
-    perks: [
-      '2 Adult tickets at 25% off',
-      '15% off CoogCafe',
-      '15% off gift shop items',
-    ],
+const PLAN_DETAILS = {
+  Dual: {
+    ticketPerk: (percent) => `2 Adult tickets at ${percent}% off`,
+    extras: [],
   },
-  {
-    type: 'Family',
-    price: 150,
-    perks: [
-      '2 Adult and 2 Child tickets at 25% off',
-      'Children under 5 always visit free',
-      '15% off CoogCafe',
-      '15% off gift shop items',
-    ],
+  Family: {
+    ticketPerk: (percent) => `2 Adult and 2 Child tickets at ${percent}% off`,
+    extras: ['Children under 5 always visit free'],
   },
-  {
-    type: 'Student',
-    price: 40,
-    perks: [
-      '2 Student tickets at 35% off',
-      '20% off CoogCafe',
-      '20% off gift shop items',
-      'Lowest yearly price',
-    ],
+  Student: {
+    ticketPerk: (percent) => `2 Student tickets at ${percent}% off`,
+    extras: ['Lowest yearly price'],
   },
-  {
-    type: 'Senior',
-    price: 60,
-    perks: [
-      '2 Senior tickets at 30% off',
-      '20% off CoogCafe',
-      '20% off gift shop items',
-      'For visitors 65 and older',
-    ],
+  Senior: {
+    ticketPerk: (percent) => `2 Senior tickets at ${percent}% off`,
+    extras: ['For visitors 65 and older'],
   },
-]
+}
 
 const HAND = `${import.meta.env.BASE_URL}images/coog-hand.png`
 
 function formatPrice(value){
   return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`
+}
+
+function planPerks(plan){
+  const details = PLAN_DETAILS[plan.MembershipType] || {
+    ticketPerk: (percent) => `Exhibition tickets at ${percent}% off`,
+    extras: [],
+  }
+
+  return [
+    details.ticketPerk(plan.DiscountPercent),
+    `${plan.CafeDiscount}% off CoogCafe`,
+    `${plan.GiftShopDiscount}% off gift shop items`,
+    ...details.extras,
+  ]
 }
 
 function useAccountLink(tab){
@@ -96,8 +88,12 @@ function InfoCard({ label, title, children, note, action, tab }){
   )
 }
 
-function MembershipPlans(){
+function MembershipPlans({ plans }){
   const to = useAccountLink('membership')
+
+  if (plans.length === 0) {
+    return null
+  }
 
   return (
     <section className="ab-plans">
@@ -108,15 +104,15 @@ function MembershipPlans(){
       </div>
 
       <div className="ab-plan-grid">
-        {PLANS.map((plan)=>(
-          <article key={plan.type} className="ab-plan">
+        {plans.map((plan)=>(
+          <article key={plan.MembershipType} className="ab-plan">
             <div className="ab-plan-top">
-              <h3>{plan.type}</h3>
-              <span className="ab-plan-price">${plan.price}</span>
+              <h3>{plan.MembershipType}</h3>
+              <span className="ab-plan-price">{formatPrice(plan.Price)}</span>
             </div>
 
             <ul className="ab-plan-perks">
-              {plan.perks.map((perk)=>(
+              {planPerks(plan).map((perk)=>(
                 <li key={perk}>{perk}</li>
               ))}
             </ul>
@@ -134,6 +130,18 @@ function MembershipPlans(){
 function AboutPage(){
   const today = HOURS[(new Date().getDay() + 6) % 7]
   const isOpen = today.time !== 'Closed'
+  const [membershipPlans, setMembershipPlans] = useState([])
+  const [ticketPrices, setTicketPrices] = useState({})
+
+  useEffect(() => {
+    callApi('/api/membership-prices', 'GET')
+      .then((data) => setMembershipPlans(data))
+      .catch(() => setMembershipPlans([]))
+
+    callApi('/api/ticket-prices', 'GET')
+      .then((data) => setTicketPrices(data))
+      .catch(() => setTicketPrices({}))
+  }, [])
 
   return (
     <div className="ab-page">
@@ -186,7 +194,7 @@ function AboutPage(){
           action="Buy Tickets"
           tab="tickets"
         >
-          {Object.entries(DEFAULT_TICKET_PRICES).map(([type, price])=>(
+          {Object.entries(ticketPrices).map(([type, price])=>(
             <li key={type} className="ab-row">
               <span>{type}</span>
               <span className="ab-price">{formatPrice(price)}</span>
@@ -200,11 +208,11 @@ function AboutPage(){
           action="Become a Member"
           tab="membership"
         >
-          {Object.entries(DEFAULT_MEMBERSHIP_PRICES).map(([type, price])=>(
-            <li key={type} className="ab-row">
-              <span>{type}</span>
+          {membershipPlans.map((plan)=>(
+            <li key={plan.MembershipType} className="ab-row">
+              <span>{plan.MembershipType}</span>
               <span className="ab-price">
-                {formatPrice(price)}
+                {formatPrice(plan.Price)}
                 <span className="ab-suffix">/ year</span>
               </span>
             </li>
@@ -212,7 +220,7 @@ function AboutPage(){
         </InfoCard>
       </div>
 
-      <MembershipPlans />
+      <MembershipPlans plans={membershipPlans} />
     </div>
   )
 }

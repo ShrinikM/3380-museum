@@ -1132,6 +1132,43 @@ INSERT INTO `ticketprice` VALUES ('Adult',25.00,'2026-11-03 19:56:09'),('Child',
 UNLOCK TABLES;
 
 --
+-- Table structure for table `membershipprice`
+--
+
+DROP TABLE IF EXISTS `membershipprice`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `membershipprice` (
+  `MembershipType` varchar(255) NOT NULL,
+  `Price` decimal(8,2) NOT NULL,
+  `DiscountPercent` decimal(5,2) NOT NULL DEFAULT '0.00',
+  `GiftShopDiscount` decimal(5,2) NOT NULL DEFAULT '0.00',
+  `CafeDiscount` decimal(5,2) NOT NULL DEFAULT '0.00',
+  `CreatedAt` datetime NOT NULL,
+  `UpdatedAt` datetime NOT NULL,
+  `CreatedBy` bigint unsigned DEFAULT NULL,
+  PRIMARY KEY (`MembershipType`),
+  KEY `fk_membershipprice_createdby` (`CreatedBy`),
+  CONSTRAINT `fk_membershipprice_createdby` FOREIGN KEY (`CreatedBy`) REFERENCES `staff` (`StaffID`),
+  CONSTRAINT `chk_membershipprice_price` CHECK ((`Price` > 0)),
+  CONSTRAINT `chk_membershipprice_discount` CHECK ((`DiscountPercent` between 0 and 100)),
+  CONSTRAINT `chk_membershipprice_giftshop` CHECK ((`GiftShopDiscount` between 0 and 100)),
+  CONSTRAINT `chk_membershipprice_cafe` CHECK ((`CafeDiscount` between 0 and 100)),
+  CONSTRAINT `chk_membershipprice_type` CHECK ((`MembershipType` in (_utf8mb4'Dual',_utf8mb4'Family',_utf8mb4'Student',_utf8mb4'Senior')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `membershipprice`
+--
+
+LOCK TABLES `membershipprice` WRITE;
+/*!40000 ALTER TABLE `membershipprice` DISABLE KEYS */;
+INSERT INTO `membershipprice` VALUES ('Dual',75.00,25.00,15.00,15.00,NOW(),NOW(),NULL),('Family',150.00,25.00,15.00,15.00,NOW(),NOW(),NULL),('Student',40.00,35.00,20.00,20.00,NOW(),NOW(),NULL),('Senior',60.00,30.00,20.00,20.00,NOW(),NOW(),NULL);
+/*!40000 ALTER TABLE `membershipprice` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `waitlist`
 --
 

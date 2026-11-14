@@ -1,45 +1,30 @@
 const pool = require("./db");
 
-const membershipPlans = {
-  Dual: {
-    Price: 75,
-    DiscountPercent: 25,
-    GiftShopDiscount: 15,
-    CafeDiscount: 15,
-  },
-  Family: {
-    Price: 150,
-    DiscountPercent: 25,
-    GiftShopDiscount: 15,
-    CafeDiscount: 15,
-  },
-  Student: {
-    Price: 40,
-    DiscountPercent: 35,
-    GiftShopDiscount: 20,
-    CafeDiscount: 20,
-  },
-  Senior: {
-    Price: 60,
-    DiscountPercent: 30,
-    GiftShopDiscount: 20,
-    CafeDiscount: 20,
-  },
-};
-
-const membershipTicketLimits = {
-  Dual: { Adult: 2 },
-  Family: { Adult: 2, Child: 2 },
-  Student: { Adult: 2 },
-  Senior: { Senior: 2 },
-};
-
-const membershipTypes = Object.keys(membershipPlans);
+const ticketLimitColumns = [
+  ["Adult", "AdultTicketLimit"],
+  ["Child", "ChildTicketLimit"],
+  ["Student", "StudentTicketLimit"],
+  ["Senior", "SeniorTicketLimit"],
+];
 
 function makeError(status, message) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+function ticketLimitsFromRow(row) {
+  const limits = {};
+
+  for (const [ticketType, column] of ticketLimitColumns) {
+    const limit = Number(row[column]) || 0;
+
+    if (limit > 0) {
+      limits[ticketType] = limit;
+    }
+  }
+
+  return limits;
 }
 
 async function getTicketPrices() {
@@ -69,12 +54,59 @@ function getTicketTypes(prices) {
   return Object.keys(prices);
 }
 
-function getMembershipLimits(membershipType) {
-  return membershipTicketLimits[membershipType] || {};
+async function getMembershipPlans() {
+  const [rows] = await pool.query(
+    `SELECT
+       MembershipType,
+       Price,
+       DiscountPercent,
+       GiftShopDiscount,
+       CafeDiscount,
+       AdultTicketLimit,
+       ChildTicketLimit,
+       StudentTicketLimit,
+       SeniorTicketLimit
+     FROM membershipprice
+     ORDER BY FIELD(MembershipType, 'Dual', 'Family', 'Student', 'Senior')`
+  );
+
+  if (rows.length === 0) {
+    throw makeError(
+      500,
+      "Membership prices are not set up in the database. Run backend/schema/membershipprice.sql."
+    );
+  }
+
+  const plans = {};
+
+  for (const row of rows) {
+    plans[row.MembershipType] = {
+      Price: Number(row.Price),
+      DiscountPercent: Number(row.DiscountPercent),
+      GiftShopDiscount: Number(row.GiftShopDiscount),
+      CafeDiscount: Number(row.CafeDiscount),
+      TicketLimits: ticketLimitsFromRow(row),
+    };
+  }
+
+  return plans;
 }
 
-function getMembershipTicketDiscount(membershipType, discountPercent, ticketType) {
-  const limits = getMembershipLimits(membershipType);
+function getMembershipTypes(plans) {
+  return Object.keys(plans);
+}
+
+function getMembershipLimits(plans, membershipType) {
+  return plans[membershipType]?.TicketLimits || {};
+}
+
+function getMembershipTicketDiscount(
+  plans,
+  membershipType,
+  discountPercent,
+  ticketType
+) {
+  const limits = getMembershipLimits(plans, membershipType);
 
   if (!limits[ticketType]) {
     return 0;
@@ -136,9 +168,8 @@ module.exports = {
   countReservedSeats,
   getTicketPrices,
   getTicketTypes,
-  membershipPlans,
-  membershipTicketLimits,
-  membershipTypes,
+  getMembershipPlans,
+  getMembershipTypes,
   getMembershipLimits,
   getMembershipTicketDiscount,
 };

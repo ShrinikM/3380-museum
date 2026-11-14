@@ -1,5 +1,6 @@
 const pool = require("../db");
-const { membershipPlans } = require("../prices");
+const { getMembershipPlans } = require("../prices");
+const { getPaymentMethods } = require("../paymentMethods");
 const { joinCurrentTerm, activeTerm } = require("../terms");
 
 const storeTypes = {
@@ -16,13 +17,6 @@ const storeTypes = {
     buyer: "member.CustomerID",
   },
 };
-
-const paymentMethods = [
-  "Cash",
-  "Credit Card",
-  "Debit Card",
-  "Mobile Pay",
-];
 
 function makeError(status, message) {
   const error = new Error(message);
@@ -129,7 +123,7 @@ function checkItem(body, kind) {
   return item;
 }
 
-function checkSale(body) {
+function checkSale(body, paymentMethods) {
   const itemID = checkPositiveId(body.ItemID, "item");
   const staffID = checkPositiveId(body.StaffID, "staff member");
   const quantity = Number(body.Quantity);
@@ -192,8 +186,13 @@ async function checkStaff(connection, staffID, kind) {
   }
 }
 
-function storeSalePrice(basePrice, membershipType, kind) {
-  const plan = membershipPlans[membershipType];
+async function storeSalePrice(basePrice, membershipType, kind) {
+  if (!membershipType) {
+    return Number(Number(basePrice).toFixed(2));
+  }
+
+  const plans = await getMembershipPlans();
+  const plan = plans[membershipType];
 
   if (!plan) {
     return Number(Number(basePrice).toFixed(2));
@@ -534,7 +533,8 @@ async function deleteItem(params, body, kind) {
 // CREATE SALE
 async function addSale(params, body, kind, actorId) {
   const store = getStore(kind);
-  const sale = checkSale(body);
+  const paymentMethods = await getPaymentMethods("store");
+  const sale = checkSale(body, paymentMethods);
   const connection = await pool.getConnection();
 
   try {
@@ -574,7 +574,7 @@ async function addSale(params, body, kind, actorId) {
         ${kind === "giftshop" ? ", ?" : ""})`,
       [
         sale.ItemID,
-        storeSalePrice(
+        await storeSalePrice(
           item.Price,
           member ? member.MembershipType : null,
           kind
@@ -611,7 +611,8 @@ async function addSale(params, body, kind, actorId) {
 async function updateSale(params, body, kind) {
   const id = checkId(params);
   const store = getStore(kind);
-  const sale = checkSale(body);
+  const paymentMethods = await getPaymentMethods("store");
+  const sale = checkSale(body, paymentMethods);
   const connection = await pool.getConnection();
 
   try {
@@ -700,7 +701,7 @@ async function updateSale(params, body, kind) {
        WHERE SaleID = ? AND IsDeleted = 0`,
       [
         sale.ItemID,
-        storeSalePrice(
+        await storeSalePrice(
           newItem.Price,
           member ? member.MembershipType : null,
           kind

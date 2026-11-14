@@ -13,8 +13,6 @@ const TABS = [
   { id: 'details', label: 'My Details' },
 ]
 
-const ONLINE_PAYMENTS = ['Credit Card', 'Debit Card', 'Mobile Pay']
-const MEMBERSHIP_PAYMENTS = ['Credit Card', 'Debit Card']
 const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
 const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
@@ -156,6 +154,7 @@ function MembershipTab({ account, onChanged }) {
   const [renewing, setRenewing] = useState(false)
   const [plan, setPlan] = useState('')
   const [payment, setPayment] = useState('')
+  const [membershipPayments, setMembershipPayments] = useState([])
   const [schoolEmail, setSchoolEmail] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [error, setError] = useState('')
@@ -163,6 +162,12 @@ function MembershipTab({ account, onChanged }) {
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [cancelError, setCancelError] = useState('')
+
+  useEffect(() => {
+    callApi('/api/payment-methods?for=online_membership', 'GET')
+      .then(setMembershipPayments)
+      .catch(() => setMembershipPayments([]))
+  }, [])
 
   const handleCancelClick = () => {
     setCancelError('')
@@ -264,6 +269,12 @@ function MembershipTab({ account, onChanged }) {
   const isActive = hasMembership && membership.Status === 'active'
   const canCancel = isActive || (hasMembership && membership.Status === 'upcoming')
   const selectedPlan = plans.find((item) => item.MembershipType === plan)
+  const {
+    visibleRows: historyRows,
+    page: historyPage,
+    total: historyTotal,
+    setPage: setHistoryPage,
+  } = usePagedList(terms, membership?.MembershipID || 'none')
 
   const picker = (
     <section className="cp-card">
@@ -343,7 +354,7 @@ function MembershipTab({ account, onChanged }) {
           }}
         >
           <option value="">Choose a payment method</option>
-          {MEMBERSHIP_PAYMENTS.map((method) => (
+          {membershipPayments.map((method) => (
             <option key={method} value={method}>{method}</option>
           ))}
         </select>
@@ -476,7 +487,7 @@ function MembershipTab({ account, onChanged }) {
               </tr>
             </thead>
             <tbody>
-              {terms.map((term) => (
+              {historyRows.map((term) => (
                 <tr key={term.TermID}>
                   <td className="strong">{term.MembershipType}</td>
                   <td>{formatDate(term.StartDate)} - {formatDate(term.EndDate)}</td>
@@ -492,6 +503,12 @@ function MembershipTab({ account, onChanged }) {
             </tbody>
           </table>
         </div>
+
+        <TablePager
+          page={historyPage}
+          total={historyTotal}
+          onChange={setHistoryPage}
+        />
       </section>
 
       <Modal
@@ -1050,6 +1067,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
   const [counts, setCounts] = useState({})
   const [visitDate, setVisitDate] = useState('')
   const [ticketPayment, setTicketPayment] = useState('')
+  const [onlinePayments, setOnlinePayments] = useState([])
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
   const [waiting, setWaiting] = useState(false)
@@ -1060,6 +1078,12 @@ function TicketsTab({ data, account, purchases, onBought }) {
   const [pendingStudentCount, setPendingStudentCount] = useState(null)
   const [pendingWaitlistJoin, setPendingWaitlistJoin] = useState(false)
   const [exhibitions, setExhibitions] = useState(data.exhibitions)
+
+  useEffect(() => {
+    callApi('/api/payment-methods?for=online', 'GET')
+      .then(setOnlinePayments)
+      .catch(() => setOnlinePayments([]))
+  }, [])
 
   useEffect(() => {
     setExhibitions(data.exhibitions)
@@ -1120,16 +1144,10 @@ function TicketsTab({ data, account, purchases, onBought }) {
   }
 
   if (membership?.Status?.toLowerCase() === 'active') {
-    if (membership.MembershipType === 'Dual') {
-      discountedLimit.Adult = 2
-    } else if (membership.MembershipType === 'Family') {
-      discountedLimit.Adult = 2
-      discountedLimit.Child = 2
-    } else if (membership.MembershipType === 'Student') {
-      discountedLimit.Adult = 2
-    } else if (membership.MembershipType === 'Senior') {
-      discountedLimit.Senior = 20
-    }
+    const plan = account?.plans?.find(
+      (item) => item.MembershipType === membership.MembershipType
+    )
+    Object.assign(discountedLimit, plan?.TicketLimits || {})
   }
 
   const usedDiscounts = {
@@ -1281,7 +1299,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
       return
     }
 
-    if (!ONLINE_PAYMENTS.includes(ticketPayment)) {
+    if (!onlinePayments.includes(ticketPayment)) {
       setError('Please choose a payment method.')
       return
     }
@@ -1604,7 +1622,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
                   }}
                 >
                   <option value="">Choose a payment method</option>
-                  {ONLINE_PAYMENTS.map((method) => (
+                  {onlinePayments.map((method) => (
                     <option key={method} value={method}>{method}</option>
                   ))}
                 </select>
@@ -1700,8 +1718,15 @@ function TicketsTab({ data, account, purchases, onBought }) {
 function ShopTab({ items, account, onBought }) {
   const [cart, setCart] = useState({})
   const [payment, setPayment] = useState('')
+  const [onlinePayments, setOnlinePayments] = useState([])
   const [error, setError] = useState('')
   const [buying, setBuying] = useState(false)
+
+  useEffect(() => {
+    callApi('/api/payment-methods?for=online', 'GET')
+      .then(setOnlinePayments)
+      .catch(() => setOnlinePayments([]))
+  }, [])
 
   const membership = account?.membership ?? null
   const shopDiscount =
@@ -1831,7 +1856,7 @@ function ShopTab({ items, account, onBought }) {
                 }}
               >
                 <option value="">Choose a payment method</option>
-                {ONLINE_PAYMENTS.map((method) => (
+                {onlinePayments.map((method) => (
                   <option key={method} value={method}>{method}</option>
                 ))}
               </select>

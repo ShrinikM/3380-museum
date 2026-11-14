@@ -5,22 +5,6 @@ import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 import { TablePager, usePagedList } from '../components/TablePager'
 
-const membershipTypes = ['Dual', 'Family', 'Student', 'Senior']
-
-const membershipPrices = {
-  Dual: 75,
-  Family: 150,
-  Student: 40,
-  Senior: 60,
-}
-
-const membershipDiscounts = {
-  Dual: 25,
-  Family: 25,
-  Student: 35,
-  Senior: 30,
-}
-
 const emptyFamilyMember = {
   FirstName: '',
   LastName: '',
@@ -73,6 +57,9 @@ function Memberships() {
   const allowEdit = canEdit('/memberships')
 
   const [memberships, setMemberships] = useState([])
+  const [membershipTypes, setMembershipTypes] = useState([])
+  const [membershipPrices, setMembershipPrices] = useState({})
+  const [membershipDiscounts, setMembershipDiscounts] = useState({})
   const [loadError, setLoadError] = useState('')
   const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
@@ -88,6 +75,29 @@ function Memberships() {
   const [membershipToDelete, setMembershipToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  useEffect(() => {
+    async function loadPlans() {
+      try {
+        const plans = await callApi('/api/membership-prices', 'GET')
+        const prices = {}
+        const discounts = {}
+
+        for (const plan of plans) {
+          prices[plan.MembershipType] = plan.Price
+          discounts[plan.MembershipType] = plan.DiscountPercent
+        }
+
+        setMembershipTypes(plans.map((plan) => plan.MembershipType))
+        setMembershipPrices(prices)
+        setMembershipDiscounts(discounts)
+      } catch (error) {
+        setLoadError(error.message)
+      }
+    }
+
+    loadPlans()
+  }, [])
 
   useEffect(() => {
     async function loadMemberships() {

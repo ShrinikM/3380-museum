@@ -3,7 +3,6 @@ import { Panel, Modal, SelectionActions } from './ui'
 import { useSelection } from '../hooks/useSelection'
 import { TablePager, usePagedList } from './TablePager'
 import { callApi } from '../api'
-import { PAYMENT_METHODS } from '../data/constants'
 import { useRole } from '../context/role'
 
 const STORES = {
@@ -11,14 +10,12 @@ const STORES = {
     title: 'Gift Shop',
     name: 'gift shop',
     staffId: 4,
-    payments: PAYMENT_METHODS.giftshopsale,
     categories: ['Books', 'Accessories', 'Home', 'Stationery', 'Kids', 'Prints'],
   },
   cafe: {
     title: 'Café',
     name: 'café',
     staffId: 2,
-    payments: PAYMENT_METHODS.cafesale,
     categories: ['Beverages', 'Pastries', 'Sandwiches', 'Salads', 'Soups', 'Desserts'],
   },
 }
@@ -84,6 +81,7 @@ function StorePage({ kind }){
 
   const [items, setItems] = useState([])
   const [sales, setSales] = useState([])
+  const [paymentMethods, setPaymentMethods] = useState([])
   const [loadError, setLoadError] = useState('')
 
   const [tab, setTab] = useState('items')
@@ -99,8 +97,12 @@ function StorePage({ kind }){
   const [deleteError, setDeleteError] = useState('')
 
   const loadStoreData = useCallback(async()=>{
-    const itemsData = await callApi(`${base}/items`, 'GET')
+    const [itemsData, paymentData] = await Promise.all([
+      callApi(`${base}/items`, 'GET'),
+      callApi('/api/payment-methods?for=store', 'GET'),
+    ])
     setItems(itemsData.map(toItem))
+    setPaymentMethods(paymentData)
 
     if(showSales){
       const salesData = await callApi(`${base}/sales`, 'GET')
@@ -689,7 +691,7 @@ function StorePage({ kind }){
                   onChange={handleChange}
                 >
                   <option value="">Select Payment</option>
-                  {store.payments.map((method)=>(
+                  {paymentMethods.map((method)=>(
                     <option key={method} value={method}>{method}</option>
                   ))}
                 </select>
