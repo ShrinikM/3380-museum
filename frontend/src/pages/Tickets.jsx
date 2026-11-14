@@ -24,7 +24,6 @@ const emptyForm = {
   MembershipID: '',
 }
 
-const paymentMethods = ['Cash', 'Credit Card', 'Debit Card', 'Mobile Pay']
 
 function getMemberDiscount(member, ticketType) {
   if (!member || !ticketType) {
@@ -56,6 +55,7 @@ function Tickets() {
   const [waitlists, setWaitlists] = useState([])
   const [exhibitions, setExhibitions] = useState([])
   const [ticketPrices, setTicketPrices] = useState({})
+  const [paymentMethods, setPaymentMethods] = useState([])
   const [loadError, setLoadError] = useState('')
   const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
@@ -85,13 +85,14 @@ function Tickets() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [ticketsData, exhibitionsData, refundsData, waitlistData, pricesData] =
+        const [ticketsData, exhibitionsData, refundsData, waitlistData, pricesData, paymentData] =
           await Promise.all([
             callApi('/api/tickets', 'GET'),
             callApi('/api/exhibitions', 'GET'),
             callApi('/api/tickets/refunds', 'GET'),
             callApi('/api/tickets/waitlist', 'GET'),
             callApi('/api/ticket-prices', 'GET'),
+            callApi('/api/payment-methods?for=ticket', 'GET'),
           ])
 
         setTickets(
@@ -105,6 +106,7 @@ function Tickets() {
         setRefunds(refundsData)
         setWaitlists(waitlistData)
         setTicketPrices(pricesData)
+        setPaymentMethods(paymentData)
         setLoadError('')
       } catch (err) {
         setLoadError('Could not load tickets: ' + err.message)

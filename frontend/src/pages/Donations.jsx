@@ -5,14 +5,6 @@ import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 import { TablePager, usePagedList } from '../components/TablePager'
 
-const paymentMethods = [
-  'Cash',
-  'Credit Card',
-  'Debit Card',
-  'Check',
-  'Bank Transfer',
-]
-
 const emptyForm = {
   FirstName: '',
   LastName: '',
@@ -29,6 +21,7 @@ function Donations() {
   const today = new Date().toISOString().split('T')[0]
 
   const [donations, setDonations] = useState([])
+  const [paymentMethods, setPaymentMethods] = useState([])
   const [loadError, setLoadError] = useState('')
   const [formError, setFormError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
@@ -45,7 +38,12 @@ function Donations() {
   useEffect(() => {
     async function loadDonations() {
       try {
-        const data = await callApi('/api/donations', 'GET')
+        const [data, paymentData] = await Promise.all([
+          callApi('/api/donations', 'GET'),
+          callApi('/api/payment-methods?for=donation', 'GET'),
+        ])
+
+        setPaymentMethods(paymentData)
 
         setDonations(
           data.map((donation) => ({

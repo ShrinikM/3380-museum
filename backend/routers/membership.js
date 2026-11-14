@@ -1,4 +1,5 @@
 const pool = require("../db");
+const { getPaymentMethods } = require("../paymentMethods");
 const { joinCurrentTerm, termStatus } = require("../terms");
 const { membershipPlans } = require("../prices");
 
@@ -127,7 +128,7 @@ function validateSchoolEmail(schoolEmail, membershipType) {
   return email;
 }
 
-function validateMembership(body) {
+function validateMembership(body, allowedPayments) {
   const {
     FirstName,
     LastName,
@@ -147,13 +148,6 @@ function validateMembership(body) {
     "Family",
     "Student",
     "Senior",
-  ];
-
-  const allowedPayments = [
-    "Cash",
-    "Credit Card",
-    "Debit Card",
-    "Bank Transfer",
   ];
 
   if (
@@ -501,7 +495,8 @@ async function insertFamilyMembers(connection, membershipId, members) {
 }
 
 async function addMembership(params, body, staffId) {
-  const membership = validateMembership(body);
+  const allowedPayments = await getPaymentMethods("membership");
+  const membership = validateMembership(body, allowedPayments);
   const connection = await pool.getConnection();
 
   try {
@@ -659,7 +654,8 @@ async function addMembership(params, body, staffId) {
 
 async function updateMembership(params, body) {
   const id = checkId(params);
-  const membership = validateMembership(body);
+  const allowedPayments = await getPaymentMethods("membership");
+  const membership = validateMembership(body, allowedPayments);
 
   await findMembership(id);
 

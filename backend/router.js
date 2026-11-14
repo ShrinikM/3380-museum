@@ -12,9 +12,10 @@ const dashboardRoutes = require("./routers/dashboard");
 const donationRoutes = require("./routers/donation");
 const alertRoutes = require("./routers/alert");
 const customerRoutes = require("./routers/customer");
+const paymentRoutes = require("./routers/payment");
 const { findSession } = require("./sessions");
 
-const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes, reportRoutes, dashboardRoutes, donationRoutes, alertRoutes, customerRoutes);
+const allRoutes = artistRoutes.concat(artworkRoutes, collectionRoutes, exhibitionRoutes, ticketRoutes, membershipRoutes, storeRoutes, staffRoutes, reportRoutes, dashboardRoutes, donationRoutes, alertRoutes, customerRoutes, paymentRoutes);
 
 const databaseErrorCodes = [
   "ECONNREFUSED",

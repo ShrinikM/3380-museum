@@ -1,4 +1,5 @@
 const pool = require("../db");
+const { getPaymentMethods } = require("../paymentMethods");
 const {
   getTicketPrices,
   getTicketTypes,
@@ -41,7 +42,6 @@ const selectTickets = `
   WHERE t.IsDeleted = 0
 `;
 
-const paymentMethods = ["Cash", "Credit Card", "Debit Card", "Mobile Pay"];
 
 function isRealDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -70,7 +70,7 @@ function checkId(params) {
 }
 
 
-function checkTicket(body, ticketPrices) {
+function checkTicket(body, ticketPrices, paymentMethods) {
   const ticketTypes = getTicketTypes(ticketPrices);
 
   if (!ticketTypes.includes(body.TicketType)) {
@@ -268,7 +268,8 @@ async function getPrices() {
 
 async function addTicket(params, body, staffId) {
   const ticketPrices = await getTicketPrices();
-  const ticket = checkTicket(body, ticketPrices);
+  const paymentMethods = await getPaymentMethods("ticket");
+  const ticket = checkTicket(body, ticketPrices, paymentMethods);
 
   await checkReferences(ticket, ticketPrices);
 
@@ -318,7 +319,8 @@ async function addTicket(params, body, staffId) {
 async function updateTicket(params, body) {
   const id = checkId(params);
   const ticketPrices = await getTicketPrices();
-  const ticket = checkTicket(body, ticketPrices);
+  const paymentMethods = await getPaymentMethods("ticket");
+  const ticket = checkTicket(body, ticketPrices, paymentMethods);
 
   if (await findTicket(id) === null) {
     throw makeError(404, "Ticket not found");

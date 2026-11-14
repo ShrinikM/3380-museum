@@ -1,6 +1,6 @@
 const pool = require("../db");
+const { getPaymentMethods } = require("../paymentMethods");
 
-const paymentMethods = ["Cash", "Credit Card", "Debit Card", "Check", "Bank Transfer"];
 
 const selectDonations = `
   SELECT
@@ -76,7 +76,7 @@ function checkDate(value, fieldName) {
   return value;
 }
 
-function checkDonation(body) {
+function checkDonation(body, paymentMethods) {
   const donation = {};
 
   donation.FirstName = checkName(body.FirstName, "First name");
@@ -118,7 +118,8 @@ async function getDonations(params, body, staffId) {
 }
 
 async function addDonation(params, body, staffId) {
-  const donation = checkDonation(body);
+  const paymentMethods = await getPaymentMethods("donation");
+  const donation = checkDonation(body, paymentMethods);
 
   const [result] = await pool.query(
     `INSERT INTO donations
@@ -140,7 +141,8 @@ async function addDonation(params, body, staffId) {
 
 async function updateDonation(params, body, staffId) {
   const id = checkId(params);
-  const donation = checkDonation(body);
+  const paymentMethods = await getPaymentMethods("donation");
+  const donation = checkDonation(body, paymentMethods);
 
   const existingDonation = await findDonation(id);
   if (existingDonation === null) {
@@ -178,8 +180,6 @@ async function deleteDonation(params, body, staffId) {
   return { status: 200, data: { message: "Donation deleted" } };
 }
 
-const onlinePaymentMethods = ["Credit Card", "Debit Card", "Bank Transfer"];
-
 const minPublicDonation = 10;
 
 function localToday() {
@@ -190,6 +190,8 @@ function localToday() {
 }
 
 async function addPublicDonation(params, body) {
+  const onlinePaymentMethods = await getPaymentMethods("online_donation");
+
   if (!onlinePaymentMethods.includes(body.PaymentMethod)) {
     throw makeError(400, "Please choose a payment method");
   }
@@ -197,7 +199,7 @@ async function addPublicDonation(params, body) {
   const donation = checkDonation({
     ...body,
     DonationDate: localToday(),
-  });
+  }, onlinePaymentMethods);
 
   if (donation.AmountDonated < minPublicDonation) {
     throw makeError(400, "The minimum donation is $10");

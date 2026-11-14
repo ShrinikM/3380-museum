@@ -83,6 +83,7 @@ function Memberships() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
 
+  const [paymentMethods, setPaymentMethods] = useState([])
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [membershipToDelete, setMembershipToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -91,7 +92,12 @@ function Memberships() {
   useEffect(() => {
     async function loadMemberships() {
       try {
-        const data = await callApi('/api/memberships', 'GET')
+        const [data, paymentData] = await Promise.all([
+          callApi('/api/memberships', 'GET'),
+          callApi('/api/payment-methods?for=membership', 'GET'),
+        ])
+
+        setPaymentMethods(paymentData)
 
         setMemberships(
           data.map((member) => ({
@@ -943,10 +949,11 @@ function Memberships() {
               required
             >
               <option value="">Select Payment</option>
-              <option value="Cash">Cash</option>
-              <option value="Credit Card">Credit Card</option>
-              <option value="Debit Card">Debit Card</option>
-              <option value="Bank Transfer">Bank Transfer</option>
+              {paymentMethods.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
             </select>
           </div>
 
