@@ -446,23 +446,25 @@ function checkStudentTicketEmail(value) {
   return email;
 }
 
-async function schoolEmailAlreadyUsed(email, connection) {
+async function schoolEmailAlreadyUsed(email, exhibitionId, visitDate, connection) {
   const db = connection || pool;
   const [rows] = await db.query(
     `SELECT TicketID
      FROM ticket
      WHERE TicketType = 'Student'
        AND SchoolEmail = ?
+       AND ExhibitionID = ?
+       AND (? IS NULL OR VisitDate = ?)
        AND IsDeleted = 0
        AND RefundStatus <> 'Refunded'
      LIMIT 1`,
-    [email]
+    [email, exhibitionId, visitDate, visitDate]
   );
 
   return rows.length > 0;
 }
 
-async function checkStudentTicketAccess(membership, counts, schoolEmail, connection) {
+async function checkStudentTicketAccess(membership, counts, schoolEmail, exhibitionId, visitDate, connection) {
   if (!counts.Student) {
     return null;
   }
@@ -481,16 +483,16 @@ async function checkStudentTicketAccess(membership, counts, schoolEmail, connect
   if (counts.Student > 1) {
     throw makeError(
       400,
-      "Only one Student ticket can be purchased per school email."
+      "Only one Student ticket can be purchased per school email for each visit."
     );
   }
 
   const email = checkStudentTicketEmail(schoolEmail);
 
-  if (await schoolEmailAlreadyUsed(email, connection)) {
+  if (await schoolEmailAlreadyUsed(email, exhibitionId, visitDate, connection)) {
     throw makeError(
       400,
-      "A Student ticket has already been purchased with that school email."
+      "A Student ticket has already been purchased with that school email for this visit."
     );
   }
 
@@ -815,6 +817,7 @@ async function getPurchases(params, body, customerId) {
        DATE_FORMAT(t.VisitDate, '%Y-%m-%d') AS VisitDate,
        DATE_FORMAT(t.UpdatedAt, '%Y-%m-%d') AS UpdatedAt,
        DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
+       t.IsDeleted = 0 AND t.RefundStatus = 'Refunded' AS MuseumRefund,
        t.IsDeleted = 0
          AND t.RefundStatus = 'None'
          AND e.CancelledAt IS NULL
@@ -869,6 +872,7 @@ async function getPurchases(params, body, customerId) {
         TicketID: Number(ticket.TicketID),
         Price: Number(ticket.Price),
         CanRefund: Number(ticket.CanRefund) === 1,
+        MuseumRefund: Number(ticket.MuseumRefund) === 1,
       })),
       orders: orders.map((order) => ({
         ...order,
@@ -892,6 +896,7 @@ async function getMyAlerts(params, body, customerId) {
   const [cancelled] = await pool.query(
     `SELECT
        e.Name,
+       e.CancellationReason,
        SUM(t.RefundStatus = 'Pending') AS Pending,
        SUM(t.RefundStatus = 'Refunded') AS Refunded
      FROM ticket t
@@ -902,7 +907,7 @@ async function getMyAlerts(params, body, customerId) {
        AND t.NotificationStatus = 'Sent'
        AND e.CancelledAt IS NOT NULL
        AND t.UpdatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-     GROUP BY e.ExhibitionID, e.Name
+     GROUP BY e.ExhibitionID, e.Name, e.CancellationReason
      ORDER BY e.Name`,
     [customerId]
   );
@@ -911,7 +916,10 @@ async function getMyAlerts(params, body, customerId) {
     const parts = [];
 
     if (Number(item.Pending) > 0) {
-      parts.push(Number(item.Pending) + " refund pending");
+      parts.push(
+        Number(item.Pending) +
+          (Number(item.Pending) === 1 ? " refund pending" : " refunds pending")
+      );
     }
 
     if (Number(item.Refunded) > 0) {
@@ -920,7 +928,12 @@ async function getMyAlerts(params, body, customerId) {
 
     alerts.push({
       Paths: ["/account"],
-      Message: item.Name + " was cancelled: " + parts.join(", "),
+      Message:
+        item.Name +
+        " was cancelled" +
+        (item.CancellationReason ? " (" + item.CancellationReason + ")" : "") +
+        ": " +
+        parts.join(", "),
     });
   }
 
@@ -1114,6 +1127,8 @@ async function addTickets(params, body, customerId) {
       membership,
       order.Counts,
       body.SchoolEmail,
+      order.ExhibitionID,
+      order.VisitDate,
       connection
     );
 
@@ -1371,7 +1386,9 @@ async function joinWaitlist(params, body, customerId) {
   const schoolEmail = await checkStudentTicketAccess(
     membership,
     counts,
-    body.SchoolEmail
+    body.SchoolEmail,
+    exhibitionID,
+    null
   );
 
   const connection = await pool.getConnection();

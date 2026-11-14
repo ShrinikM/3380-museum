@@ -358,8 +358,35 @@ async function updateTicket(params, body) {
 async function deleteTicket(params) {
   const id = checkId(params);
 
-  if (await findTicket(id) === null) {
+  const [rows] = await pool.query(
+    `SELECT
+       RefundStatus,
+       COALESCE(VisitDate, SaleDate) < CURDATE() AS Used
+     FROM ticket
+     WHERE TicketID = ? AND IsDeleted = 0`,
+    [id]
+  );
+
+  if (rows.length === 0) {
     throw makeError(404, "Ticket not found");
+  }
+
+  if (rows[0].RefundStatus === "Pending") {
+    throw makeError(
+      409,
+      "This ticket is waiting for a refund. Use Refund on the Cancelled exhibitions table instead."
+    );
+  }
+
+  if (rows[0].RefundStatus === "Refunded") {
+    throw makeError(409, "This ticket was already refunded, so it cannot be deleted.");
+  }
+
+  if (Number(rows[0].Used) === 1) {
+    throw makeError(
+      409,
+      "This ticket's visit date has passed, so it is part of the sales history and cannot be deleted."
+    );
   }
 
   await pool.query(

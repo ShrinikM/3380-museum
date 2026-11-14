@@ -278,7 +278,10 @@ async function getRevenueReport(params) {
       sale.SalePrice * sale.Quantity AS Amount,
       sale.PaymentMethod AS PaymentMethod,
       TRIM(CONCAT(COALESCE(buyer.FirstName, ''), ' ', COALESCE(buyer.LastName, ''))) AS CustomerName,
-      CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName
+      CASE
+        WHEN sale.CreatedBy IS NULL AND sale.CustomerID IS NOT NULL THEN 'Online'
+        ELSE CONCAT(staff.FirstName, ' ', staff.LastName)
+      END AS StaffName
     FROM giftshopsale sale
     JOIN giftshop item ON item.ItemID = sale.ItemID
     JOIN staff ON staff.StaffID = sale.StaffID
@@ -581,6 +584,9 @@ async function getStoreSaleTransactions(params, saleTable, itemTable, buyerExpr)
   const dates = readDates(params);
   const values = [];
   const saleDates = dateFilter("sale.SaleDate", dates, values);
+  const staffExpr = saleTable === "giftshopsale"
+    ? "CASE WHEN sale.CreatedBy IS NULL AND sale.CustomerID IS NOT NULL THEN 'Online' ELSE CONCAT(staff.FirstName, ' ', staff.LastName) END"
+    : "CONCAT(staff.FirstName, ' ', staff.LastName)";
 
   const [rows] = await pool.query(
     `SELECT
@@ -591,7 +597,9 @@ async function getStoreSaleTransactions(params, saleTable, itemTable, buyerExpr)
       DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS SaleDate,
       sale.PaymentMethod,
       CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName,
-      CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName
+      ` +
+      staffExpr +
+      ` AS StaffName
     FROM ` +
       saleTable +
       ` AS sale

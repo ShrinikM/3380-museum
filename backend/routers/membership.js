@@ -187,7 +187,6 @@ function validateMembership(body) {
     throw makeError(400, "Invalid payment method.");
   }
 
-  // Price and discount always come from the plan, never from the form
   const plan = membershipPlans[MembershipType];
 
   validateDate(StartDate, "start date");
@@ -803,6 +802,27 @@ async function lookupMembership(params) {
 
 async function deleteMembership(params) {
   const id = checkId(params);
+
+  const [current] = await pool.query(
+    `SELECT
+       DATE_FORMAT(term.EndDate, '%Y-%m-%d') AS EndDate,
+       ${termStatus} AS Status
+     FROM membership m
+     ${joinCurrentTerm("m")}
+     WHERE m.MembershipID = ?
+       AND m.IsDeleted = 0`,
+    [id]
+  );
+
+  if (
+    current.length > 0 &&
+    (current[0].Status === "active" || current[0].Status === "upcoming")
+  ) {
+    throw makeError(
+      409,
+      `This membership is ${current[0].Status} until ${current[0].EndDate}, so it cannot be deleted. Only expired or cancelled memberships can be deleted.`
+    );
+  }
 
   const [result] = await pool.query(
     `UPDATE membership

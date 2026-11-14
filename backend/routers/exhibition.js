@@ -363,7 +363,6 @@ async function updateExhibition(params, body, staffId) {
     throw makeError(400, "A cancelled exhibition cannot be edited");
   }
 
-  // Sold tickets must still fall inside the exhibition's new dates
   const [outside] = await pool.query(
     `SELECT
        COUNT(*) AS Total,
@@ -476,6 +475,22 @@ async function deleteExhibition(params) {
 
   if (existing === null) {
     throw makeError(404, "Exhibition not found");
+  }
+
+  const sold = Number(existing.Tickets);
+
+  if (sold > 0 && existing.Status === "cancelled") {
+    throw makeError(
+      400,
+      `This exhibition still has ${sold} ${sold === 1 ? "ticket" : "tickets"} waiting for a refund. Refund them on the Tickets page before deleting it.`
+    );
+  }
+
+  if (sold > 0) {
+    throw makeError(
+      400,
+      `This exhibition has ${sold} sold ${sold === 1 ? "ticket" : "tickets"}, so it cannot be deleted. Cancel it instead so visitors are notified and refunded.`
+    );
   }
 
   await pool.query(

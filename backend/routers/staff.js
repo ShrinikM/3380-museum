@@ -42,7 +42,6 @@ function checkEmail(value) {
   return email;
 }
 
-// Same rule as customers and members: exactly 10 digits, stored as digits only
 function checkPhone(value) {
   const phone = checkText(value, "Phone number").replace(/\D/g, "");
   if (phone.length !== 10) {
@@ -205,6 +204,41 @@ async function deleteStaff(params, body, staffId) {
 
   if (id === staffId) {
     throw makeError(409, "You cannot delete your own account");
+  }
+
+  const [exhibitions] = await pool.query(
+    `SELECT e.Name
+     FROM exhibitionstaff es
+     JOIN exhibition e ON e.ExhibitionID = es.ExhibitionID
+     WHERE es.StaffID = ?
+       AND e.IsDeleted = 0
+       AND e.CancelledAt IS NULL
+       AND e.EndDate >= CURDATE()
+     ORDER BY e.StartDate`,
+    [id]
+  );
+
+  if (exhibitions.length > 0) {
+    throw makeError(
+      409,
+      "This staff member is assigned to " +
+        exhibitions.map((row) => row.Name).join(", ") +
+        ". Assign someone else to these exhibitions before deleting them."
+    );
+  }
+
+  const [items] = await pool.query(
+    `SELECT ItemName FROM giftshop WHERE StaffID = ? AND IsDeleted = 0
+     UNION ALL
+     SELECT ItemName FROM cafe WHERE StaffID = ? AND IsDeleted = 0`,
+    [id, id]
+  );
+
+  if (items.length > 0) {
+    throw makeError(
+      409,
+      `This staff member is responsible for ${items.length} gift shop or café ${items.length === 1 ? "item" : "items"}. Assign the items to someone else before deleting them.`
+    );
   }
 
   await pool.query("UPDATE staff SET IsDeleted = 1, UpdatedAt = NOW() WHERE StaffID = ?", [id]);

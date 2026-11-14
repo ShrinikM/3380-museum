@@ -164,6 +164,26 @@ async function deleteArtwork(params, body, staffId) {
     throw makeError(404, "Artwork not found");
   }
 
+  const [shows] = await pool.query(
+    `SELECT e.Name, DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate
+     FROM artwork a
+     JOIN exhibition e ON e.CollectionID = a.CollectionID
+     WHERE a.ArtworkID = ?
+       AND e.IsDeleted = 0
+       AND e.CancelledAt IS NULL
+       AND e.EndDate >= CURDATE()
+     ORDER BY e.StartDate
+     LIMIT 1`,
+    [id]
+  );
+
+  if (shows.length > 0) {
+    throw makeError(
+      409,
+      `This artwork is part of "${shows[0].Name}" until ${shows[0].EndDate}, so it cannot be deleted while the exhibition is running or upcoming.`
+    );
+  }
+
   await pool.query(
     "UPDATE artwork SET IsDeleted = 1, UpdatedAt = NOW(), UpdatedBy = ? WHERE ArtworkID = ?",
     [staffId, id]

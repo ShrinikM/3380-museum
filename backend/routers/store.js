@@ -1,4 +1,3 @@
-
 const pool = require("../db");
 const { membershipPlans } = require("../prices");
 const { joinCurrentTerm, activeTerm } = require("../terms");
@@ -270,6 +269,14 @@ async function findItem(id, kind) {
   };
 }
 
+function staffNameSql(kind) {
+  if (kind === "giftshop") {
+    return "CASE WHEN sale.CreatedBy IS NULL AND sale.CustomerID IS NOT NULL THEN 'Online' ELSE CONCAT(staff.FirstName, ' ', staff.LastName) END";
+  }
+
+  return "CONCAT(staff.FirstName, ' ', staff.LastName)";
+}
+
 async function findSale(id, kind) {
   const store = getStore(kind);
 
@@ -283,7 +290,7 @@ async function findSale(id, kind) {
        DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS SaleDate,
        sale.PaymentMethod,
        sale.StaffID,
-       CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName,
+       ${staffNameSql(kind)} AS StaffName,
        sale.MembershipID,
        CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName
      FROM ${store.saleTable} sale
@@ -357,7 +364,7 @@ async function getSales(params, body, kind) {
        sale.SalePrice, sale.Quantity,
        DATE_FORMAT(sale.SaleDate, '%Y-%m-%d') AS SaleDate,
        sale.PaymentMethod, sale.StaffID,
-       CONCAT(staff.FirstName, ' ', staff.LastName) AS StaffName,
+       ${staffNameSql(kind)} AS StaffName,
        sale.MembershipID,
        CONCAT(buyer.FirstName, ' ', buyer.LastName) AS CustomerName
      FROM ${store.saleTable} sale

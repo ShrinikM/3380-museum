@@ -1151,7 +1151,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
 
   const changeTicketCount = (type, value) => {
     if (type === 'Student' && askForStudentEmail && value > 1) {
-      setError('Only one Student ticket can be purchased per school email.')
+      setError('Only one Student ticket can be purchased per school email for each visit.')
       return
     }
 
@@ -1789,7 +1789,8 @@ function Notices({ purchases, waitlist, account, onLeave, onGo }) {
   const cancelled = []
 
   for (const ticket of purchases.tickets) {
-    const isCancelledExhibition = ticket.ExhibitionStatus === 'cancelled' || ticket.RefundStatus === 'Pending' || ticket.CancellationReason
+    const isCancelledExhibition =
+      ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
     if (!isCancelledExhibition) {
       continue
     }
@@ -1822,7 +1823,7 @@ function Notices({ purchases, waitlist, account, onLeave, onGo }) {
     <div className="cp-notices">
       {cancelled.map((item) => (
         <p key={item.name} className="cp-notice" role="status">
-          <strong>{item.name}</strong> was cancelled.
+          <strong>{item.name}</strong> was cancelled due to "{item.reason}". Your refund is processing.
         </p>
       ))}
 
@@ -1895,7 +1896,8 @@ function CustomerPage() {
 
     const cancelled = []
     for (const ticket of purchases.tickets) {
-      const isCancelledExhibition = ticket.ExhibitionStatus === 'cancelled' || ticket.RefundStatus === 'Pending' || ticket.CancellationReason
+      const isCancelledExhibition =
+        ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
       if (!isCancelledExhibition) {
         continue
       }
@@ -1917,7 +1919,7 @@ function CustomerPage() {
     }
 
     const refundedTix = (purchases.tickets || []).filter(
-      (tix) => tix.RefundStatus === 'Refunded' && !acknowledgedData.refunds.includes(tix.TicketID)
+      (tix) => tix.MuseumRefund && !acknowledgedData.refunds.includes(tix.TicketID)
     )
 
     if (cancelled.length > 0 || refundedTix.length > 0) {
@@ -2045,7 +2047,7 @@ function CustomerPage() {
               <ul style={{ paddingLeft: '20px', margin: 0 }}>
                 {customerAlerts.cancelledExhibitions.map((ex) => (
                   <li key={ex.name} style={{ fontSize: '14px', marginBottom: '4px' }}>
-                    <strong>{ex.name}</strong> was cancelled.
+                    <strong>{ex.name}</strong> was cancelled due to "{ex.reason}". Your refund is processing.
                   </li>
                 ))}
               </ul>
@@ -2058,7 +2060,7 @@ function CustomerPage() {
               <ul style={{ paddingLeft: '20px', margin: 0 }}>
                 {customerAlerts.refundedTickets.map((tix) => (
                   <li key={tix.TicketID} style={{ fontSize: '14px' }}>
-                    <strong>{tix.ExhibitionName || 'Ticket'}</strong> - Refund status: Processed
+                    <strong>{tix.ExhibitionName || 'Ticket'}</strong> ({tix.TicketType}) - your refund of {money(tix.Price)} was processed.
                   </li>
                 ))}
               </ul>
