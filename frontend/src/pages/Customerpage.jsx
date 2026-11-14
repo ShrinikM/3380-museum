@@ -1621,12 +1621,16 @@ function TicketsTab({ data, account, purchases, onBought }) {
                     setError('')
                   }}
                 >
-                  <option value="">Choose a payment method</option>
-                  {onlinePayments.map((method) => (
+                <option value="">Choose a payment method</option>
+                  {ONLINE_PAYMENTS.map((method) => (
                     <option key={method} value={method}>{method}</option>
                   ))}
                 </select>
               </div>
+            )}
+
+            {!isWaitlistMode && (
+              <p className="cp-note">All tickets are non-refundable.</p>
             )}
 
             {isWaitlistMode && myWaitlistEntries.length > 0 && (
