@@ -27,15 +27,19 @@ DB_PORT=3306
 
 ## Setup
 ```bash
-cd frontend && npm install
-cd ../backend && npm install
+cd frontend
+npm install
+cd ../backend
+npm install
 ```
 
 ## Run
 Run the backend and the frontend in two separate terminals:
 ```bash
-cd backend && npm start
-cd frontend && npm run dev
+cd backend
+npm start
+cd frontend
+npm run dev
 ```
 Then open the link shown in the frontend terminal.
 
