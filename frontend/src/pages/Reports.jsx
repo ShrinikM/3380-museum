@@ -4,6 +4,7 @@ import { useRole } from '../context/role'
 import Chart from '../components/Chart'
 import { useSelection } from '../hooks/useSelection'
 import { Modal } from '../components/ui'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 const MAX_HISTORY = 10
 
@@ -467,6 +468,50 @@ function getSavedHistory(storageKey){
   }
 }
 
+function PagedReportTable({ rows, columns, caption, emptyText, resetKey, getKey, renderCell }){
+  const { visibleRows, page, total, setPage } = usePagedList(rows, resetKey)
+
+  return (
+    <>
+      <div className="table-wrap">
+        <table className="data-table report-table-compact">
+          <caption className="sr-only">{caption}</caption>
+          <thead>
+            <tr>
+              {columns.map((column)=>(
+                <th key={column.key} scope="col" title={column.title || column.label}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {visibleRows.map((row, index)=>(
+              <tr key={getKey ? getKey(row) : index}>
+                {columns.map((column)=>(
+                  <td key={column.key} className="report-cell center-cell">
+                    {renderCell ? renderCell(row, column) : formatCell(row[column.key], column.format)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={columns.length} className="empty">
+                  {emptyText}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TablePager page={page} total={total} onChange={setPage} />
+    </>
+  )
+}
+
 function Reports(){
   const { user } = useRole()
   const today = new Date().toLocaleDateString('en-CA')
@@ -832,44 +877,13 @@ function Reports(){
                   <h3 className="report-table-title">{group.title}</h3>
                 )}
 
-                <div className="table-wrap">
-                  <table className="data-table report-table-compact">
-                    <caption className="sr-only">{group.title}</caption>
-                    <thead>
-                      <tr>
-                        {viewingColumns.map((column)=>(
-                          <th
-                            key={column.key}
-                            scope="col"
-                            title={column.title || column.label}
-                          >
-                            {column.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {groupRows.map((row, index)=>(
-                        <tr key={index}>
-                          {viewingColumns.map((column)=>(
-                            <td key={column.key} className="report-cell center-cell">
-                              {formatCell(row[column.key], column.format)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-
-                      {groupRows.length === 0 && (
-                        <tr>
-                          <td colSpan={viewingColumns.length} className="empty">
-                            No data for this report.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <PagedReportTable
+                  rows={groupRows}
+                  columns={viewingColumns}
+                  caption={group.title}
+                  emptyText="No data for this report."
+                  resetKey={viewingItem.id + '|' + group.title}
+                />
               </div>
             )
           })}
@@ -892,58 +906,23 @@ function Reports(){
                 </div>
               </div>
 
-              <div className="table-wrap">
-                <table className="data-table report-table-compact">
-                  <caption className="sr-only">{revenueSource} revenue transactions</caption>
-                  <thead>
-                    <tr>
-                      {(revenueSource === 'Tickets'
-                        ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
-                        : revenueTxnColumns
-                      ).map((column)=>(
-                        <th key={column.key} scope="col" title={column.title}>
-                          {column.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(viewingItem.transactions[revenueSource] || []).map((row)=>{
-                      const columns = revenueSource === 'Tickets'
-                        ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
-                        : revenueTxnColumns
-
-                      return (
-                        <tr key={revenueSource + '-' + row.TransactionID}>
-                          {columns.map((column)=>(
-                            <td key={column.key} className="report-cell center-cell">
-                              {column.key === 'TransactionID'
-                                ? `#${String(row.TransactionID).padStart(5, '0')}`
-                                : formatCell(row[column.key], column.format)}
-                            </td>
-                          ))}
-                        </tr>
-                      )
-                    })}
-
-                    {(viewingItem.transactions[revenueSource] || []).length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={
-                            (revenueSource === 'Tickets'
-                              ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
-                              : revenueTxnColumns
-                            ).length
-                          }
-                          className="empty"
-                        >
-                          No {revenueSource.toLowerCase()} transactions in this date range.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PagedReportTable
+                rows={viewingItem.transactions[revenueSource] || []}
+                columns={
+                  revenueSource === 'Tickets'
+                    ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
+                    : revenueTxnColumns
+                }
+                caption={revenueSource + ' revenue transactions'}
+                emptyText={'No ' + revenueSource.toLowerCase() + ' transactions in this date range.'}
+                resetKey={viewingItem.id + '|' + revenueSource}
+                getKey={(row)=>revenueSource + '-' + row.TransactionID}
+                renderCell={(row, column)=>(
+                  column.key === 'TransactionID'
+                    ? `#${String(row.TransactionID).padStart(5, '0')}`
+                    : formatCell(row[column.key], column.format)
+                )}
+              />
             </div>
           )}
 
@@ -965,85 +944,41 @@ function Reports(){
                 </div>
               </div>
 
-              <div className="table-wrap">
-                <table className="data-table report-table-compact">
-                  <caption className="sr-only">{storeSource} sale transactions</caption>
-                  <thead>
-                    <tr>
-                      {storeSaleColumns.map((column)=>(
-                        <th key={column.key} scope="col" title={column.title}>
-                          {column.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(viewingItem.transactions[storeSource] || []).map((row)=>(
-                      <tr key={row.SaleID}>
-                        {storeSaleColumns.map((column)=>(
-                          <td key={column.key} className="report-cell center-cell">
-                            {column.key === 'SaleID'
-                              ? `#${String(row.SaleID).padStart(5, '0')}`
-                              : formatCell(row[column.key], column.format)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-
-                    {(viewingItem.transactions[storeSource] || []).length === 0 && (
-                      <tr>
-                        <td colSpan={storeSaleColumns.length} className="empty">
-                          No {storeSource.toLowerCase()} sales in this date range.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PagedReportTable
+                rows={viewingItem.transactions[storeSource] || []}
+                columns={storeSaleColumns}
+                caption={storeSource + ' sale transactions'}
+                emptyText={'No ' + storeSource.toLowerCase() + ' sales in this date range.'}
+                resetKey={viewingItem.id + '|' + storeSource}
+                getKey={(row)=>row.SaleID}
+                renderCell={(row, column)=>(
+                  column.key === 'SaleID'
+                    ? `#${String(row.SaleID).padStart(5, '0')}`
+                    : formatCell(row[column.key], column.format)
+                )}
+              />
             </div>
           )}
 
           {viewingItem.reportType === 'ticket-sales' && Array.isArray(viewingItem.transactions) && (
             <div className="report-table-group">
               <h3 className="report-table-title">Ticket Transactions</h3>
-              <div className="table-wrap">
-                <table className="data-table report-table-compact">
-                  <caption className="sr-only">Ticket transactions</caption>
-                  <thead>
-                    <tr>
-                      {ticketTxnColumns.map((column)=>(
-                        <th key={column.key} scope="col" title={column.title}>
-                          {column.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewingItem.transactions.map((row)=>(
-                      <tr key={row.TicketID}>
-                        {ticketTxnColumns.map((column)=>(
-                          <td key={column.key} className="report-cell center-cell">
-                            {column.key === 'TicketID'
-                              ? `#${String(row.TicketID).padStart(5, '0')}`
-                              : formatCell(
-                                  row[column.key] === '' ? null : row[column.key],
-                                  column.format
-                                )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-
-                    {viewingItem.transactions.length === 0 && (
-                      <tr>
-                        <td colSpan={ticketTxnColumns.length} className="empty">
-                          No ticket sales in this date range.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PagedReportTable
+                rows={viewingItem.transactions}
+                columns={ticketTxnColumns}
+                caption="Ticket transactions"
+                emptyText="No ticket sales in this date range."
+                resetKey={String(viewingItem.id)}
+                getKey={(row)=>row.TicketID}
+                renderCell={(row, column)=>(
+                  column.key === 'TicketID'
+                    ? `#${String(row.TicketID).padStart(5, '0')}`
+                    : formatCell(
+                        row[column.key] === '' ? null : row[column.key],
+                        column.format
+                      )
+                )}
+              />
             </div>
           )}
         </div>

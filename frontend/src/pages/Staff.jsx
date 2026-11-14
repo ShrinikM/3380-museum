@@ -3,6 +3,7 @@ import { Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 const ROLE_OPTIONS = ['Admin', 'Staff']
 
@@ -88,6 +89,11 @@ function Staff() {
 
     return text.includes(searchTerm.toLowerCase())
   })
+
+  const { visibleRows, page, total, setPage } = usePagedList(
+    filteredStaff,
+    searchTerm
+  )
 
   const handleChange = (e) => {
     setFormData({
@@ -320,7 +326,7 @@ function Staff() {
           </thead>
 
           <tbody>
-            {filteredStaff.map((item) => (
+            {visibleRows.map((item) => (
               <tr
                 key={item.StaffID}
                 className={isSelected(item.StaffID) ? 'selected-row' : ''}
@@ -361,6 +367,7 @@ function Staff() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={isModalOpen}

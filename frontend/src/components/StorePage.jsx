@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Panel, Modal, SelectionActions } from './ui'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from './TablePager'
 import { callApi } from '../api'
 import { PAYMENT_METHODS } from '../data/constants'
 import { useRole } from '../context/role'
@@ -126,6 +127,10 @@ function StorePage({ kind }){
   const filteredSales = sales.filter((sale)=>
     `${sale.SaleID} ${sale.ItemName ?? ''} ${sale.PaymentMethod}`.toLowerCase().includes(query)
   )
+
+  const resetKey = tab + '|' + search
+  const pagedItems = usePagedList(filteredItems, resetKey)
+  const pagedSales = usePagedList(filteredSales, resetKey)
 
   const itemSelection = useSelection(filteredItems, (item)=>item.ItemID)
   const saleSelection = useSelection(filteredSales, (sale)=>sale.SaleID)
@@ -461,6 +466,7 @@ function StorePage({ kind }){
       )}
 
       {tab === 'items' || !showSales ? (
+        <>
         <div className="card table-wrap">
           <table className={'data-table' + (allowEdit && itemSelection.selectedRows.length > 0 ? ' selecting' : '')}>
             <caption className="sr-only">{store.title} items</caption>
@@ -480,7 +486,7 @@ function StorePage({ kind }){
             </thead>
 
             <tbody>
-              {filteredItems.map((item)=>(
+              {pagedItems.visibleRows.map((item)=>(
                 <tr
                   key={item.ItemID}
                   className={itemSelection.isSelected(item.ItemID) ? 'selected-row' : ''}
@@ -511,7 +517,10 @@ function StorePage({ kind }){
             </tbody>
           </table>
         </div>
+        <TablePager page={pagedItems.page} total={pagedItems.total} onChange={pagedItems.setPage} />
+        </>
       ) : (
+        <>
         <div className="card table-wrap">
           <table className={'data-table' + (allowEdit && saleSelection.selectedRows.length > 0 ? ' selecting' : '')}>
             <caption className="sr-only">{store.title} sales</caption>
@@ -534,7 +543,7 @@ function StorePage({ kind }){
             </thead>
 
             <tbody>
-              {filteredSales.map((sale)=>(
+              {pagedSales.visibleRows.map((sale)=>(
                 <tr
                   key={sale.SaleID}
                   className={saleSelection.isSelected(sale.SaleID) ? 'selected-row' : ''}
@@ -568,6 +577,8 @@ function StorePage({ kind }){
             </tbody>
           </table>
         </div>
+        <TablePager page={pagedSales.page} total={pagedSales.total} onChange={pagedSales.setPage} />
+        </>
       )}
 
       <Modal open={open} title={modalTitle} onClose={closeModal}>

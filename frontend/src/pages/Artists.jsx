@@ -3,6 +3,7 @@ import { Badge, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 function Artists() {
   const { user, canEdit } = useRole()
@@ -182,6 +183,8 @@ function Artists() {
     )
   })
 
+  const { visibleRows, page, total, setPage } = usePagedList(filtered, search)
+
   const {
     selectedRows: selectedArtists,
     isSelected,
@@ -290,7 +293,7 @@ function Artists() {
           </thead>
 
           <tbody>
-            {filtered.map((item) => (
+            {visibleRows.map((item) => (
               <tr
                 key={item.ArtistID}
                 className={isSelected(item.ArtistID) ? 'selected-row' : ''}
@@ -348,6 +351,7 @@ function Artists() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}

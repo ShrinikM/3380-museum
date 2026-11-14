@@ -3,6 +3,7 @@ import { Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 function Collections() {
   const { user, canEdit } = useRole()
@@ -126,6 +127,8 @@ function Collections() {
     )
   })
 
+  const { visibleRows, page, total, setPage } = usePagedList(filtered, search)
+
   const {
     selectedRows: selectedCollections,
     isSelected,
@@ -232,7 +235,7 @@ function Collections() {
           </thead>
 
           <tbody>
-            {filtered.map((item) => (
+            {visibleRows.map((item) => (
               <tr
                 key={item.CollectionID}
                 className={isSelected(item.CollectionID) ? 'selected-row' : ''}
@@ -278,6 +281,7 @@ function Collections() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}

@@ -956,6 +956,41 @@ textarea.input {
   background: var(--card);
 }
 
+.table-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.table-pager-meta,
+.table-pager-page {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.table-pager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-pager-actions .btn {
+  min-height: 32px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.card.table-wrap + .table-pager,
+.table-wrap + .table-pager {
+  margin-top: 12px;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
