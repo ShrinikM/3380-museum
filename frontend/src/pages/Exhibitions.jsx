@@ -530,7 +530,8 @@ function Exhibitions() {
               <th scope="col">Collection</th>
               <th scope="col">Start Date</th>
               <th scope="col">End Date</th>
-              <th scope="col">Tickets / Daily Cap.</th>
+              <th scope="col">Tickets Sold</th>
+              <th scope="col">Daily Capacity</th>
               <th scope="col">Staff</th>
               <th scope="col">Artworks</th>
               <th scope="col">Status</th>
@@ -540,7 +541,7 @@ function Exhibitions() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={allowEdit ? 9 : 8} className="empty">
+                <td colSpan={allowEdit ? 10 : 9} className="empty">
                   Loading exhibitions...
                 </td>
               </tr>
@@ -587,9 +588,9 @@ function Exhibitions() {
                       : '-'}
                   </td>
 
-                  <td>
-                    {exhibition.Tickets} / {exhibition.Capacity}
-                  </td>
+                  <td>{exhibition.Tickets}</td>
+
+                  <td>{exhibition.Capacity}</td>
 
                   <td>
                     {exhibition.StaffNames.length > 0
@@ -610,7 +611,7 @@ function Exhibitions() {
 
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={allowEdit ? 9 : 8} className="empty">
+                <td colSpan={allowEdit ? 10 : 9} className="empty">
                   No exhibitions found matching this filter.
                 </td>
               </tr>
