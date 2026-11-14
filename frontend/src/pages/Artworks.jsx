@@ -3,6 +3,7 @@ import { Badge, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 import { ARTWORK_TYPES } from '../data/constants'
 
 function Artworks() {
@@ -154,6 +155,11 @@ function Artworks() {
     return matchesSearch && matchesType
   })
 
+  const { visibleRows, page, total, setPage } = usePagedList(
+    filtered,
+    search + '|' + selectedType
+  )
+
   const {
     selectedRows: selectedArtworks,
     isSelected,
@@ -294,7 +300,7 @@ function Artworks() {
           </thead>
 
           <tbody>
-            {filtered.map((item) => (
+            {visibleRows.map((item) => (
               <tr
                 key={item.ArtworkID}
                 className={isSelected(item.ArtworkID) ? 'selected-row' : ''}
@@ -344,6 +350,7 @@ function Artworks() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}

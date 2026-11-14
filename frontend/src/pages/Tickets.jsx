@@ -3,6 +3,7 @@ import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 const defaultTicketTypes = ['Adult', 'Senior', 'Student', 'Child']
 
@@ -170,6 +171,13 @@ function Tickets() {
 
     return matchesSearch && matchesType && matchesExhibition
   })
+
+  const { visibleRows, page, total, setPage } = usePagedList(
+    filtered,
+    search + '|' + type + '|' + exhibition
+  )
+  const pagedRefunds = usePagedList(refunds)
+  const pagedWaitlists = usePagedList(waitlists)
 
   const usedMemberDiscounts = (found, type, visitDate, exhibitionId) => {
     if (!found || !type || !visitDate || !exhibitionId) {
@@ -541,7 +549,7 @@ function Tickets() {
             </thead>
 
             <tbody>
-              {refunds.map((item) => (
+              {pagedRefunds.visibleRows.map((item) => (
                 <tr key={item.ExhibitionID}>
                   <td>
                     <div className="strong">{item.ExhibitionName}</div>
@@ -580,6 +588,13 @@ function Tickets() {
           </table>
         </div>
       )}
+      {refunds.length > 0 && (
+        <TablePager
+          page={pagedRefunds.page}
+          total={pagedRefunds.total}
+          onChange={pagedRefunds.setPage}
+        />
+      )}
 
       {waitlists.length > 0 && (
         <div className="card table-wrap section-gap-sm">
@@ -597,7 +612,7 @@ function Tickets() {
             </thead>
 
             <tbody>
-              {waitlists.map((item) => (
+              {pagedWaitlists.visibleRows.map((item) => (
                 <tr key={item.ExhibitionID}>
                   <td className="strong">{item.ExhibitionName}</td>
                   <td>{item.Waiting}</td>
@@ -607,6 +622,13 @@ function Tickets() {
             </tbody>
           </table>
         </div>
+      )}
+      {waitlists.length > 0 && (
+        <TablePager
+          page={pagedWaitlists.page}
+          total={pagedWaitlists.total}
+          onChange={pagedWaitlists.setPage}
+        />
       )}
 
       <div className="toolbar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -718,7 +740,7 @@ function Tickets() {
           </thead>
 
           <tbody>
-            {filtered.map((ticket) => {
+            {visibleRows.map((ticket) => {
               return (
                 <tr
                   key={ticket.TicketID}
@@ -837,6 +859,7 @@ function Tickets() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}

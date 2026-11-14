@@ -3,6 +3,7 @@ import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { useRole } from '../context/role'
 import { callApi } from '../api'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 function localToday() {
   const now = new Date()
@@ -311,6 +312,11 @@ function Exhibitions() {
     return matchesSearch && matchesStatus
   })
 
+  const { visibleRows, page, total, setPage } = usePagedList(
+    filtered,
+    search + '|' + selectedStatus
+  )
+
   const {
     selectedRows: selectedExhibitions,
     isSelected,
@@ -549,7 +555,7 @@ function Exhibitions() {
 
             {!loading &&
               !loadError &&
-              filtered.map((exhibition) => (
+              visibleRows.map((exhibition) => (
                 <tr
                   key={exhibition.ExhibitionID}
                   className={
@@ -619,6 +625,7 @@ function Exhibitions() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}

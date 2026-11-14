@@ -3,6 +3,7 @@ import { Badge, Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 const membershipTypes = ['Dual', 'Family', 'Student', 'Senior']
 
@@ -174,6 +175,11 @@ function Memberships() {
 
     return matchesSearch && matchesType
   })
+
+  const { visibleRows, page, total, setPage } = usePagedList(
+    filtered,
+    search + '|' + selectedType
+  )
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -693,7 +699,7 @@ function Memberships() {
           </thead>
 
           <tbody>
-            {filtered.map((member) => (
+            {visibleRows.map((member) => (
               <tr
                 key={member.id}
                 className={isSelected(member.id) ? 'selected-row' : ''}
@@ -753,6 +759,7 @@ function Memberships() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}

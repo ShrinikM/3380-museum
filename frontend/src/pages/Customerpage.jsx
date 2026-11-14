@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { callApi } from '../api'
 import { Modal } from '../components/ui'
+import { TablePager, usePagedList } from '../components/TablePager'
 import './Customerpage.css'
 
 const TABS = [
@@ -753,6 +754,15 @@ function PurchasesTab({ purchases, onChanged }) {
   const [saving, setSaving] = useState(false)
   const { tickets, orders, waitlist } = purchases
 
+  const rows =
+    view === 'tickets' ? tickets : view === 'orders' ? orders : waitlist
+  const { visibleRows, page, total, setPage } = usePagedList(rows, view)
+
+  const changeView = (nextView) => {
+    setView(nextView)
+    setSelectedIds([])
+  }
+
   const selectedTickets = tickets.filter((ticket) =>
     selectedIds.includes(ticket.TicketID)
   )
@@ -835,10 +845,7 @@ function PurchasesTab({ purchases, onChanged }) {
               type="button"
               className={view === 'tickets' ? 'is-active' : ''}
               aria-pressed={view === 'tickets'}
-              onClick={() => {
-                setView('tickets')
-                setSelectedIds([])
-              }}
+              onClick={() => changeView('tickets')}
             >
               Tickets
             </button>
@@ -846,10 +853,7 @@ function PurchasesTab({ purchases, onChanged }) {
               type="button"
               className={view === 'orders' ? 'is-active' : ''}
               aria-pressed={view === 'orders'}
-              onClick={() => {
-                setView('orders')
-                setSelectedIds([])
-              }}
+              onClick={() => changeView('orders')}
             >
               Gift Shop
             </button>
@@ -857,10 +861,7 @@ function PurchasesTab({ purchases, onChanged }) {
               type="button"
               className={view === 'waitlist' ? 'is-active' : ''}
               aria-pressed={view === 'waitlist'}
-              onClick={() => {
-                setView('waitlist')
-                setSelectedIds([])
-              }}
+              onClick={() => changeView('waitlist')}
             >
               Waitlist
             </button>
@@ -872,64 +873,72 @@ function PurchasesTab({ purchases, onChanged }) {
         tickets.length === 0 ? (
           <p className="cp-empty">You haven't bought any tickets yet.</p>
         ) : (
-          <div className="table-wrap">
-            <table
-              className={
-                'data-table cp-ticket-table' + (selecting ? ' selecting' : '')
-              }
-            >
-              <thead>
-                <tr>
-                  <th scope="col" className="select-col">
-                    <span className="sr-only">Select</span>
-                  </th>
-                  <th scope="col">Exhibition</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Price</th>
-                  <th scope="col">Payment</th>
-                  <th scope="col">Bought</th>
-                  <th scope="col">Visit Date</th>
-                  <th scope="col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket) => (
-                  <tr
-                    key={ticket.TicketID}
-                    className={
-                      selectedIds.includes(ticket.TicketID) ? 'selected-row' : ''
-                    }
-                  >
-                    <td className="select-col">
-                      {ticket.CanRefund ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(ticket.TicketID)}
-                          onChange={() => toggleTicket(ticket.TicketID)}
-                          aria-label={`Select ${ticket.TicketType} ticket for ${ticket.ExhibitionName}`}
-                        />
-                      ) : null}
-                    </td>
-                    <td className="strong">{ticket.ExhibitionName}</td>
-                    <td>{ticket.TicketType}</td>
-                    <td>{money(ticket.Price)}</td>
-                    <td>{ticket.PaymentMethod || '-'}</td>
-                    <td>{formatDate(ticket.SaleDate)}</td>
-                    <td>
-                      {ticket.VisitDate
-                        ? formatDate(ticket.VisitDate)
-                        : 'Not specified'}
-                    </td>
-                    <td>
-                      <span className={`badge badge-${ticketStatus(ticket.RefundStatus).variant}`}>
-                        {ticketStatus(ticket.RefundStatus).label}
-                      </span>
-                    </td>
+          <>
+            <div className="table-wrap">
+              <table
+                className={
+                  'data-table cp-ticket-table' + (selecting ? ' selecting' : '')
+                }
+              >
+                <thead>
+                  <tr>
+                    <th scope="col" className="select-col">
+                      <span className="sr-only">Select</span>
+                    </th>
+                    <th scope="col">Exhibition</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Price</th>
+                    <th scope="col">Payment</th>
+                    <th scope="col">Bought</th>
+                    <th scope="col">Visit Date</th>
+                    <th scope="col">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {visibleRows.map((ticket) => (
+                    <tr
+                      key={ticket.TicketID}
+                      className={
+                        selectedIds.includes(ticket.TicketID) ? 'selected-row' : ''
+                      }
+                    >
+                      <td className="select-col">
+                        {ticket.CanRefund ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(ticket.TicketID)}
+                            onChange={() => toggleTicket(ticket.TicketID)}
+                            aria-label={`Select ${ticket.TicketType} ticket for ${ticket.ExhibitionName}`}
+                          />
+                        ) : null}
+                      </td>
+                      <td className="strong">{ticket.ExhibitionName}</td>
+                      <td>{ticket.TicketType}</td>
+                      <td>{money(ticket.Price)}</td>
+                      <td>{ticket.PaymentMethod || '-'}</td>
+                      <td>{formatDate(ticket.SaleDate)}</td>
+                      <td>
+                        {ticket.VisitDate
+                          ? formatDate(ticket.VisitDate)
+                          : 'Not specified'}
+                      </td>
+                      <td>
+                        <span className={`badge badge-${ticketStatus(ticket.RefundStatus).variant}`}>
+                          {ticketStatus(ticket.RefundStatus).label}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <TablePager
+              page={page}
+              total={total}
+              onChange={setPage}
+            />
+          </>
         )
       )}
 
@@ -937,30 +946,38 @@ function PurchasesTab({ purchases, onChanged }) {
         orders.length === 0 ? (
           <p className="cp-empty">You haven't ordered anything from the gift shop yet.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Item</th>
-                  <th scope="col">Quantity</th>
-                  <th scope="col">Total</th>
-                  <th scope="col">Payment</th>
-                  <th scope="col">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.SaleID}>
-                    <td className="strong">{order.ItemName}</td>
-                    <td>{order.Quantity}</td>
-                    <td>{money(order.Total)}</td>
-                    <td>{order.PaymentMethod}</td>
-                    <td>{formatDate(order.SaleDate)}</td>
+          <>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Item</th>
+                    <th scope="col">Quantity</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">Payment</th>
+                    <th scope="col">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {visibleRows.map((order) => (
+                    <tr key={order.SaleID}>
+                      <td className="strong">{order.ItemName}</td>
+                      <td>{order.Quantity}</td>
+                      <td>{money(order.Total)}</td>
+                      <td>{order.PaymentMethod}</td>
+                      <td>{formatDate(order.SaleDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <TablePager
+              page={page}
+              total={total}
+              onChange={setPage}
+            />
+          </>
         )
       )}
 
@@ -968,32 +985,40 @@ function PurchasesTab({ purchases, onChanged }) {
         waitlist.length === 0 ? (
           <p className="cp-empty">You haven't joined any waitlists yet.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Exhibition</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Joined</th>
-                  <th scope="col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {waitlist.map((entry) => (
-                  <tr key={entry.WaitlistID}>
-                    <td className="strong">{entry.ExhibitionName}</td>
-                    <td>{entry.TicketType}</td>
-                    <td>{formatDate(entry.JoinedAt)}</td>
-                    <td>
-                      <span className={`badge badge-${waitlistStatus(entry).variant}`}>
-                        {waitlistStatus(entry).label}
-                      </span>
-                    </td>
+          <>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Exhibition</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Joined</th>
+                    <th scope="col">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {visibleRows.map((entry) => (
+                    <tr key={entry.WaitlistID}>
+                      <td className="strong">{entry.ExhibitionName}</td>
+                      <td>{entry.TicketType}</td>
+                      <td>{formatDate(entry.JoinedAt)}</td>
+                      <td>
+                        <span className={`badge badge-${waitlistStatus(entry).variant}`}>
+                          {waitlistStatus(entry).label}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <TablePager
+              page={page}
+              total={total}
+              onChange={setPage}
+            />
+          </>
         )
       )}
 

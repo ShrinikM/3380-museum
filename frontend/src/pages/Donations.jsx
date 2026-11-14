@@ -3,6 +3,7 @@ import { Panel, Modal, SelectionActions } from '../components/ui'
 import { callApi } from '../api'
 import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
+import { TablePager, usePagedList } from '../components/TablePager'
 
 const paymentMethods = [
   'Cash',
@@ -79,6 +80,11 @@ function Donations() {
 
     return text.includes(search.toLowerCase())
   })
+
+  const { visibleRows, page, total, setPage } = usePagedList(
+    filteredDonations,
+    search
+  )
 
   const handleChange = (e) => {
     setFormData({
@@ -321,7 +327,7 @@ function Donations() {
           </thead>
 
           <tbody>
-            {filteredDonations.map((donation) => (
+            {visibleRows.map((donation) => (
               <tr
                 key={donation.DonationID}
                 className={
@@ -366,6 +372,7 @@ function Donations() {
           </tbody>
         </table>
       </div>
+      <TablePager page={page} total={total} onChange={setPage} />
 
       <Modal
         open={open}
