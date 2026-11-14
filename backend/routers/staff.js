@@ -1,4 +1,5 @@
 const pool = require("../db");
+const { checkStoredPassword } = require("../passwords");
 
 const roles = ["Admin", "Staff"];
 
@@ -13,6 +14,10 @@ const selectStaff = `
     DATE_FORMAT(EndDate, '%Y-%m-%d') AS EndDate,
     Email,
     PhoneNumber,
+    Street,
+    City,
+    State,
+    ZipCode,
     CreatedAt,
     UpdatedAt
   FROM staff
@@ -34,6 +39,14 @@ function checkText(value, fieldName) {
   return value.trim();
 }
 
+function checkOptionalText(value, fieldName) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  return checkText(value, fieldName);
+}
+
 function checkEmail(value) {
   const email = checkText(value, "Email");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -48,6 +61,20 @@ function checkPhone(value) {
     throw makeError(400, "Phone number must have 10 digits");
   }
   return phone;
+}
+
+function checkZipCode(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const zip = checkText(value, "Zip code");
+
+  if (!/^[0-9]{5}$/.test(zip)) {
+    throw makeError(400, "Zip code must be 5 digits");
+  }
+
+  return zip;
 }
 
 const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/;
@@ -84,6 +111,10 @@ function checkStaff(body) {
   staff.Department = checkText(body.Department, "Department");
   staff.Email = checkEmail(body.Email);
   staff.PhoneNumber = checkPhone(body.PhoneNumber);
+  staff.Street = checkOptionalText(body.Street, "Street");
+  staff.City = checkOptionalText(body.City, "City");
+  staff.State = checkOptionalText(body.State, "State");
+  staff.ZipCode = checkZipCode(body.ZipCode);
 
   staff.Role = checkText(body.Role, "Role");
   if (!roles.includes(staff.Role)) {
@@ -137,14 +168,59 @@ async function getStaff(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
+async function loginStaff(params, body) {
+  if (typeof body.Email !== "string" || body.Email.trim() === "") {
+    throw makeError(400, "Please enter your email");
+  }
+
+  if (typeof body.Password !== "string" || body.Password === "") {
+    throw makeError(400, "Please enter your password");
+  }
+
+  const email = body.Email.trim().toLowerCase();
+
+  const [rows] = await pool.query(
+    `SELECT
+       s.StaffID,
+       s.Email,
+       s.Role,
+       s.FirstName,
+       s.LastName,
+       sc.Password
+     FROM staff s
+     JOIN staffcredentials sc
+       ON sc.StaffID = s.StaffID
+     WHERE LOWER(s.Email) = ?
+       AND s.IsDeleted = 0
+       AND (s.EndDate IS NULL OR s.EndDate > CURDATE())`,
+    [email]
+  );
+
+  if (rows.length === 0 || !checkStoredPassword(body.Password, rows[0].Password)) {
+    throw makeError(401, "Invalid email or password");
+  }
+
+  return {
+    status: 200,
+    data: {
+      StaffID: Number(rows[0].StaffID),
+      Email: rows[0].Email,
+      Role: rows[0].Role,
+      FirstName: rows[0].FirstName,
+      LastName: rows[0].LastName,
+    },
+  };
+}
+
 async function addStaff(params, body, staffId) {
   const staff = checkStaff(body);
   await checkEmailIsFree(staff.Email, 0);
 
   const [result] = await pool.query(
     `INSERT INTO staff
-      (FirstName, LastName, Role, Department, StartDate, EndDate, Email, PhoneNumber, CreatedAt, UpdatedAt, CreatedBy)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
+      (FirstName, LastName, Role, Department, StartDate, EndDate, Email, PhoneNumber,
+       Street, City, State, ZipCode, CreatedAt, UpdatedAt, CreatedBy)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
     [
       staff.FirstName,
       staff.LastName,
@@ -154,6 +230,10 @@ async function addStaff(params, body, staffId) {
       staff.EndDate,
       staff.Email,
       staff.PhoneNumber,
+      staff.Street,
+      staff.City,
+      staff.State,
+      staff.ZipCode,
       staffId,
     ]
   );
@@ -175,7 +255,19 @@ async function updateStaff(params, body, staffId) {
 
   await pool.query(
     `UPDATE staff
-     SET FirstName = ?, LastName = ?, Role = ?, Department = ?, StartDate = ?, EndDate = ?, Email = ?, PhoneNumber = ?, UpdatedAt = NOW()
+     SET FirstName = ?,
+         LastName = ?,
+         Role = ?,
+         Department = ?,
+         StartDate = ?,
+         EndDate = ?,
+         Email = ?,
+         PhoneNumber = ?,
+         Street = ?,
+         City = ?,
+         State = ?,
+         ZipCode = ?,
+         UpdatedAt = NOW()
      WHERE StaffID = ?`,
     [
       staff.FirstName,
@@ -186,6 +278,10 @@ async function updateStaff(params, body, staffId) {
       staff.EndDate,
       staff.Email,
       staff.PhoneNumber,
+      staff.Street,
+      staff.City,
+      staff.State,
+      staff.ZipCode,
       id,
     ]
   );
@@ -247,6 +343,7 @@ async function deleteStaff(params, body, staffId) {
 }
 
 module.exports = [
+  { method: "POST", path: "/api/staff/login", handler: loginStaff },
   { method: "GET", path: "/api/staff", handler: getStaff },
   { method: "POST", path: "/api/staff", handler: addStaff, needsActor: true },
   { method: "PUT", path: "/api/staff/:id", handler: updateStaff, needsActor: true },

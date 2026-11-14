@@ -7,7 +7,7 @@ const HERO_IMAGE = '/images/rumskib.jpeg'
 const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
 function Login() {
-  const { login, loginCustomer, registerCustomer } = useRole()
+  const { loginStaff, loginCustomer, registerCustomer } = useRole()
   const [searchParams] = useSearchParams()
   const [mode, setMode] = useState(
     searchParams.get('mode') === 'register' ? 'register' : 'login'
@@ -78,17 +78,17 @@ function Login() {
 
     const loginEmail = username.trim().toLowerCase()
 
-    if (login(loginEmail, password)) {
-      return
-    }
-
     setBusy(true)
 
     try {
-      await loginCustomer(loginEmail, password)
-    } catch (err) {
-      setError(err.message)
-      setBusy(false)
+      await loginStaff(loginEmail, password)
+    } catch {
+      try {
+        await loginCustomer(loginEmail, password)
+      } catch (err) {
+        setError(err.message || 'Invalid email or password')
+        setBusy(false)
+      }
     }
   }
 

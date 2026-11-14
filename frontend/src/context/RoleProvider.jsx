@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { RoleContext } from './role'
 import { callApi } from '../api'
-import { ROLES, DEMO_LOGINS } from '../data/roles'
+import { ROLES } from '../data/roles'
 
 function getSavedUser(){
   try{
@@ -15,19 +15,15 @@ function getSavedUser(){
 function RoleProvider({ children }){
   const [user, setUser] = useState(getSavedUser)
 
-  const login = (username, password)=>{
-    const found = DEMO_LOGINS.find((item)=>
-      item.username === username && item.password === password
-    )
-
-    if(!found){
-      return false
+  const startStaff = (data)=>{
+    const loggedInUser = {
+      username: data.Email,
+      name: data.FirstName,
+      role: data.Role,
     }
 
-    const loggedInUser = { username: found.username, role: found.role }
     localStorage.setItem('user', JSON.stringify(loggedInUser))
     setUser(loggedInUser)
-    return true
   }
 
   const startCustomer = (data)=>{
@@ -40,6 +36,15 @@ function RoleProvider({ children }){
 
     localStorage.setItem('user', JSON.stringify(loggedInUser))
     setUser(loggedInUser)
+  }
+
+  const loginStaff = async (email, password)=>{
+    const data = await callApi('/api/staff/login', 'POST', {
+      Email: email,
+      Password: password,
+    })
+
+    startStaff(data)
   }
 
   const loginCustomer = async (email, password)=>{
@@ -83,7 +88,7 @@ function RoleProvider({ children }){
   }
 
   return (
-    <RoleContext.Provider value={{ user, login, loginCustomer, registerCustomer, logout, canView, canEdit }}>
+    <RoleContext.Provider value={{ user, loginStaff, loginCustomer, registerCustomer, logout, canView, canEdit }}>
       {children}
     </RoleContext.Provider>
   )

@@ -190,7 +190,7 @@ async function getRevenueReport(params) {
             MIN(term.StartDate) AS SortDate
           FROM membershipterm term
           JOIN membership ON membership.MembershipID = term.MembershipID
-          WHERE membership.IsDeleted = 0 AND term.CancelledAt IS NULL` +
+          WHERE membership.IsDeleted = 0` +
       memberDates +
       `
           GROUP BY DATE_FORMAT(term.StartDate, '%b %y')
@@ -334,8 +334,7 @@ async function getRevenueReport(params) {
     JOIN membership ON membership.MembershipID = term.MembershipID
     LEFT JOIN customer ON customer.CustomerID = membership.CustomerID
     LEFT JOIN staff seller ON seller.StaffID = term.CreatedBy
-    WHERE membership.IsDeleted = 0
-      AND term.CancelledAt IS NULL` +
+    WHERE membership.IsDeleted = 0` +
       memberTxnDates +
       `
     ORDER BY term.StartDate DESC, term.TermID DESC`,
@@ -692,7 +691,7 @@ async function getReportSummaryStats() {
      FROM membershipterm term
      JOIN membership ON membership.MembershipID = term.MembershipID
      WHERE membership.IsDeleted = 0
-       AND term.CancelledAt IS NULL
+       AND term.StartDate <= CURDATE()
        AND term.EndDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
   );
 
@@ -729,7 +728,6 @@ async function getReportSummaryStats() {
      FROM membershipterm term
      JOIN membership ON membership.MembershipID = term.MembershipID
      WHERE membership.IsDeleted = 0
-       AND term.CancelledAt IS NULL
        AND term.StartDate <= CURDATE()
        AND term.EndDate >= CURDATE()`
   );

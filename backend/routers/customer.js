@@ -5,9 +5,11 @@ const {
   getMembershipPlans,
   getMembershipTypes,
   getMembershipLimits,
+  claimWaitlistSeats,
   countMemberDiscounts,
   countReservedSeats,
   getMembershipTicketDiscount,
+  lockWaitlist,
 } = require("../prices");
 const { getPaymentMethods } = require("../paymentMethods");
 const { joinCurrentTerm, termStatus } = require("../terms");
@@ -15,8 +17,6 @@ const { hashPassword, checkPassword } = require("../passwords");
 const { startSession, endSessions } = require("../sessions");
 
 const waitlistLimit = 10;
-
-const blockedStudentMemberships = ["Senior"];
 
 function makeError(status, message) {
   const error = new Error(message);
@@ -373,8 +373,12 @@ async function findTerms(membershipId) {
        Price,
        PaymentMethod,
        CASE
-         WHEN CancelledAt IS NOT NULL THEN 'cancelled'
+         WHEN EndDate < CURDATE() AND CancelledAt IS NOT NULL THEN 'cancelled'
          WHEN EndDate < CURDATE() THEN 'expired'
+         WHEN CancelledAt IS NOT NULL
+           AND StartDate <= CURDATE()
+           AND EndDate >= CURDATE() THEN 'ending'
+         WHEN CancelledAt IS NOT NULL THEN 'cancelled'
          WHEN StartDate > CURDATE() THEN 'upcoming'
          ELSE 'active'
        END AS Status
@@ -391,8 +395,15 @@ async function findTerms(membershipId) {
   }));
 }
 
+function benefitsActive(membership) {
+  return (
+    membership !== null &&
+    (membership.Status === "active" || membership.Status === "ending")
+  );
+}
+
 function getDiscount(membership) {
-  if (membership !== null && membership.Status === "active") {
+  if (benefitsActive(membership)) {
     return membership.DiscountPercent;
   }
 
@@ -401,25 +412,12 @@ function getDiscount(membership) {
 
 function hasActiveMembership(membership, type) {
   return (
-    membership !== null &&
-    membership.Status === "active" &&
+    benefitsActive(membership) &&
     membership.MembershipType === type
   );
 }
 
-function studentTicketsBlocked(membership) {
-  if (membership === null || membership.Status !== "active") {
-    return false;
-  }
-
-  return blockedStudentMemberships.includes(membership.MembershipType);
-}
-
 function needsStudentTicketEmail(membership) {
-  if (studentTicketsBlocked(membership)) {
-    return false;
-  }
-
   return !hasActiveMembership(membership, "Student");
 }
 
@@ -466,13 +464,6 @@ async function checkStudentTicketAccess(membership, counts, schoolEmail, exhibit
     return null;
   }
 
-  if (studentTicketsBlocked(membership)) {
-    throw makeError(
-      400,
-      "Student tickets are not available with a Senior membership."
-    );
-  }
-
   if (!needsStudentTicketEmail(membership)) {
     return null;
   }
@@ -511,7 +502,7 @@ function getTicketDiscount(membership, ticketType, plans) {
 
 
 async function getStoreDiscount(membership, kind) {
-  if (membership === null || membership.Status !== "active") {
+  if (!benefitsActive(membership)) {
     return 0;
   }
 
@@ -534,7 +525,7 @@ async function getStoreDiscount(membership, kind) {
 }
 
 function getActiveMembershipID(membership) {
-  if (membership !== null && membership.Status === "active") {
+  if (benefitsActive(membership)) {
     return membership.MembershipID;
   }
 
@@ -597,6 +588,20 @@ async function cancelMembership(params, body, customerId) {
     throw makeError(404, "You do not have a membership to cancel");
   }
 
+  if (membership.Status === "ending") {
+    return {
+      status: 200,
+      data: {
+        message:
+          "No refunds. Your membership stays active until " +
+          membership.EndDate +
+          ", then it ends.",
+        endDate: membership.EndDate,
+        status: "ending",
+      },
+    };
+  }
+
   if (membership.Status !== "active" && membership.Status !== "upcoming") {
     throw makeError(400, "Your membership is not active");
   }
@@ -610,7 +615,14 @@ async function cancelMembership(params, body, customerId) {
 
   return {
     status: 200,
-    data: { message: "Membership cancelled" },
+    data: {
+      message:
+        "No refunds. Your membership stays active until " +
+        membership.EndDate +
+        ", then it ends.",
+      endDate: membership.EndDate,
+      status: membership.Status === "upcoming" ? "cancelled" : "ending",
+    },
   };
 }
 
@@ -702,13 +714,44 @@ async function renewMembership(params, body, customerId) {
   const paymentMethods = await getPaymentMethods("online_membership");
   const renewal = checkRenewal(body, plans, paymentMethods);
   const membership = await findMembership(customerId);
+  const deferChange =
+    membership !== null &&
+    (membership.Status === "active" ||
+      membership.Status === "ending" ||
+      membership.Status === "upcoming");
 
   if (
     membership !== null &&
-    membership.Status === "active" &&
+    benefitsActive(membership) &&
     membership.MembershipType === renewal.MembershipType
   ) {
     throw makeError(400, `You are already on the ${renewal.MembershipType} plan`);
+  }
+
+  if (deferChange && benefitsActive(membership)) {
+    const terms = await findTerms(membership.MembershipID);
+    const scheduled = terms.find((term) => term.Status === "upcoming");
+
+    if (
+      scheduled &&
+      scheduled.MembershipType === renewal.MembershipType
+    ) {
+      throw makeError(
+        400,
+        `Your ${renewal.MembershipType} plan is already scheduled to start on ${scheduled.StartDate}`
+      );
+    }
+  }
+
+  if (
+    membership !== null &&
+    membership.Status === "upcoming" &&
+    membership.MembershipType === renewal.MembershipType
+  ) {
+    throw makeError(
+      400,
+      `You are already scheduled for the ${renewal.MembershipType} plan`
+    );
   }
 
   const plan = plans[renewal.MembershipType];
@@ -747,29 +790,144 @@ async function renewMembership(params, body, customerId) {
       );
     }
 
-    await connection.query(
-      `UPDATE membershipterm
-       SET CancelledAt = NOW()
-       WHERE MembershipID = ?
-         AND CancelledAt IS NULL
-         AND EndDate >= CURDATE()`,
-      [membershipId]
-    );
+    let startsOn = null;
+    let message = "Membership renewed";
 
-    await connection.query(
-      `INSERT INTO membershipterm
-        (MembershipID, MembershipType, StartDate, EndDate, Price,
-         DiscountPercent, PaymentMethod, CreatedAt, CreatedBy)
-       VALUES (?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR),
-               ?, ?, ?, NOW(), NULL)`,
-      [
-        membershipId,
-        renewal.MembershipType,
-        plan.Price,
-        plan.DiscountPercent,
-        renewal.PaymentMethod,
-      ]
-    );
+    if (deferChange && benefitsActive(membership)) {
+      await connection.query(
+        `UPDATE membershipterm
+         SET CancelledAt = NOW()
+         WHERE MembershipID = ?
+           AND CancelledAt IS NULL
+           AND StartDate > CURDATE()`,
+        [membershipId]
+      );
+
+      const [overlap] = await connection.query(
+        `SELECT TermID
+         FROM membershipterm
+         WHERE MembershipID = ?
+           AND CancelledAt IS NULL
+           AND StartDate < DATE_ADD(DATE_ADD(?, INTERVAL 1 DAY), INTERVAL 1 YEAR)
+           AND EndDate > DATE_ADD(?, INTERVAL 1 DAY)
+         LIMIT 1`,
+        [membershipId, membership.EndDate, membership.EndDate]
+      );
+
+      if (overlap.length > 0) {
+        throw makeError(
+          409,
+          "That membership already has an open term covering those dates."
+        );
+      }
+
+      await connection.query(
+        `INSERT INTO membershipterm
+          (MembershipID, MembershipType, StartDate, EndDate, Price,
+           DiscountPercent, PaymentMethod, CreatedAt, CreatedBy)
+         VALUES (
+           ?,
+           ?,
+           DATE_ADD(?, INTERVAL 1 DAY),
+           DATE_ADD(DATE_ADD(?, INTERVAL 1 DAY), INTERVAL 1 YEAR),
+           ?, ?, ?, NOW(), NULL
+         )`,
+        [
+          membershipId,
+          renewal.MembershipType,
+          membership.EndDate,
+          membership.EndDate,
+          plan.Price,
+          plan.DiscountPercent,
+          renewal.PaymentMethod,
+        ]
+      );
+
+      const [created] = await connection.query(
+        `SELECT DATE_FORMAT(StartDate, '%Y-%m-%d') AS StartDate
+         FROM membershipterm
+         WHERE MembershipID = ?
+         ORDER BY TermID DESC
+         LIMIT 1`,
+        [membershipId]
+      );
+
+      startsOn = created[0]?.StartDate || null;
+      message =
+        "Your plan will change next year. " +
+        renewal.MembershipType +
+        " starts on " +
+        startsOn +
+        ".";
+    } else if (deferChange && membership.Status === "upcoming") {
+      await connection.query(
+        `UPDATE membershipterm
+         SET MembershipType = ?,
+             Price = ?,
+             DiscountPercent = ?,
+             PaymentMethod = ?
+         WHERE TermID = ?`,
+        [
+          renewal.MembershipType,
+          plan.Price,
+          plan.DiscountPercent,
+          renewal.PaymentMethod,
+          membership.TermID,
+        ]
+      );
+
+      startsOn = membership.StartDate;
+      message =
+        "Your plan will be " +
+        renewal.MembershipType +
+        " when your membership starts on " +
+        startsOn +
+        ".";
+    } else {
+      await connection.query(
+        `UPDATE membershipterm
+         SET CancelledAt = NOW()
+         WHERE MembershipID = ?
+           AND CancelledAt IS NULL
+           AND EndDate >= CURDATE()`,
+        [membershipId]
+      );
+
+      const [overlap] = await connection.query(
+        `SELECT TermID
+         FROM membershipterm
+         WHERE MembershipID = ?
+           AND CancelledAt IS NULL
+           AND StartDate < DATE_ADD(CURDATE(), INTERVAL 1 YEAR)
+           AND EndDate > CURDATE()
+         LIMIT 1`,
+        [membershipId]
+      );
+
+      if (overlap.length > 0) {
+        throw makeError(
+          409,
+          "That membership already has an open term covering those dates."
+        );
+      }
+
+      await connection.query(
+        `INSERT INTO membershipterm
+          (MembershipID, MembershipType, StartDate, EndDate, Price,
+           DiscountPercent, PaymentMethod, CreatedAt, CreatedBy)
+         VALUES (?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR),
+                 ?, ?, ?, NOW(), NULL)`,
+        [
+          membershipId,
+          renewal.MembershipType,
+          plan.Price,
+          plan.DiscountPercent,
+          renewal.PaymentMethod,
+        ]
+      );
+
+      message = "Your " + renewal.MembershipType + " membership is active.";
+    }
 
     if (renewal.SchoolEmail) {
       await connection.query(
@@ -793,7 +951,14 @@ async function renewMembership(params, body, customerId) {
 
     return {
       status: 201,
-      data: { message: "Membership renewed", total: plan.Price },
+      data: {
+        message: message,
+        total: plan.Price,
+        deferred: Boolean(
+          startsOn && deferChange && benefitsActive(membership)
+        ),
+        startsOn: startsOn,
+      },
     };
   } catch (error) {
     await connection.rollback();
@@ -821,11 +986,7 @@ async function getPurchases(params, body, customerId) {
        DATE_FORMAT(t.VisitDate, '%Y-%m-%d') AS VisitDate,
        DATE_FORMAT(t.UpdatedAt, '%Y-%m-%d') AS UpdatedAt,
        DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
-       t.IsDeleted = 0 AND t.RefundStatus = 'Refunded' AS MuseumRefund,
-       t.IsDeleted = 0
-         AND t.RefundStatus = 'None'
-         AND e.CancelledAt IS NULL
-         AND COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS CanRefund
+       t.IsDeleted = 0 AND t.RefundStatus = 'Refunded' AS MuseumRefund
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
@@ -876,7 +1037,6 @@ async function getPurchases(params, body, customerId) {
         TicketID: Number(ticket.TicketID),
         ExhibitionID: Number(ticket.ExhibitionID),
         Price: Number(ticket.Price),
-        CanRefund: Number(ticket.CanRefund) === 1,
         MuseumRefund: Number(ticket.MuseumRefund) === 1,
       })),
       orders: orders.map((order) => ({
@@ -1015,6 +1175,7 @@ async function getMyAlerts(params, body, customerId) {
          WHERE ack.CustomerID = t.CustomerID
            AND ack.AlertType = 'exhibition'
            AND ack.AlertKey = CAST(e.ExhibitionID AS CHAR)
+             COLLATE utf8mb4_0900_ai_ci
        )
      GROUP BY e.ExhibitionID, e.Name, e.CancellationReason
      ORDER BY e.Name`,
@@ -1330,6 +1491,8 @@ async function addTickets(params, body, customerId) {
       );
     }
 
+    await lockWaitlist(connection, order.ExhibitionID);
+
     const sold = await countSold(
       connection,
       order.ExhibitionID,
@@ -1364,7 +1527,7 @@ async function addTickets(params, body, customerId) {
       for (let i = 0; i < order.Counts[type]; i++) {
         let discount = getTicketDiscount(membership, type, plans);
 
-        if (membership !== null && membership.Status === "active") {
+        if (benefitsActive(membership)) {
           const limits = getMembershipLimits(plans, membership.MembershipType);
           const limit = limits[type] || 0;
 
@@ -1403,13 +1566,11 @@ async function addTickets(params, body, customerId) {
       }
     }
 
-    await connection.query(
-      `UPDATE waitlist
-       SET Status = 'Claimed'
-       WHERE CustomerID = ?
-         AND ExhibitionID = ?
-         AND Status IN ('Waiting', 'Notified')`,
-      [customerId, order.ExhibitionID]
+    await claimWaitlistSeats(
+      connection,
+      customerId,
+      order.ExhibitionID,
+      order.Count
     );
 
     await connection.commit();
@@ -1430,89 +1591,8 @@ async function addTickets(params, body, customerId) {
 }
 
 
-async function refundTicket(params, body, customerId) {
-  const ticketIds = [];
-
-  if (Array.isArray(body.TicketIDs)) {
-    for (const value of body.TicketIDs) {
-      ticketIds.push(checkPositiveId(value, "ticket"));
-    }
-  } else if (body.TicketID !== undefined) {
-    ticketIds.push(checkPositiveId(body.TicketID, "ticket"));
-  }
-
-  if (ticketIds.length === 0) {
-    throw makeError(400, "Please select at least one ticket to refund");
-  }
-
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-
-    let refundTotal = 0;
-    let refundCount = 0;
-
-    for (const ticketId of ticketIds) {
-      const [rows] = await connection.query(
-        `SELECT
-           t.Price,
-           t.RefundStatus,
-           e.CancelledAt IS NULL
-             AND COALESCE(t.VisitDate, e.StartDate) > CURDATE() AS CanRefund
-         FROM ticket t
-         JOIN exhibition e
-           ON e.ExhibitionID = t.ExhibitionID
-         WHERE t.TicketID = ?
-           AND t.CustomerID = ?
-           AND t.IsDeleted = 0
-         FOR UPDATE`,
-        [ticketId, customerId]
-      );
-
-      if (rows.length === 0) {
-        throw makeError(404, "Ticket not found");
-      }
-
-      const ticket = rows[0];
-
-      if (ticket.RefundStatus !== "None") {
-        throw makeError(409, "One of the selected tickets has already been refunded");
-      }
-
-      if (Number(ticket.CanRefund) !== 1) {
-        throw makeError(
-          400,
-          "Tickets can be refunded until the day before your visit"
-        );
-      }
-
-      await connection.query(
-        `UPDATE ticket
-         SET IsDeleted = 1, UpdatedAt = NOW()
-         WHERE TicketID = ?`,
-        [ticketId]
-      );
-
-      refundTotal = refundTotal + Number(ticket.Price);
-      refundCount = refundCount + 1;
-    }
-
-    await connection.commit();
-
-    return {
-      status: 200,
-      data: {
-        count: refundCount,
-        refund: money(refundTotal),
-      },
-    };
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+async function refundTicket() {
+  throw makeError(400, "Ticket refunds are not available");
 }
 
 async function joinWaitlist(params, body, customerId) {
@@ -1601,8 +1681,14 @@ async function joinWaitlist(params, body, customerId) {
       );
     }
 
+    await lockWaitlist(connection, exhibitionID);
+
     const sold = await countSold(connection, exhibitionID, visitDate);
-    const reserved = await countReservedSeats(connection, exhibitionID, customerId);
+    const reserved = await countReservedSeats(
+      connection,
+      exhibitionID,
+      customerId
+    );
 
     if (sold + reserved < Number(exhibition.Capacity)) {
       throw makeError(400, "Tickets are still available for that visit date");
@@ -1612,8 +1698,7 @@ async function joinWaitlist(params, body, customerId) {
       `SELECT COUNT(*) AS WaitlistCount
        FROM waitlist
        WHERE ExhibitionID = ?
-         AND Status IN ('Waiting', 'Notified')
-       FOR UPDATE`,
+         AND Status IN ('Waiting', 'Notified')`,
       [exhibitionID]
     );
 

@@ -8,6 +8,7 @@ const {
   getMembershipLimits,
   countMemberDiscounts,
   countReservedSeats,
+  lockWaitlist,
 } = require("../prices");
 const { joinCurrentTerm, activeTerm } = require("../terms");
 
@@ -187,16 +188,6 @@ async function checkReferences(ticket, ticketPrices, skipTicketId = null) {
     const membership = memberships[0];
     const plans = await getMembershipPlans();
 
-    if (
-      ticket.TicketType === "Student" &&
-      membership.MembershipType === "Senior"
-    ) {
-      throw makeError(
-        400,
-        "Student tickets are not available with a Senior membership."
-      );
-    }
-
     let discount = getMembershipTicketDiscount(
       plans,
       membership.MembershipType,
@@ -271,6 +262,46 @@ async function getPrices() {
   };
 }
 
+async function checkSeatOpen(connection, exhibitionId, visitDate, customerId, skipTicketId) {
+  const [exhibitions] = await connection.query(
+    `SELECT Capacity
+     FROM exhibition
+     WHERE ExhibitionID = ?
+     FOR UPDATE`,
+    [exhibitionId]
+  );
+
+  if (exhibitions.length === 0) {
+    throw makeError(400, "The selected exhibition does not exist");
+  }
+
+  await lockWaitlist(connection, exhibitionId);
+
+  const [sold] = await connection.query(
+    `SELECT COUNT(*) AS Total
+     FROM ticket
+     WHERE ExhibitionID = ?
+       AND VisitDate <=> ?
+       AND IsDeleted = 0
+       AND RefundStatus <> 'Refunded'
+       AND NOT (TicketID <=> ?)`,
+    [exhibitionId, visitDate, skipTicketId]
+  );
+  const reserved = await countReservedSeats(
+    connection,
+    exhibitionId,
+    customerId
+  );
+  const open = Number(exhibitions[0].Capacity) - Number(sold[0].Total) - reserved;
+
+  if (open <= 0) {
+    throw makeError(
+      400,
+      "No seats left for that visit date. Remaining seats are held for the waitlist."
+    );
+  }
+}
+
 async function addTicket(params, body, staffId) {
   const ticketPrices = await getTicketPrices();
   const paymentMethods = await getPaymentMethods("ticket");
@@ -278,47 +309,49 @@ async function addTicket(params, body, staffId) {
 
   await checkReferences(ticket, ticketPrices);
 
-  const [capacity] = await pool.query(
-    `SELECT
-       e.Capacity - (
-         SELECT COUNT(*) FROM ticket t
-         WHERE t.ExhibitionID = e.ExhibitionID
-           AND t.VisitDate <=> ?
-           AND t.IsDeleted = 0
-           AND t.RefundStatus <> 'Refunded'
-       ) AS Open
-     FROM exhibition e
-     WHERE e.ExhibitionID = ?`,
-    [ticket.VisitDate, ticket.ExhibitionID]
-  );
-  const reserved = await countReservedSeats(pool, ticket.ExhibitionID, ticket.CustomerID);
+  const connection = await pool.getConnection();
 
-  if (Number(capacity[0].Open) - reserved <= 0) {
-    throw makeError(400, "No seats left for that visit date. Remaining seats are held for the waitlist.");
-  }
+  try {
+    await connection.beginTransaction();
 
-  const [result] = await pool.query(
-    `INSERT INTO ticket
-      (TicketType, Price, PaymentMethod, SaleDate, VisitDate, ExhibitionID,
-       MembershipID, CustomerID, CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, 0)`,
-    [
-      ticket.TicketType,
-      ticket.Price,
-      ticket.PaymentMethod,
-      ticket.SaleDate,
-      ticket.VisitDate,
+    await checkSeatOpen(
+      connection,
       ticket.ExhibitionID,
-      ticket.MembershipID,
+      ticket.VisitDate,
       ticket.CustomerID,
-      staffId,
-    ]
-  );
+      null
+    );
 
-  return {
-    status: 201,
-    data: await findTicket(result.insertId),
-  };
+    const [result] = await connection.query(
+      `INSERT INTO ticket
+        (TicketType, Price, PaymentMethod, SaleDate, VisitDate, ExhibitionID,
+         MembershipID, CustomerID, CreatedAt, UpdatedAt, CreatedBy, IsDeleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, 0)`,
+      [
+        ticket.TicketType,
+        ticket.Price,
+        ticket.PaymentMethod,
+        ticket.SaleDate,
+        ticket.VisitDate,
+        ticket.ExhibitionID,
+        ticket.MembershipID,
+        ticket.CustomerID,
+        staffId,
+      ]
+    );
+
+    await connection.commit();
+
+    return {
+      status: 201,
+      data: await findTicket(result.insertId),
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function updateTicket(params, body) {
@@ -333,55 +366,56 @@ async function updateTicket(params, body) {
 
   await checkReferences(ticket, ticketPrices, id);
 
-  const [capacity] = await pool.query(
-    `SELECT
-       e.Capacity - (
-         SELECT COUNT(*) FROM ticket t
-         WHERE t.ExhibitionID = e.ExhibitionID
-           AND t.VisitDate <=> ?
-           AND t.IsDeleted = 0
-           AND t.RefundStatus <> 'Refunded'
-           AND t.TicketID <> ?
-       ) AS Open
-     FROM exhibition e
-     WHERE e.ExhibitionID = ?`,
-    [ticket.VisitDate, id, ticket.ExhibitionID]
-  );
-  const reserved = await countReservedSeats(pool, ticket.ExhibitionID, ticket.CustomerID);
+  const connection = await pool.getConnection();
 
-  if (Number(capacity[0].Open) - reserved <= 0) {
-    throw makeError(400, "No seats left for that visit date. Remaining seats are held for the waitlist.");
-  }
+  try {
+    await connection.beginTransaction();
 
-  await pool.query(
-    `UPDATE ticket
-     SET TicketType = ?,
-         Price = ?,
-         PaymentMethod = ?,
-         SaleDate = ?,
-         VisitDate = ?,
-         ExhibitionID = ?,
-         MembershipID = ?,
-         CustomerID = COALESCE(?, CustomerID),
-         UpdatedAt = NOW()
-     WHERE TicketID = ? AND IsDeleted = 0`,
-    [
-      ticket.TicketType,
-      ticket.Price,
-      ticket.PaymentMethod,
-      ticket.SaleDate,
-      ticket.VisitDate,
+    await checkSeatOpen(
+      connection,
       ticket.ExhibitionID,
-      ticket.MembershipID,
+      ticket.VisitDate,
       ticket.CustomerID,
-      id,
-    ]
-  );
+      id
+    );
 
-  return {
-    status: 200,
-    data: await findTicket(id),
-  };
+    await connection.query(
+      `UPDATE ticket
+       SET TicketType = ?,
+           Price = ?,
+           PaymentMethod = ?,
+           SaleDate = ?,
+           VisitDate = ?,
+           ExhibitionID = ?,
+           MembershipID = ?,
+           CustomerID = COALESCE(?, CustomerID),
+           UpdatedAt = NOW()
+       WHERE TicketID = ? AND IsDeleted = 0`,
+      [
+        ticket.TicketType,
+        ticket.Price,
+        ticket.PaymentMethod,
+        ticket.SaleDate,
+        ticket.VisitDate,
+        ticket.ExhibitionID,
+        ticket.MembershipID,
+        ticket.CustomerID,
+        id,
+      ]
+    );
+
+    await connection.commit();
+
+    return {
+      status: 200,
+      data: await findTicket(id),
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function deleteTicket(params) {

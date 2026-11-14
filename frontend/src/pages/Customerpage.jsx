@@ -13,35 +13,29 @@ const TABS = [
   { id: 'details', label: 'My Details' },
 ]
 
-const BLOCKED_STUDENT_MEMBERSHIPS = ['Senior']
 const COUGARNET_PATTERN = /^[^\s@]+@cougarnet\.uh\.edu$/i
 const NAME_PATTERN = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 
-function canBuyStudentTickets(membership) {
-  if (membership === null || membership.Status?.toLowerCase() !== 'active') {
-    return true
-  }
-
-  return !BLOCKED_STUDENT_MEMBERSHIPS.includes(membership.MembershipType)
-}
-
 function needsStudentEmail(membership) {
-  if (!canBuyStudentTickets(membership)) {
-    return false
-  }
-
   return (
-    !membership ||
-    membership.Status?.toLowerCase() !== 'active' ||
+    !membershipBenefitsActive(membership) ||
     membership.MembershipType !== 'Student'
   )
 }
 
 const STATUS_TEXT = {
   active: 'Active',
+  ending: 'Ending',
   upcoming: 'Starts soon',
   expired: 'Expired',
   cancelled: 'Cancelled',
+}
+
+function membershipBenefitsActive(membership) {
+  return (
+    membership &&
+    (membership.Status === 'active' || membership.Status === 'ending')
+  )
 }
 
 const TICKET_STATUS = {
@@ -179,9 +173,12 @@ function MembershipTab({ account, onChanged }) {
     setCancelError('')
 
     try {
-      await callApi('/api/customer/membership/cancel', 'POST')
+      const result = await callApi('/api/customer/membership/cancel', 'POST')
       setCancelModalOpen(false)
-      onChanged('Your membership has been cancelled and your payment will be refunded.')
+      onChanged(
+        result.message ||
+          'No refunds. Your membership stays active until it expires after a year.'
+      )
     }
     catch (cancelError) {
       setCancelError(cancelError.message)
@@ -255,7 +252,11 @@ function MembershipTab({ account, onChanged }) {
       })
 
       setRenewing(false)
-      onChanged(`Your ${plan} membership is active. You paid ${money(result.total)}.`)
+      onChanged(
+        result.message
+          ? `${result.message} You paid ${money(result.total)}.`
+          : `Your ${plan} membership is active. You paid ${money(result.total)}.`
+      )
     }
     catch (renewError) {
       setError(renewError.message)
@@ -267,8 +268,14 @@ function MembershipTab({ account, onChanged }) {
 
   const hasMembership = membership !== null
   const isActive = hasMembership && membership.Status === 'active'
-  const canCancel = isActive || (hasMembership && membership.Status === 'upcoming')
+  const isEnding = hasMembership && membership.Status === 'ending'
+  const benefitsOn = membershipBenefitsActive(membership)
+  const isUpcoming = hasMembership && membership.Status === 'upcoming'
+  const canCancel = isActive || isUpcoming
+  const canChangePlan = benefitsOn || isUpcoming
   const selectedPlan = plans.find((item) => item.MembershipType === plan)
+  const scheduledTerm = (terms || []).find((term) => term.Status === 'upcoming')
+  const benefitUntil = formatDate(membership?.EndDate)
   const {
     visibleRows: historyRows,
     page: historyPage,
@@ -279,13 +286,18 @@ function MembershipTab({ account, onChanged }) {
   const picker = (
     <section className="cp-card">
       <div className="cp-label">
-        {!hasMembership ? 'Join' : canCancel ? 'Change plan' : 'Renew'}
+        {!hasMembership ? 'Join' : canChangePlan ? 'Change plan' : 'Renew'}
       </div>
       <h2>{hasMembership ? 'Choose a plan' : 'Become a member'}</h2>
 
       <div className="cp-plans">
         {plans.map((item) => {
-          const isCurrent = isActive && item.MembershipType === membership.MembershipType
+          const isCurrent =
+            benefitsOn && item.MembershipType === membership.MembershipType
+          const isScheduled =
+            scheduledTerm &&
+            item.MembershipType === scheduledTerm.MembershipType &&
+            !(isUpcoming && item.MembershipType === membership.MembershipType)
 
           return (
             <button
@@ -296,14 +308,16 @@ function MembershipTab({ account, onChanged }) {
                 setPlan(item.MembershipType)
                 setError('')
               }}
-              disabled={isCurrent}
+              disabled={isCurrent || Boolean(isScheduled)}
             >
               <span className="cp-option-name">{item.MembershipType}</span>
               <span className="cp-option-text">{money(item.Price)} for one year</span>
               <span className="cp-option-meta">
                 {isCurrent
                   ? 'Your current plan'
-                  : `${item.DiscountPercent}% off tickets - ${item.GiftShopDiscount}% off gift shop - ${item.CafeDiscount}% off CoogCafe`}
+                  : isScheduled
+                    ? `Starts ${formatDate(scheduledTerm.StartDate)}`
+                    : `${item.DiscountPercent}% off tickets - ${item.GiftShopDiscount}% off gift shop - ${item.CafeDiscount}% off CoogCafe`}
               </span>
             </button>
           )
@@ -401,7 +415,9 @@ function MembershipTab({ account, onChanged }) {
             <h2>{membership.MembershipType}</h2>
           </div>
           <span className={`cp-status is-${membership.Status}`}>
-            {STATUS_TEXT[membership.Status]}
+            {isEnding
+              ? `Active until ${benefitUntil}`
+              : STATUS_TEXT[membership.Status]}
           </span>
         </div>
 
@@ -420,15 +436,27 @@ function MembershipTab({ account, onChanged }) {
           </div>
           <div>
             <dt>Ticket discount</dt>
-            <dd>{isActive ? `${membership.DiscountPercent}%` : 'None while inactive'}</dd>
+            <dd>
+              {benefitsOn
+                ? `${membership.DiscountPercent}% · active until ${benefitUntil}`
+                : 'None while inactive'}
+            </dd>
           </div>
           <div>
             <dt>Gift shop</dt>
-            <dd>{isActive ? `${membership.GiftShopDiscount}% off` : 'None while inactive'}</dd>
+            <dd>
+              {benefitsOn
+                ? `${membership.GiftShopDiscount}% off · active until ${benefitUntil}`
+                : 'None while inactive'}
+            </dd>
           </div>
           <div>
             <dt>CoogCafe</dt>
-            <dd>{isActive ? `${membership.CafeDiscount}% off` : 'None while inactive'}</dd>
+            <dd>
+              {benefitsOn
+                ? `${membership.CafeDiscount}% off · active until ${benefitUntil}`
+                : 'None while inactive'}
+            </dd>
           </div>
           <div>
             <dt>Email</dt>
@@ -442,7 +470,21 @@ function MembershipTab({ account, onChanged }) {
           )}
         </dl>
 
-        {!canCancel && (
+        {isEnding && (
+          <p className="cp-note">
+            Cancellation recorded. No refunds. Benefits stay active until {benefitUntil}, then
+            this membership ends.
+          </p>
+        )}
+
+        {scheduledTerm && (
+          <p className="cp-note">
+            Your plan changes to {scheduledTerm.MembershipType} on{' '}
+            {formatDate(scheduledTerm.StartDate)}. No refunds on the current term.
+          </p>
+        )}
+
+        {!canChangePlan && (
           <p className="cp-note">
             Your membership is {membership.Status}. Renew it to get your ticket discount back.
           </p>
@@ -451,7 +493,7 @@ function MembershipTab({ account, onChanged }) {
         {!renewing && (
           <div className="cp-member-actions">
             <button type="button" className="btn primary" onClick={openRenew}>
-              {canCancel ? 'Change Plan' : 'Renew Membership'}
+              {canChangePlan ? 'Change Plan' : 'Renew Membership'}
             </button>
 
             {canCancel && (
@@ -495,7 +537,9 @@ function MembershipTab({ account, onChanged }) {
                   <td>{term.PaymentMethod}</td>
                   <td>
                     <span className={`badge badge-${term.Status}`}>
-                      {STATUS_TEXT[term.Status]}
+                      {term.Status === 'ending'
+                        ? `Active until ${formatDate(term.EndDate)}`
+                        : STATUS_TEXT[term.Status]}
                     </span>
                   </td>
                 </tr>
@@ -524,7 +568,7 @@ function MembershipTab({ account, onChanged }) {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to cancel your membership? Your payment will be refunded and this cannot be undone.
+            No refunds. Your membership stays active until {formatDate(membership.EndDate)}, then it ends. Ticket, gift shop, and CoogCafe discounts keep working until that date. You can still change plans for next year.
           </p>
 
           <div className="form-actions">
@@ -763,72 +807,13 @@ function DetailsTab({ account, onUpdated }) {
   )
 }
 
-function PurchasesTab({ purchases, onChanged }) {
+function PurchasesTab({ purchases }) {
   const [view, setView] = useState('tickets')
-  const [selectedIds, setSelectedIds] = useState([])
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [refundError, setRefundError] = useState('')
-  const [saving, setSaving] = useState(false)
   const { tickets, orders, waitlist } = purchases
 
   const rows =
     view === 'tickets' ? tickets : view === 'orders' ? orders : waitlist
   const { visibleRows, page, total, setPage } = usePagedList(rows, view)
-
-  const changeView = (nextView) => {
-    setView(nextView)
-    setSelectedIds([])
-  }
-
-  const selectedTickets = tickets.filter((ticket) =>
-    selectedIds.includes(ticket.TicketID)
-  )
-  const selectedTotal = selectedTickets.reduce(
-    (sum, ticket) => sum + ticket.Price,
-    0
-  )
-  const selecting = selectedIds.length > 0
-
-  const toggleTicket = (ticketId) => {
-    setSelectedIds((current) => {
-      if (current.includes(ticketId)) {
-        return current.filter((id) => id !== ticketId)
-      }
-
-      return [...current, ticketId]
-    })
-    setRefundError('')
-  }
-
-  const closeRefund = () => {
-    setConfirmOpen(false)
-    setRefundError('')
-  }
-
-  const confirmRefund = async () => {
-    if (selectedIds.length === 0) {
-      return
-    }
-
-    setSaving(true)
-    setRefundError('')
-
-    try {
-      const result = await callApi('/api/customer/tickets/refund', 'POST', {
-        TicketIDs: selectedIds,
-      })
-
-      setConfirmOpen(false)
-      setSelectedIds([])
-      onChanged(
-        `${result.count} ${result.count === 1 ? 'ticket was' : 'tickets were'} refunded. ${money(result.refund)} will be returned to your card.`
-      )
-    } catch (refundFailed) {
-      setRefundError(refundFailed.message)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <section className="cp-card">
@@ -836,33 +821,12 @@ function PurchasesTab({ purchases, onChanged }) {
         <h2>Purchases</h2>
 
         <div className="page-header-actions">
-          {view === 'tickets' && selecting && (
-            <>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => setSelectedIds([])}
-                disabled={saving}
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                className="btn danger"
-                onClick={() => setConfirmOpen(true)}
-                disabled={saving}
-              >
-                Refund Selected ({selectedIds.length})
-              </button>
-            </>
-          )}
-
           <div className="cp-toggle" role="group" aria-label="Purchase type">
             <button
               type="button"
               className={view === 'tickets' ? 'is-active' : ''}
               aria-pressed={view === 'tickets'}
-              onClick={() => changeView('tickets')}
+              onClick={() => setView('tickets')}
             >
               Tickets
             </button>
@@ -870,7 +834,7 @@ function PurchasesTab({ purchases, onChanged }) {
               type="button"
               className={view === 'orders' ? 'is-active' : ''}
               aria-pressed={view === 'orders'}
-              onClick={() => changeView('orders')}
+              onClick={() => setView('orders')}
             >
               Gift Shop
             </button>
@@ -878,7 +842,7 @@ function PurchasesTab({ purchases, onChanged }) {
               type="button"
               className={view === 'waitlist' ? 'is-active' : ''}
               aria-pressed={view === 'waitlist'}
-              onClick={() => changeView('waitlist')}
+              onClick={() => setView('waitlist')}
             >
               Waitlist
             </button>
@@ -892,16 +856,9 @@ function PurchasesTab({ purchases, onChanged }) {
         ) : (
           <>
             <div className="table-wrap">
-              <table
-                className={
-                  'data-table cp-ticket-table' + (selecting ? ' selecting' : '')
-                }
-              >
+              <table className="data-table cp-ticket-table">
                 <thead>
                   <tr>
-                    <th scope="col" className="select-col">
-                      <span className="sr-only">Select</span>
-                    </th>
                     <th scope="col">Exhibition</th>
                     <th scope="col">Type</th>
                     <th scope="col">Price</th>
@@ -913,22 +870,7 @@ function PurchasesTab({ purchases, onChanged }) {
                 </thead>
                 <tbody>
                   {visibleRows.map((ticket) => (
-                    <tr
-                      key={ticket.TicketID}
-                      className={
-                        selectedIds.includes(ticket.TicketID) ? 'selected-row' : ''
-                      }
-                    >
-                      <td className="select-col">
-                        {ticket.CanRefund ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.includes(ticket.TicketID)}
-                            onChange={() => toggleTicket(ticket.TicketID)}
-                            aria-label={`Select ${ticket.TicketType} ticket for ${ticket.ExhibitionName}`}
-                          />
-                        ) : null}
-                      </td>
+                    <tr key={ticket.TicketID}>
                       <td className="strong">{ticket.ExhibitionName}</td>
                       <td>{ticket.TicketType}</td>
                       <td>{money(ticket.Price)}</td>
@@ -1038,26 +980,6 @@ function PurchasesTab({ purchases, onChanged }) {
           </>
         )
       )}
-
-      <Modal open={confirmOpen} title="Refund tickets" onClose={closeRefund}>
-        <p>
-          Refund {selectedIds.length}{' '}
-          {selectedIds.length === 1 ? 'ticket' : 'tickets'} for{' '}
-          <strong>{money(selectedTotal)}</strong>? Spots will go to the next
-          people on the waitlist.
-        </p>
-
-        {refundError && <p className="form-error" role="alert">{refundError}</p>}
-
-        <div className="modal-actions">
-          <button type="button" className="btn secondary" onClick={closeRefund} disabled={saving}>
-            Keep Tickets
-          </button>
-          <button type="button" className="btn primary" onClick={confirmRefund} disabled={saving}>
-            {saving ? 'Refunding...' : 'Refund Selected'}
-          </button>
-        </div>
-      </Modal>
     </section>
   )
 }
@@ -1115,15 +1037,8 @@ function TicketsTab({ data, account, purchases, onBought }) {
 
   const { waitlist, prices, discounts, waitlistLimit } = data
   const membership = account?.membership ?? account?.Membership ?? null
-  const allowStudentTickets = canBuyStudentTickets(membership)
   const askForStudentEmail = needsStudentEmail(membership)
-  const types = Object.keys(prices).filter((type) => {
-    if (type === 'Student' && !allowStudentTickets) {
-      return false
-    }
-
-    return true
-  })
+  const types = Object.keys(prices)
   const selected = exhibitions.find(
     (item) => item.ExhibitionID === exhibitionId
   )
@@ -1143,7 +1058,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
     Senior: 0,
   }
 
-  if (membership?.Status?.toLowerCase() === 'active') {
+  if (membershipBenefitsActive(membership)) {
     const plan = account?.plans?.find(
       (item) => item.MembershipType === membership.MembershipType
     )
@@ -1733,10 +1648,9 @@ function ShopTab({ items, account, onBought }) {
   }, [])
 
   const membership = account?.membership ?? null
-  const shopDiscount =
-    membership?.Status?.toLowerCase() === 'active'
-      ? Number(membership.GiftShopDiscount) || 0
-      : 0
+  const shopDiscount = membershipBenefitsActive(membership)
+    ? Number(membership.GiftShopDiscount) || 0
+    : 0
 
   const priceFor = (item) => item.Price * (1 - shopDiscount / 100)
 

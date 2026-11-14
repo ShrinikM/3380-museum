@@ -150,6 +150,17 @@ async function countMemberDiscounts(
   return used;
 }
 
+async function lockWaitlist(db, exhibitionId) {
+  await db.query(
+    `SELECT WaitlistID
+     FROM waitlist
+     WHERE ExhibitionID = ?
+       AND Status IN ('Waiting', 'Notified')
+     FOR UPDATE`,
+    [exhibitionId]
+  );
+}
+
 async function countReservedSeats(db, exhibitionId, customerId = null) {
   const [rows] = await db.query(
     `SELECT COUNT(*) AS Total
@@ -163,7 +174,37 @@ async function countReservedSeats(db, exhibitionId, customerId = null) {
   return Number(rows[0].Total);
 }
 
+async function claimWaitlistSeats(db, customerId, exhibitionId, count) {
+  if (count < 1) {
+    return;
+  }
+
+  const [rows] = await db.query(
+    `SELECT WaitlistID
+     FROM waitlist
+     WHERE CustomerID = ?
+       AND ExhibitionID = ?
+       AND Status IN ('Notified', 'Waiting')
+     ORDER BY FIELD(Status, 'Notified', 'Waiting'), WaitlistID
+     LIMIT ?
+     FOR UPDATE`,
+    [customerId, exhibitionId, count]
+  );
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await db.query(
+    `UPDATE waitlist
+     SET Status = 'Claimed'
+     WHERE WaitlistID IN (?)`,
+    [rows.map((row) => row.WaitlistID)]
+  );
+}
+
 module.exports = {
+  claimWaitlistSeats,
   countMemberDiscounts,
   countReservedSeats,
   getTicketPrices,
@@ -172,4 +213,5 @@ module.exports = {
   getMembershipTypes,
   getMembershipLimits,
   getMembershipTicketDiscount,
+  lockWaitlist,
 };

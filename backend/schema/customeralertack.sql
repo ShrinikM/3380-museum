@@ -1,5 +1,6 @@
 -- Customer alert acknowledgments (refunds / cancelled exhibitions).
 -- Survives across devices; run on an existing museum database.
+-- Collation must match the rest of museum (utf8mb4_0900_ai_ci).
 
 CREATE TABLE IF NOT EXISTS customeralertack (
   CustomerID bigint unsigned NOT NULL,
@@ -12,7 +13,12 @@ CREATE TABLE IF NOT EXISTS customeralertack (
     FOREIGN KEY (CustomerID) REFERENCES customer (CustomerID),
   CONSTRAINT chk_customeralertack_type
     CHECK (AlertType IN ('exhibition', 'refund'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- If the table already exists with the wrong collation, fix it:
+ALTER TABLE customeralertack
+  CONVERT TO CHARACTER SET utf8mb4
+  COLLATE utf8mb4_0900_ai_ci;
 
 INSERT INTO customeralertack (CustomerID, AlertType, AlertKey, AcknowledgedAt)
 SELECT

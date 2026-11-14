@@ -25,8 +25,21 @@ const emptyForm = {
   Department: 'Curatorial',
   Email: '',
   PhoneNumber: '',
+  Street: '',
+  City: '',
+  State: '',
+  ZipCode: '',
   StartDate: '',
   EndDate: '',
+}
+
+function formatAddress(item) {
+  const line = [item.Street, item.City, item.State, item.ZipCode]
+    .map((part) => (part || '').trim())
+    .filter(Boolean)
+    .join(', ')
+
+  return line || '-'
 }
 
 const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
@@ -85,7 +98,7 @@ function Staff() {
 
   const filteredStaff = staffMembers.filter((item) => {
     const text =
-      `${item.StaffID} ${item.FirstName} ${item.LastName} ${item.Role} ${item.Department} ${item.Email} ${item.PhoneNumber} ${getStatus(item)}`.toLowerCase()
+      `${item.StaffID} ${item.FirstName} ${item.LastName} ${item.Role} ${item.Department} ${item.Email} ${item.PhoneNumber} ${item.Street || ''} ${item.City || ''} ${item.State || ''} ${item.ZipCode || ''} ${getStatus(item)}`.toLowerCase()
 
     return text.includes(searchTerm.toLowerCase())
   })
@@ -122,6 +135,10 @@ function Staff() {
       Department: item.Department || 'Curatorial',
       Email: item.Email || '',
       PhoneNumber: (item.PhoneNumber || '').replace(/\D/g, ''),
+      Street: item.Street || '',
+      City: item.City || '',
+      State: item.State || '',
+      ZipCode: item.ZipCode || '',
       StartDate: item.StartDate || '',
       EndDate: item.EndDate || '',
     })
@@ -167,6 +184,13 @@ function Staff() {
       return
     }
 
+    const zip = formData.ZipCode.trim()
+
+    if (zip && !/^[0-9]{5}$/.test(zip)) {
+      setFormError('Zip code must be 5 digits.')
+      return
+    }
+
     if (formData.EndDate && formData.EndDate < formData.StartDate) {
       setFormError('End Date cannot be before Start Date.')
       return
@@ -179,6 +203,10 @@ function Staff() {
       Department: formData.Department,
       Email: email,
       PhoneNumber: phone,
+      Street: formData.Street.trim() || null,
+      City: formData.City.trim() || null,
+      State: formData.State.trim() || null,
+      ZipCode: zip || null,
       StartDate: formData.StartDate,
       EndDate: formData.EndDate || null,
     }
@@ -320,6 +348,7 @@ function Staff() {
               <th scope="col">Department</th>
               <th scope="col">Email</th>
               <th scope="col">Phone</th>
+              <th scope="col">Address</th>
               <th scope="col">Start Date</th>
               <th scope="col">Status</th>
             </tr>
@@ -352,6 +381,7 @@ function Staff() {
                 <td>{item.Department}</td>
                 <td className="muted">{item.Email}</td>
                 <td className="mono">{item.PhoneNumber}</td>
+                <td className="muted">{formatAddress(item)}</td>
                 <td className="mono">{item.StartDate || '-'}</td>
                 <td>{getStatus(item)}</td>
               </tr>
@@ -359,7 +389,7 @@ function Staff() {
 
             {filteredStaff.length === 0 && (
               <tr>
-                <td colSpan={allowEdit ? 9 : 8} className="empty">
+                <td colSpan={allowEdit ? 10 : 9} className="empty">
                   No staff members found.
                 </td>
               </tr>
@@ -477,6 +507,67 @@ function Staff() {
                 })
               }
               required
+            />
+          </div>
+
+          <div className="form-group form-full">
+            <label htmlFor="staff-street">Street</label>
+            <input
+              id="staff-street"
+              name="Street"
+              type="text"
+              autoComplete="street-address"
+              maxLength={255}
+              value={formData.Street}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-city">City</label>
+            <input
+              id="staff-city"
+              name="City"
+              type="text"
+              autoComplete="address-level2"
+              maxLength={255}
+              value={formData.City}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-state">State</label>
+            <input
+              id="staff-state"
+              name="State"
+              type="text"
+              autoComplete="address-level1"
+              maxLength={255}
+              value={formData.State}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="staff-zip">Zip Code</label>
+            <input
+              id="staff-zip"
+              name="ZipCode"
+              type="text"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              maxLength={5}
+              placeholder="12345"
+              pattern="[0-9]{5}"
+              title="Use a 5-digit U.S. ZIP code."
+              value={formData.ZipCode}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  ZipCode: e.target.value.replace(/\D/g, '').slice(0, 5),
+                })
+              }
             />
           </div>
 

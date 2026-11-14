@@ -672,7 +672,8 @@ textarea:focus-visible {
   color: var(--success);
 }
 
-.badge-upcoming {
+.badge-upcoming,
+.badge-ending {
   background: var(--warning-bg);
   color: var(--warning);
 }

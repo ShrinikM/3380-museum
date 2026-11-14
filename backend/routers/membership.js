@@ -51,6 +51,33 @@ function checkDuplicate(error) {
   throw error;
 }
 
+async function assertNoOpenTermOverlap(
+  connection,
+  membershipId,
+  startDate,
+  endDate,
+  skipTermId = null
+) {
+  const [rows] = await connection.query(
+    `SELECT TermID
+     FROM membershipterm
+     WHERE MembershipID = ?
+       AND CancelledAt IS NULL
+       AND StartDate < ?
+       AND EndDate > ?
+       AND NOT (TermID <=> ?)
+     LIMIT 1`,
+    [membershipId, endDate, startDate, skipTermId]
+  );
+
+  if (rows.length > 0) {
+    throw makeError(
+      409,
+      "That membership already has an open term covering those dates."
+    );
+  }
+}
+
 function calculateAge(dateOfBirth, onDate) {
   const dob = new Date(`${dateOfBirth}T00:00:00Z`);
   const date = new Date(`${onDate}T00:00:00Z`);
@@ -450,6 +477,13 @@ async function addMembership(params, body, staffId) {
       );
     }
 
+    await assertNoOpenTermOverlap(
+      connection,
+      membershipId,
+      membership.StartDate,
+      membership.EndDate
+    );
+
     await connection.query(
       `INSERT INTO membershipterm (
          MembershipID,
@@ -524,6 +558,30 @@ async function updateMembership(params, body) {
       ]
     );
 
+    const [latest] = await connection.query(
+      `SELECT TermID
+       FROM membershipterm
+       WHERE MembershipID = ?
+       ORDER BY TermID DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [id]
+    );
+
+    if (latest.length === 0) {
+      throw makeError(404, "Membership term not found.");
+    }
+
+    const termId = Number(latest[0].TermID);
+
+    await assertNoOpenTermOverlap(
+      connection,
+      id,
+      membership.StartDate,
+      membership.EndDate,
+      termId
+    );
+
     await connection.query(
       `UPDATE membershipterm
        SET MembershipType = ?,
@@ -532,15 +590,7 @@ async function updateMembership(params, body) {
            Price = ?,
            DiscountPercent = ?,
            PaymentMethod = ?
-       WHERE TermID = (
-         SELECT TermID FROM (
-           SELECT TermID
-           FROM membershipterm
-           WHERE MembershipID = ?
-           ORDER BY TermID DESC
-           LIMIT 1
-         ) AS latest
-       )`,
+       WHERE TermID = ?`,
       [
         membership.MembershipType,
         membership.StartDate,
@@ -548,7 +598,7 @@ async function updateMembership(params, body) {
         membership.Price,
         membership.DiscountPercent,
         membership.PaymentMethod,
-        id,
+        termId,
       ]
     );
 
@@ -635,7 +685,9 @@ async function deleteMembership(params) {
 
   if (
     current.length > 0 &&
-    (current[0].Status === "active" || current[0].Status === "upcoming")
+    (current[0].Status === "active" ||
+      current[0].Status === "ending" ||
+      current[0].Status === "upcoming")
   ) {
     throw makeError(
       409,

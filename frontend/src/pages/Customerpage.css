@@ -309,6 +309,11 @@
   color: var(--success);
 }
 
+.cp-status.is-ending {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .cp-status.is-upcoming {
   background: var(--warning-bg);
   color: var(--warning);

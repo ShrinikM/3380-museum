@@ -269,14 +269,16 @@ function Tickets() {
         return
       }
 
-      if (
-        found.MembershipType === 'Senior' &&
-        formData.TicketType === 'Student'
-      ) {
+      if (found.Status === 'ending') {
+        setMember(found)
         setLookupMessage(
-          found.Name +
-            ' has a Senior membership. Student tickets are not available.'
+          found.Name + ' - membership benefits active until ' + found.EndDate
         )
+        setFormData({
+          ...formData,
+          MembershipID: String(found.MembershipID),
+          Price: priceFor(found, formData.TicketType, formData.VisitDate),
+        })
         return
       }
 
@@ -369,14 +371,6 @@ function Tickets() {
 
     if (!ticketTypes.includes(formData.TicketType)) {
       setFormError('Please select a valid Ticket Type.')
-      return
-    }
-
-    if (
-      member?.MembershipType === 'Senior' &&
-      formData.TicketType === 'Student'
-    ) {
-      setFormError('Student tickets are not available with a Senior membership.')
       return
     }
 

@@ -147,7 +147,7 @@ function Memberships() {
     : undefined
 
   const active = memberships.filter(
-    (member) => member.status === 'active'
+    (member) => member.status === 'active' || member.status === 'ending'
   )
 
   const upcoming = memberships.filter(

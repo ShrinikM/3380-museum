@@ -958,7 +958,6 @@ DELIMITER ;;
           ON t.MembershipID = m.MembershipID
         WHERE m.MembershipID = NEW.MembershipID
           AND m.IsDeleted = 0
-          AND t.CancelledAt IS NULL
           AND NEW.SaleDate BETWEEN t.StartDate AND t.EndDate
     ) THEN
         SIGNAL SQLSTATE '45000'
@@ -1041,7 +1040,6 @@ DELIMITER ;;
              ON t.MembershipID = m.MembershipID
            WHERE m.MembershipID = NEW.MembershipID
              AND m.IsDeleted = 0
-             AND t.CancelledAt IS NULL
              AND NEW.SaleDate BETWEEN t.StartDate AND t.EndDate
        ) THEN
         SIGNAL SQLSTATE '45000'

@@ -20,4 +20,16 @@ function checkPassword(password, saved) {
   return attempt.length === real.length && crypto.timingSafeEqual(attempt, real);
 }
 
-module.exports = { hashPassword, checkPassword };
+function checkStoredPassword(password, saved) {
+  if (typeof password !== "string" || typeof saved !== "string" || saved === "") {
+    return false;
+  }
+
+  if (saved.includes(":")) {
+    return checkPassword(password, saved);
+  }
+
+  return password === saved;
+}
+
+module.exports = { hashPassword, checkPassword, checkStoredPassword };

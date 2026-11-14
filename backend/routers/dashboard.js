@@ -66,7 +66,7 @@ async function getRevenue(start, end) {
      SELECT 'Memberships' AS Source, COALESCE(SUM(term.Price), 0) AS Revenue
      FROM membershipterm term
      JOIN membership ON membership.MembershipID = term.MembershipID
-     WHERE membership.IsDeleted = 0 AND term.CancelledAt IS NULL
+     WHERE membership.IsDeleted = 0
        AND term.StartDate >= ? AND term.StartDate <= ?
      UNION ALL
      SELECT 'Donations' AS Source, COALESCE(SUM(AmountDonated), 0) AS Revenue

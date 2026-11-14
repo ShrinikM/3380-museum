@@ -54,8 +54,3 @@ export const ROLES = {
     edit: [],
   },
 }
-
-export const DEMO_LOGINS = [
-  { username: 'admin@demo.test', password: 'admin123', role: 'Admin' },
-  { username: 'staff@demo.test', password: 'staff123', role: 'Staff' },
-]
