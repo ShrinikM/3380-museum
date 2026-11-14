@@ -26,7 +26,6 @@ const emptyForm = {
   PhoneNumber: '',
   StartDate: '',
   EndDate: '',
-  Password: '',
 }
 
 const textPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
@@ -119,7 +118,6 @@ function Staff() {
       PhoneNumber: (item.PhoneNumber || '').replace(/\D/g, ''),
       StartDate: item.StartDate || '',
       EndDate: item.EndDate || '',
-      Password: '',
     })
     setIsModalOpen(true)
   }
@@ -168,14 +166,6 @@ function Staff() {
       return
     }
 
-    if (
-      (editingId === null || formData.Password !== '') &&
-      (formData.Password.length < 8 || formData.Password.length > 100)
-    ) {
-      setFormError('Password must be 8 to 100 characters.')
-      return
-    }
-
     const staffData = {
       FirstName: firstName,
       LastName: lastName,
@@ -185,10 +175,6 @@ function Staff() {
       PhoneNumber: phone,
       StartDate: formData.StartDate,
       EndDate: formData.EndDate || null,
-    }
-
-    if (formData.Password !== '') {
-      staffData.Password = formData.Password
     }
 
     try {
@@ -508,23 +494,6 @@ function Staff() {
               min={formData.StartDate || undefined}
               value={formData.EndDate}
               onChange={handleChange}
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="staff-password">
-              {editingId === null ? 'Password' : 'New Password'}
-            </label>
-            <input
-              id="staff-password"
-              name="Password"
-              type="password"
-              autoComplete="new-password"
-              placeholder={editingId === null ? 'At least 8 characters' : 'Leave blank to keep the current password'}
-              value={formData.Password}
-              onChange={handleChange}
-              maxLength={100}
-              required={editingId === null}
             />
           </div>
 
