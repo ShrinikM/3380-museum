@@ -10,7 +10,7 @@ Live site: https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
 - Database: MySQL (Azure)
 
 ## Files
-- `<museum_dump.sql>` - SQL dump of the populated `museum` database (tables, data and triggers)
+- `backend/schema/<museum_dump.sql>` - SQL dump of the populated `museum` database with data
 - `backend/` - Node.js server that connects to the database
 - `frontend/` - React web application
 - `<Project Document>` - description of data, user roles, triggers, queries and reports
