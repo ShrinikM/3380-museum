@@ -29,7 +29,7 @@ DB_PORT=3306
 ```bash
 cd frontend
 npm install
-cd ../backend
+cd backend
 npm install
 ```
 
