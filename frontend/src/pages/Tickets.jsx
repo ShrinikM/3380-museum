@@ -171,14 +171,15 @@ function Tickets() {
     return matchesSearch && matchesType && matchesExhibition
   })
 
-  const usedMemberDiscounts = (found, type, visitDate) => {
-    if (!found || !type || !visitDate) {
+  const usedMemberDiscounts = (found, type, visitDate, exhibitionId) => {
+    if (!found || !type || !visitDate || !exhibitionId) {
       return 0
     }
 
     return tickets.filter((ticket) =>
       Number(ticket.MembershipID) === Number(found.MembershipID) &&
       ticket.VisitDate === visitDate &&
+      Number(ticket.ExhibitionID) === Number(exhibitionId) &&
       ticket.TicketType === type &&
       ticket.TicketID !== editingId &&
       ticket.RefundStatus !== 'Refunded' &&
@@ -186,15 +187,16 @@ function Tickets() {
     ).length
   }
 
-  const priceFor = (found, type, visitDate) => {
+  const priceFor = (found, type, visitDate, exhibitionId = formData.ExhibitionID) => {
     if (!type) {
       return ''
     }
 
     const limits = membershipTicketLimits[found?.MembershipType] || {}
-    const discount = usedMemberDiscounts(found, type, visitDate) < (limits[type] || 0)
-      ? getMemberDiscount(found, type)
-      : 0
+    const discount =
+      usedMemberDiscounts(found, type, visitDate, exhibitionId) < (limits[type] || 0)
+        ? getMemberDiscount(found, type)
+        : 0
 
     return getPrice(ticketPrices, type, discount)
   }
@@ -206,7 +208,10 @@ function Tickets() {
       ...formData,
       [name]: value,
       ...(name === 'VisitDate'
-        ? { Price: priceFor(member, formData.TicketType, value) }
+        ? { Price: priceFor(member, formData.TicketType, value, formData.ExhibitionID) }
+        : {}),
+      ...(name === 'ExhibitionID'
+        ? { Price: priceFor(member, formData.TicketType, formData.VisitDate, value) }
         : {}),
     })
   }

@@ -1244,7 +1244,9 @@ async function addTickets(params, body, customerId) {
       connection,
       membershipID,
       order.VisitDate,
-      ticketPrices
+      ticketPrices,
+      null,
+      order.ExhibitionID
     );
 
     for (const type of Object.keys(order.Counts)) {

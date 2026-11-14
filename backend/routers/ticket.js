@@ -206,7 +206,8 @@ async function checkReferences(ticket, ticketPrices, skipTicketId = null) {
       ticket.MembershipID,
       ticket.VisitDate,
       ticketPrices,
-      skipTicketId
+      skipTicketId,
+      ticket.ExhibitionID
     );
     const limit = getMembershipLimits(membership.MembershipType)[ticket.TicketType] || 0;
 

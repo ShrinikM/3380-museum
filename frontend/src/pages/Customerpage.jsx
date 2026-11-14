@@ -1114,10 +1114,11 @@ function TicketsTab({ data, account, purchases, onBought }) {
     Senior: 0,
   }
 
-  if (visitDate) {
+  if (visitDate && exhibitionId !== null) {
     for (const ticket of purchases?.tickets || []) {
       if (
         ticket.VisitDate === visitDate &&
+        Number(ticket.ExhibitionID) === Number(exhibitionId) &&
         ticket.RefundStatus !== 'Refunded' &&
         Number(ticket.Price) < Number(prices[ticket.TicketType])
       ) {
@@ -1512,10 +1513,6 @@ function TicketsTab({ data, account, purchases, onBought }) {
                 const memberLimit = isWaitlistMode
                   ? 0
                   : discountsLeft[type] || 0
-                const discountUsedUp =
-                  !isWaitlistMode &&
-                  (discountedLimit[type] || 0) > 0 &&
-                  memberLimit === 0
                 const memberCount = Math.min(count, memberLimit)
                 const regularCount = count - memberCount
                 const memberPrice = priceFor(type, 0)
@@ -1550,11 +1547,6 @@ function TicketsTab({ data, account, purchases, onBought }) {
                           money(regularPrice)
                         )}
                       </div>
-                      {discountUsedUp && (
-                        <div className="cp-price">
-                          Member discount already used for this day
-                        </div>
-                      )}
                     </div>
 
                     <Stepper

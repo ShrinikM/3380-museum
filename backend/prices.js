@@ -83,7 +83,14 @@ function getMembershipTicketDiscount(membershipType, discountPercent, ticketType
   return Number(discountPercent) || 0;
 }
 
-async function countMemberDiscounts(db, membershipId, visitDate, ticketPrices, skipTicketId = null) {
+async function countMemberDiscounts(
+  db,
+  membershipId,
+  visitDate,
+  ticketPrices,
+  skipTicketId = null,
+  exhibitionId = null
+) {
   const used = { Adult: 0, Child: 0, Student: 0, Senior: 0 };
 
   if (membershipId === null || !visitDate) {
@@ -95,10 +102,11 @@ async function countMemberDiscounts(db, membershipId, visitDate, ticketPrices, s
      FROM ticket
      WHERE MembershipID = ?
        AND VisitDate = ?
+       AND (? IS NULL OR ExhibitionID = ?)
        AND IsDeleted = 0
        AND RefundStatus <> 'Refunded'
        AND NOT (TicketID <=> ?)`,
-    [membershipId, visitDate, skipTicketId]
+    [membershipId, visitDate, exhibitionId, exhibitionId, skipTicketId]
   );
 
   for (const row of rows) {
