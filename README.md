@@ -9,11 +9,11 @@ Live site: https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
 - Backend: Node.js
 - Database: MySQL (Azure)
 
-## Files
+## Files/Folders
 - `backend/schema/<museum_dump.sql>` - SQL dump of the populated `museum` database with data
 - `backend/` - Node.js server that connects to the database
 - `frontend/` - React web application
-- `<Project Document>` - description of data, user roles, triggers, queries and reports
+- `PROJECT_DOCUMENT.md` - description of data, user roles, triggers, queries and reports
 
 ## Database Setup
 1. Open MySQL Workbench and import `<museum_dump.sql>` (Server -> Data Import -> Import from Self-Contained File). This creates the `museum` database on your own MySQL server.
