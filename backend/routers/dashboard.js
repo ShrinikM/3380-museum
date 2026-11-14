@@ -129,6 +129,7 @@ async function getCurrentExhibitions() {
        ON ticket.ExhibitionID = exhibition.ExhibitionID
        AND ticket.IsDeleted = 0
        AND ticket.RefundStatus <> 'Refunded'
+       AND ticket.VisitDate = CURDATE()
      WHERE exhibition.IsDeleted = 0
        AND exhibition.CancelledAt IS NULL
        AND exhibition.StartDate <= CURDATE()
@@ -160,7 +161,19 @@ async function getTopExhibitions(start, end) {
        DATE_FORMAT(exhibition.EndDate, '%Y-%m-%d') AS EndDate,
        exhibition.Capacity,
        COUNT(ticket.TicketID) AS TicketsSold,
-       COALESCE(SUM(ticket.Price), 0) AS Revenue
+       COALESCE(SUM(ticket.Price), 0) AS Revenue,
+       COALESCE((
+         SELECT COUNT(*)
+         FROM ticket day_ticket
+         WHERE day_ticket.ExhibitionID = exhibition.ExhibitionID
+           AND day_ticket.IsDeleted = 0
+           AND day_ticket.RefundStatus <> 'Refunded'
+           AND day_ticket.SaleDate >= ?
+           AND day_ticket.SaleDate <= ?
+         GROUP BY day_ticket.VisitDate
+         ORDER BY COUNT(*) DESC
+         LIMIT 1
+       ), 0) AS PeakDayTickets
      FROM ticket
      JOIN exhibition ON exhibition.ExhibitionID = ticket.ExhibitionID
      WHERE ticket.IsDeleted = 0
@@ -171,7 +184,7 @@ async function getTopExhibitions(start, end) {
      GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.StartDate, exhibition.EndDate, exhibition.Capacity
      ORDER BY TicketsSold DESC, exhibition.Name
      LIMIT 5`,
-    [start, end]
+    [start, end, start, end]
   );
 
   for (const row of rows) {
@@ -179,9 +192,10 @@ async function getTopExhibitions(start, end) {
     row.TicketsSold = Number(row.TicketsSold);
     row.Revenue = Number(row.Revenue);
     row.AveragePrice = Math.round((row.Revenue / row.TicketsSold) * 100) / 100;
+    const peakDayTickets = Number(row.PeakDayTickets);
 
     if (row.Capacity > 0) {
-      row.PercentOfCapacity = Math.round((row.TicketsSold / row.Capacity) * 1000) / 10;
+      row.PercentOfCapacity = Math.round((peakDayTickets / row.Capacity) * 1000) / 10;
     } else {
       row.PercentOfCapacity = 0;
     }

@@ -83,6 +83,7 @@ function Exhibitions() {
               ...exhibition,
               Capacity: Number(exhibition.Capacity),
               Tickets: Number(exhibition.Tickets ?? 0),
+              PeakDayTickets: Number(exhibition.PeakDayTickets ?? 0),
               ArtworkCount: Number(exhibition.ArtworkCount ?? 0),
               StaffNames: Array.isArray(exhibition.StaffNames)
                 ? exhibition.StaffNames
@@ -240,9 +241,9 @@ function Exhibitions() {
       (exhibition) => exhibition.ExhibitionID === editingId
     )
 
-    if (editing && capacity < editing.Tickets) {
+    if (editing && capacity < editing.PeakDayTickets) {
       setFormError(
-        `Capacity cannot be lower than the ${editing.Tickets} tickets already sold.`
+        `Capacity cannot be lower than the ${editing.PeakDayTickets} tickets already sold for one visit day.`
       )
       return
     }
@@ -529,7 +530,7 @@ function Exhibitions() {
               <th scope="col">Collection</th>
               <th scope="col">Start Date</th>
               <th scope="col">End Date</th>
-              <th scope="col">Tickets / Capacity</th>
+              <th scope="col">Tickets / Daily Cap.</th>
               <th scope="col">Staff</th>
               <th scope="col">Artworks</th>
               <th scope="col">Status</th>
@@ -661,7 +662,7 @@ function Exhibitions() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="exhibition-capacity">Capacity</label>
+            <label htmlFor="exhibition-capacity">Daily Capacity</label>
             <input
               id="exhibition-capacity"
               name="Capacity"

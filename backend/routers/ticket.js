@@ -276,17 +276,18 @@ async function addTicket(params, body, staffId) {
        e.Capacity - (
          SELECT COUNT(*) FROM ticket t
          WHERE t.ExhibitionID = e.ExhibitionID
+           AND t.VisitDate <=> ?
            AND t.IsDeleted = 0
            AND t.RefundStatus <> 'Refunded'
        ) AS Open
      FROM exhibition e
      WHERE e.ExhibitionID = ?`,
-    [ticket.ExhibitionID]
+    [ticket.VisitDate, ticket.ExhibitionID]
   );
   const reserved = await countReservedSeats(pool, ticket.ExhibitionID, ticket.CustomerID);
 
   if (Number(capacity[0].Open) - reserved <= 0) {
-    throw makeError(400, "No seats left. Remaining seats are held for the waitlist.");
+    throw makeError(400, "No seats left for that visit date. Remaining seats are held for the waitlist.");
   }
 
   const [result] = await pool.query(
@@ -323,6 +324,26 @@ async function updateTicket(params, body) {
   }
 
   await checkReferences(ticket, ticketPrices, id);
+
+  const [capacity] = await pool.query(
+    `SELECT
+       e.Capacity - (
+         SELECT COUNT(*) FROM ticket t
+         WHERE t.ExhibitionID = e.ExhibitionID
+           AND t.VisitDate <=> ?
+           AND t.IsDeleted = 0
+           AND t.RefundStatus <> 'Refunded'
+           AND t.TicketID <> ?
+       ) AS Open
+     FROM exhibition e
+     WHERE e.ExhibitionID = ?`,
+    [ticket.VisitDate, id, ticket.ExhibitionID]
+  );
+  const reserved = await countReservedSeats(pool, ticket.ExhibitionID, ticket.CustomerID);
+
+  if (Number(capacity[0].Open) - reserved <= 0) {
+    throw makeError(400, "No seats left for that visit date. Remaining seats are held for the waitlist.");
+  }
 
   await pool.query(
     `UPDATE ticket

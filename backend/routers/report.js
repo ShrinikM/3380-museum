@@ -398,6 +398,9 @@ async function getTicketSalesReport(params) {
   const values = [];
   const ticketDates = dateFilter("ticket.SaleDate", dates, values);
 
+  const peakValues = values.slice();
+  const peakDates = dateFilter("day_ticket.SaleDate", dates, peakValues);
+
   const [rows] = await pool.query(
     `SELECT
       exhibition.ExhibitionID,
@@ -413,12 +416,18 @@ async function getTicketSalesReport(params) {
       COALESCE(SUM(CASE WHEN ticket.TicketType = 'Student' THEN ticket.Price ELSE 0 END), 0) AS StudentRevenue,
       SUM(CASE WHEN ticket.TicketType = 'Child' THEN 1 ELSE 0 END) AS ChildTickets,
       COALESCE(SUM(CASE WHEN ticket.TicketType = 'Child' THEN ticket.Price ELSE 0 END), 0) AS ChildRevenue,
-      GREATEST(exhibition.Capacity - COUNT(ticket.TicketID), 0) AS SeatsLeft,
-      CASE
-        WHEN exhibition.Capacity > 0
-          THEN ROUND((COUNT(ticket.TicketID) / exhibition.Capacity) * 100, 1)
-        ELSE 0
-      END AS PercentFull,
+      COALESCE((
+        SELECT COUNT(*)
+        FROM ticket day_ticket
+        WHERE day_ticket.ExhibitionID = exhibition.ExhibitionID
+          AND day_ticket.IsDeleted = 0
+          AND day_ticket.RefundStatus <> 'Refunded'` +
+      peakDates +
+      `
+        GROUP BY day_ticket.VisitDate
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+      ), 0) AS PeakDayTickets,
       CASE
         WHEN COUNT(ticket.TicketID) > 0
           THEN ROUND(COALESCE(SUM(ticket.Price), 0) / COUNT(ticket.TicketID), 2)
@@ -435,14 +444,17 @@ async function getTicketSalesReport(params) {
       AND exhibition.CancelledAt IS NULL
     GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
     ORDER BY TicketsSold DESC, exhibition.Name`,
-    values
+    peakValues.concat(values)
   );
 
   const summary = rows.map(function (row) {
+    const capacity = Number(row.Capacity);
+    const peakDayTickets = Number(row.PeakDayTickets);
+
     return {
       ExhibitionID: Number(row.ExhibitionID),
       Name: row.Name,
-      Capacity: Number(row.Capacity),
+      Capacity: capacity,
       TicketsSold: Number(row.TicketsSold),
       Revenue: Number(row.Revenue),
       AdultTickets: Number(row.AdultTickets),
@@ -453,8 +465,11 @@ async function getTicketSalesReport(params) {
       StudentRevenue: Number(row.StudentRevenue),
       ChildTickets: Number(row.ChildTickets),
       ChildRevenue: Number(row.ChildRevenue),
-      SeatsLeft: Number(row.SeatsLeft),
-      PercentFull: Number(row.PercentFull),
+      SeatsLeft: Math.max(capacity - peakDayTickets, 0),
+      PercentFull:
+        capacity > 0
+          ? Math.round((peakDayTickets / capacity) * 1000) / 10
+          : 0,
       AvgTicketPrice: Number(row.AvgTicketPrice),
     };
   });
@@ -681,13 +696,16 @@ async function getReportSummaryStats() {
   const [exhibRows] = await pool.query(
     `SELECT COALESCE(
         AVG(
-          (
-            SELECT COUNT(t.TicketID)
+          COALESCE((
+            SELECT COUNT(*)
             FROM ticket t
             WHERE t.ExhibitionID = exhibition.ExhibitionID
               AND t.IsDeleted = 0
               AND t.RefundStatus <> 'Refunded'
-          ) / NULLIF(exhibition.Capacity, 0) * 100
+            GROUP BY t.VisitDate
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+          ), 0) / NULLIF(exhibition.Capacity, 0) * 100
         ),
         0
       ) AS AvgCapacity

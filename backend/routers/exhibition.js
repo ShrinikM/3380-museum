@@ -19,6 +19,17 @@ const selectExhibitions = `
        AND t.IsDeleted = 0
        AND t.RefundStatus <> 'Refunded') AS Tickets,
 
+    COALESCE((
+      SELECT COUNT(*)
+      FROM ticket t
+      WHERE t.ExhibitionID = e.ExhibitionID
+        AND t.IsDeleted = 0
+        AND t.RefundStatus <> 'Refunded'
+      GROUP BY t.VisitDate
+      ORDER BY COUNT(*) DESC
+      LIMIT 1
+    ), 0) AS PeakDayTickets,
+
     (SELECT COUNT(*)
      FROM artwork a
      WHERE a.CollectionID = e.CollectionID
@@ -194,6 +205,7 @@ function formatExhibition(row) {
   return {
     ...row,
     Tickets: Number(row.Tickets),
+    PeakDayTickets: Number(row.PeakDayTickets),
     ArtworkCount: Number(row.ArtworkCount),
     StaffNames: row.StaffNames
       ? row.StaffNames.split(",")
@@ -390,10 +402,10 @@ async function updateExhibition(params, body, staffId) {
     );
   }
 
-  if (exhibition.Capacity < Number(existing.Tickets)) {
+  if (exhibition.Capacity < Number(existing.PeakDayTickets)) {
     throw makeError(
       400,
-      `Capacity cannot be lower than the ${existing.Tickets} tickets already sold`
+      `Capacity cannot be lower than the ${existing.PeakDayTickets} tickets already sold for one visit day`
     );
   }
 

@@ -1034,8 +1034,37 @@ function TicketsTab({ data, account, purchases, onBought }) {
   const [studentModalError, setStudentModalError] = useState('')
   const [pendingStudentCount, setPendingStudentCount] = useState(null)
   const [pendingWaitlistJoin, setPendingWaitlistJoin] = useState(false)
+  const [exhibitions, setExhibitions] = useState(data.exhibitions)
 
-  const { exhibitions, waitlist, prices, discounts, waitlistLimit } = data
+  useEffect(() => {
+    setExhibitions(data.exhibitions)
+  }, [data.exhibitions])
+
+  useEffect(() => {
+    if (!visitDate) {
+      setExhibitions(data.exhibitions)
+      return
+    }
+
+    let cancelled = false
+
+    callApi(
+      '/api/customer/exhibitions?visitDate=' + encodeURIComponent(visitDate),
+      'GET'
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setExhibitions(result.exhibitions)
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [visitDate, data.exhibitions])
+
+  const { waitlist, prices, discounts, waitlistLimit } = data
   const membership = account?.membership ?? account?.Membership ?? null
   const allowStudentTickets = canBuyStudentTickets(membership)
   const askForStudentEmail = needsStudentEmail(membership)
@@ -1049,7 +1078,8 @@ function TicketsTab({ data, account, purchases, onBought }) {
   const selected = exhibitions.find(
     (item) => item.ExhibitionID === exhibitionId
   )
-  const isWaitlistMode = selected !== undefined && selected.Remaining === 0
+  const isWaitlistMode =
+    selected !== undefined && visitDate !== '' && selected.Remaining === 0
   const myWaitlistEntries = selected
     ? waitlist.filter((entry) => entry.ExhibitionID === selected.ExhibitionID)
     : []
@@ -1180,10 +1210,14 @@ function TicketsTab({ data, account, purchases, onBought }) {
     const item = exhibitions.find(
       (exhibition) => exhibition.ExhibitionID === id
     )
+    const earliest =
+      item && item.StartDate > today ? item.StartDate : today
 
     setExhibitionId(id)
     setCounts({})
-    setVisitDate(item?.StartDate || '')
+    setVisitDate(
+      item && earliest <= item.EndDate ? earliest : item?.StartDate || ''
+    )
     setError('')
   }
 
@@ -1270,6 +1304,24 @@ function TicketsTab({ data, account, purchases, onBought }) {
       return
     }
 
+    if (!visitDate) {
+      setError('Please choose a visit date.')
+      return
+    }
+
+    if (
+      visitDate < selected.StartDate ||
+      visitDate > selected.EndDate
+    ) {
+      setError('Choose a date within the exhibition dates.')
+      return
+    }
+
+    if (visitDate < today) {
+      setError('The visit date cannot be in the past.')
+      return
+    }
+
     if (totalCount === 0) {
       setError('Please choose at least one ticket for the waitlist.')
       return
@@ -1294,11 +1346,13 @@ function TicketsTab({ data, account, purchases, onBought }) {
     try {
       const result = await callApi('/api/customer/waitlist', 'POST', {
         ExhibitionID: selected.ExhibitionID,
+        VisitDate: visitDate,
         Tickets: counts,
         SchoolEmail: email || schoolEmail,
       })
 
       setCounts({})
+      setVisitDate('')
       setExhibitionId(null)
       setSchoolEmail('')
       setSchoolEmailOk(false)
@@ -1375,19 +1429,28 @@ function TicketsTab({ data, account, purchases, onBought }) {
 
         <div className="cp-options">
           {exhibitions.map((item) => {
-            const soldOut = item.Remaining === 0
+            const daySoldOut =
+              visitDate !== '' &&
+              item.ExhibitionID === exhibitionId &&
+              item.Remaining === 0
             const myEntries = waitlist.filter(
               (spot) => spot.ExhibitionID === item.ExhibitionID
             )
             const notified = myEntries.some((spot) => spot.Status === 'Notified')
+            const remainingLabel =
+              visitDate !== '' && item.ExhibitionID === exhibitionId
+                ? item.Remaining === 0
+                  ? ` · Sold out on ${formatDate(visitDate)} · Waitlist ${item.WaitlistCount} of ${waitlistLimit}`
+                  : ` · ${item.Remaining} left on ${formatDate(visitDate)}`
+                : ` · up to ${item.Capacity} per day`
 
             return (
               <button
                 key={item.ExhibitionID}
                 type="button"
-                className={`cp-option${item.ExhibitionID === exhibitionId ? ' is-selected' : ''}${soldOut ? ' is-soldout' : ''}`}
+                className={`cp-option${item.ExhibitionID === exhibitionId ? ' is-selected' : ''}${daySoldOut ? ' is-soldout' : ''}`}
                 onClick={() => chooseExhibition(item.ExhibitionID)}
-                disabled={soldOut && item.WaitlistFull && myEntries.length === 0}
+                disabled={daySoldOut && item.WaitlistFull && myEntries.length === 0}
               >
                 <span className="cp-option-name">{item.Name}</span>
 
@@ -1399,9 +1462,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
 
                 <span className="cp-option-meta">
                   {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
-                  {soldOut
-                    ? ` · Sold out · Waitlist ${item.WaitlistCount} of ${waitlistLimit}`
-                    : ` · ${item.Remaining} left`}
+                  {remainingLabel}
                   {myEntries.length > 0 &&
                     ` · You have ${myEntries.length} on the waitlist`}
                   {notified && ' · A spot opened for you'}
@@ -1420,7 +1481,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
         <div className="cp-label">Step 2</div>
         <h2>
           {isWaitlistMode
-            ? 'Choose tickets for the waitlist'
+            ? 'That visit date is full — join the waitlist'
             : 'Choose tickets and visit date'}
         </h2>
 
@@ -1428,23 +1489,22 @@ function TicketsTab({ data, account, purchases, onBought }) {
           <p className="cp-empty">Choose an exhibition first.</p>
         ) : (
           <>
-            {!isWaitlistMode && (
-              <div className="form-group">
-                <label htmlFor="ticket-visit-date">Visit date</label>
-                <input
-                  id="ticket-visit-date"
-                  type="date"
-                  value={visitDate}
-                  min={selected.StartDate > today ? selected.StartDate : today}
-                  max={selected.EndDate}
-                  onChange={(event) => {
-                    setVisitDate(event.target.value)
-                    setError('')
-                  }}
-                  required
-                />
-              </div>
-            )}
+            <div className="form-group">
+              <label htmlFor="ticket-visit-date">Visit date</label>
+              <input
+                id="ticket-visit-date"
+                type="date"
+                value={visitDate}
+                min={selected.StartDate > today ? selected.StartDate : today}
+                max={selected.EndDate}
+                onChange={(event) => {
+                  setVisitDate(event.target.value)
+                  setCounts({})
+                  setError('')
+                }}
+                required
+              />
+            </div>
 
             <ul className="cp-lines">
               {types.map((type) => {
@@ -1490,11 +1550,6 @@ function TicketsTab({ data, account, purchases, onBought }) {
                           money(regularPrice)
                         )}
                       </div>
-                      {memberLimit > 0 && !isWaitlistMode && (
-                        <div className="cp-price">
-                          Member price for {memberLimit} {memberLimit === 1 ? 'ticket' : 'tickets'} on this day
-                        </div>
-                      )}
                       {discountUsedUp && (
                         <div className="cp-price">
                           Member discount already used for this day

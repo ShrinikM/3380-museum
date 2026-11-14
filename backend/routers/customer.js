@@ -548,14 +548,15 @@ const openExhibition = `
   AND e.EndDate >= CURDATE()
 `;
 
-async function countSold(connection, exhibitionId) {
+async function countSold(connection, exhibitionId, visitDate) {
   const [rows] = await connection.query(
     `SELECT COUNT(*) AS Total
      FROM ticket
      WHERE ExhibitionID = ?
+       AND VisitDate <=> ?
        AND IsDeleted = 0
        AND RefundStatus <> 'Refunded'`,
-    [exhibitionId]
+    [exhibitionId, visitDate]
   );
 
   return Number(rows[0].Total);
@@ -964,6 +965,71 @@ async function getExhibitions(params, body, customerId) {
   await findCustomer(customerId);
   const membership = await findMembership(customerId);
   const ticketPrices = await getTicketPrices();
+  const visitDate =
+    typeof params.visitDate === "string" && isValidDate(params.visitDate)
+      ? params.visitDate
+      : null;
+
+  const remainingSql =
+    visitDate === null
+      ? `GREATEST(
+           e.Capacity - IF(
+             (
+               SELECT COUNT(DISTINCT t.VisitDate)
+               FROM ticket t
+               WHERE t.ExhibitionID = e.ExhibitionID
+                 AND t.IsDeleted = 0
+                 AND t.RefundStatus <> 'Refunded'
+                 AND t.VisitDate IS NOT NULL
+                 AND t.VisitDate >= GREATEST(e.StartDate, CURDATE())
+                 AND t.VisitDate <= e.EndDate
+             ) < (DATEDIFF(e.EndDate, GREATEST(e.StartDate, CURDATE())) + 1),
+             0,
+             COALESCE(
+               (
+                 SELECT COUNT(*)
+                 FROM ticket t
+                 WHERE t.ExhibitionID = e.ExhibitionID
+                   AND t.IsDeleted = 0
+                   AND t.RefundStatus <> 'Refunded'
+                   AND t.VisitDate IS NOT NULL
+                   AND t.VisitDate >= GREATEST(e.StartDate, CURDATE())
+                   AND t.VisitDate <= e.EndDate
+                 GROUP BY t.VisitDate
+                 ORDER BY COUNT(*) ASC
+                 LIMIT 1
+               ),
+               0
+             )
+           ) - (
+             SELECT COUNT(*)
+             FROM waitlist r
+             WHERE r.ExhibitionID = e.ExhibitionID
+               AND r.Status = 'Notified'
+               AND r.CustomerID <> ?
+           ),
+           0
+         )`
+      : `GREATEST(
+           e.Capacity - (
+             SELECT COUNT(*)
+             FROM ticket t
+             WHERE t.ExhibitionID = e.ExhibitionID
+               AND t.VisitDate = ?
+               AND t.IsDeleted = 0
+               AND t.RefundStatus <> 'Refunded'
+           ) - (
+             SELECT COUNT(*)
+             FROM waitlist r
+             WHERE r.ExhibitionID = e.ExhibitionID
+               AND r.Status = 'Notified'
+               AND r.CustomerID <> ?
+           ),
+           0
+         )`;
+
+  const queryValues =
+    visitDate === null ? [customerId] : [visitDate, customerId];
 
   const [rows] = await pool.query(
     `SELECT
@@ -972,22 +1038,8 @@ async function getExhibitions(params, body, customerId) {
        e.Description,
        DATE_FORMAT(e.StartDate, '%Y-%m-%d') AS StartDate,
        DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate,
-       GREATEST(
-         e.Capacity - (
-           SELECT COUNT(*)
-           FROM ticket t
-           WHERE t.ExhibitionID = e.ExhibitionID
-             AND t.IsDeleted = 0
-             AND t.RefundStatus <> 'Refunded'
-         ) - (
-           SELECT COUNT(*)
-           FROM waitlist r
-           WHERE r.ExhibitionID = e.ExhibitionID
-             AND r.Status = 'Notified'
-             AND r.CustomerID <> ?
-         ),
-         0
-       ) AS Remaining,
+       e.Capacity,
+       ${remainingSql} AS Remaining,
        (
          SELECT COUNT(*)
          FROM waitlist w
@@ -999,7 +1051,7 @@ async function getExhibitions(params, body, customerId) {
        AND e.CancelledAt IS NULL
        AND e.EndDate >= CURDATE()
      ORDER BY e.StartDate, e.Name`,
-    [customerId]
+    queryValues
   );
 
   const [waitlist] = await pool.query(
@@ -1024,6 +1076,7 @@ async function getExhibitions(params, body, customerId) {
       exhibitions: rows.map((exhibition) => ({
         ...exhibition,
         ExhibitionID: Number(exhibition.ExhibitionID),
+        Capacity: Number(exhibition.Capacity),
         Remaining: Number(exhibition.Remaining),
         WaitlistCount: Number(exhibition.WaitlistCount),
         WaitlistFull:
@@ -1166,7 +1219,11 @@ async function addTickets(params, body, customerId) {
       );
     }
 
-    const sold = await countSold(connection, order.ExhibitionID);
+    const sold = await countSold(
+      connection,
+      order.ExhibitionID,
+      order.VisitDate
+    );
     const reserved = await countReservedSeats(
       connection,
       order.ExhibitionID,
@@ -1177,7 +1234,7 @@ async function addTickets(params, body, customerId) {
     if (order.Count > remaining) {
       throw makeError(
         400,
-        "Not enough tickets left for this exhibition"
+        "Not enough tickets left for that visit date"
       );
     }
 
@@ -1352,6 +1409,12 @@ async function joinWaitlist(params, body, customerId) {
   const ticketTypes = getTicketTypes(ticketPrices);
   const membership = await findMembership(customerId);
 
+  if (!isValidDate(body.VisitDate)) {
+    throw makeError(400, "Please select a valid visit date");
+  }
+
+  const visitDate = body.VisitDate;
+
   const counts = {};
   let total = 0;
 
@@ -1388,7 +1451,7 @@ async function joinWaitlist(params, body, customerId) {
     counts,
     body.SchoolEmail,
     exhibitionID,
-    null
+    visitDate
   );
 
   const connection = await pool.getConnection();
@@ -1397,7 +1460,11 @@ async function joinWaitlist(params, body, customerId) {
     await connection.beginTransaction();
 
     const [exhibitions] = await connection.query(
-      `SELECT e.ExhibitionID, e.Capacity
+      `SELECT
+         e.ExhibitionID,
+         e.Capacity,
+         DATE_FORMAT(e.StartDate, '%Y-%m-%d') AS StartDate,
+         DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate
        FROM exhibition e
        WHERE e.ExhibitionID = ?
          AND ${openExhibition}
@@ -1409,11 +1476,23 @@ async function joinWaitlist(params, body, customerId) {
       throw makeError(400, "That exhibition is not open for tickets");
     }
 
-    const sold = await countSold(connection, exhibitionID);
+    const exhibition = exhibitions[0];
+
+    if (
+      visitDate < exhibition.StartDate ||
+      visitDate > exhibition.EndDate
+    ) {
+      throw makeError(
+        400,
+        "The visit date must be within the exhibition's start and end dates"
+      );
+    }
+
+    const sold = await countSold(connection, exhibitionID, visitDate);
     const reserved = await countReservedSeats(connection, exhibitionID, customerId);
 
-    if (sold + reserved < Number(exhibitions[0].Capacity)) {
-      throw makeError(400, "Tickets are still available for this exhibition");
+    if (sold + reserved < Number(exhibition.Capacity)) {
+      throw makeError(400, "Tickets are still available for that visit date");
     }
 
     const [waiting] = await connection.query(

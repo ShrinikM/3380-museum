@@ -938,6 +938,7 @@ DELIMITER ;;
         SELECT COUNT(*)
         FROM ticket
         WHERE ExhibitionID = NEW.ExhibitionID
+          AND VisitDate <=> NEW.VisitDate
           AND IsDeleted = 0
           AND RefundStatus <> 'Refunded'
     ) >= (
@@ -946,7 +947,7 @@ DELIMITER ;;
         WHERE ExhibitionID = NEW.ExhibitionID
     ) THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Exhibition ticket capacity exceeded';
+            SET MESSAGE_TEXT = 'Exhibition ticket capacity exceeded for that visit date';
     END IF;
 
     IF NEW.MembershipID IS NOT NULL AND NOT EXISTS (
@@ -979,7 +980,13 @@ DELIMITER ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`Team3`@`%`*/ /*!50003 TRIGGER `trg_ticket_before_update` BEFORE UPDATE ON `ticket` FOR EACH ROW BEGIN
     IF NEW.IsDeleted = 0
-       AND (OLD.IsDeleted = 1 OR NEW.ExhibitionID <> OLD.ExhibitionID) THEN
+       AND NEW.RefundStatus <> 'Refunded'
+       AND (
+            OLD.IsDeleted = 1
+            OR OLD.RefundStatus = 'Refunded'
+            OR NEW.ExhibitionID <> OLD.ExhibitionID
+            OR NOT (NEW.VisitDate <=> OLD.VisitDate)
+       ) THEN
 
         IF EXISTS (
             SELECT 1
@@ -995,15 +1002,17 @@ DELIMITER ;;
             SELECT COUNT(*)
             FROM ticket
             WHERE ExhibitionID = NEW.ExhibitionID
+              AND VisitDate <=> NEW.VisitDate
               AND IsDeleted = 0
               AND RefundStatus <> 'Refunded'
+              AND TicketID <> NEW.TicketID
         ) >= (
             SELECT Capacity
             FROM exhibition
             WHERE ExhibitionID = NEW.ExhibitionID
         ) THEN
             SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = 'Exhibition ticket capacity exceeded';
+                SET MESSAGE_TEXT = 'Exhibition ticket capacity exceeded for that visit date';
         END IF;
     END IF;
 
