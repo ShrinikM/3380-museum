@@ -28,18 +28,15 @@ const PLANS = [
   {
     type: 'Dual',
     price: 75,
-    discount: 25,
     perks: [
       '2 Adult tickets at 25% off',
       '15% off CoogCafe',
       '15% off gift shop items',
-      'Early booking for new exhibitions',
     ],
   },
   {
     type: 'Family',
     price: 150,
-    discount: 25,
     perks: [
       '2 Adult and 2 Child tickets at 25% off',
       'Children under 5 always visit free',
@@ -50,9 +47,8 @@ const PLANS = [
   {
     type: 'Student',
     price: 40,
-    discount: 35,
     perks: [
-      '2 Adult tickets at 35% off',
+      '2 Student tickets at 35% off',
       '20% off CoogCafe',
       '20% off gift shop items',
       'Lowest yearly price',
@@ -61,9 +57,8 @@ const PLANS = [
   {
     type: 'Senior',
     price: 60,
-    discount: 30,
     perks: [
-      '2 Adult tickets at 30% off',
+      '2 Senior tickets at 30% off',
       '20% off CoogCafe',
       '20% off gift shop items',
       'For visitors 65 and older',
@@ -109,7 +104,7 @@ function MembershipPlans(){
       <div className="ab-plans-head">
         <div className="ab-label">Membership</div>
         <h2>Choose a membership</h2>
-        <p>Every plan lasts one year and includes a discount on all exhibition tickets.</p>
+        <p>Every plan lasts one year and includes a discount on exhibition tickets. Member discounts can be used once per exhibition per visit day.</p>
       </div>
 
       <div className="ab-plan-grid">
@@ -120,10 +115,7 @@ function MembershipPlans(){
               <span className="ab-plan-price">${plan.price}</span>
             </div>
 
-            <p className="ab-plan-intro">{plan.intro}</p>
-
             <ul className="ab-plan-perks">
-              <li><strong>{plan.discount}% off</strong> every ticket</li>
               {plan.perks.map((perk)=>(
                 <li key={perk}>{perk}</li>
               ))}

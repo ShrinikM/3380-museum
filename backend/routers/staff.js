@@ -1,4 +1,5 @@
 const pool = require("../db");
+const { hashPassword, checkPassword } = require("../passwords");
 
 const roles = ["Admin", "Staff"];
 
@@ -106,6 +107,13 @@ function checkStaff(body) {
   return staff;
 }
 
+function checkNewPassword(value) {
+  if (typeof value !== "string" || value.length < 8 || value.length > 100) {
+    throw makeError(400, "Password must be 8 to 100 characters");
+  }
+  return value;
+}
+
 function checkId(params) {
   const id = Number(params.id);
   if (!Number.isInteger(id) || id < 1) {
@@ -137,28 +145,83 @@ async function getStaff(params, body, staffId) {
   return { status: 200, data: rows };
 }
 
-async function addStaff(params, body, staffId) {
-  const staff = checkStaff(body);
-  await checkEmailIsFree(staff.Email, 0);
+async function loginStaff(params, body) {
+  const email = checkEmail(body.Email).toLowerCase();
 
-  const [result] = await pool.query(
-    `INSERT INTO staff
-      (FirstName, LastName, Role, Department, StartDate, EndDate, Email, PhoneNumber, CreatedAt, UpdatedAt, CreatedBy)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
-    [
-      staff.FirstName,
-      staff.LastName,
-      staff.Role,
-      staff.Department,
-      staff.StartDate,
-      staff.EndDate,
-      staff.Email,
-      staff.PhoneNumber,
-      staffId,
-    ]
+  if (typeof body.Password !== "string" || body.Password === "") {
+    throw makeError(400, "Please enter your password");
+  }
+
+  const [rows] = await pool.query(
+    `SELECT s.StaffID, s.FirstName, s.LastName, s.Email, s.Role, sc.Password
+     FROM staff s
+     JOIN staffcredentials sc
+       ON sc.StaffID = s.StaffID
+     WHERE s.Email = ?
+       AND s.IsDeleted = 0`,
+    [email]
   );
 
-  const newStaff = await findStaff(result.insertId);
+  if (rows.length === 0 || !checkPassword(body.Password, rows[0].Password)) {
+    throw makeError(401, "Wrong email or password");
+  }
+
+  return {
+    status: 200,
+    data: {
+      StaffID: rows[0].StaffID,
+      Email: rows[0].Email,
+      FirstName: rows[0].FirstName,
+      LastName: rows[0].LastName,
+      Role: rows[0].Role,
+    },
+  };
+}
+
+async function addStaff(params, body, staffId) {
+  const staff = checkStaff(body);
+  const password = checkNewPassword(body.Password);
+  await checkEmailIsFree(staff.Email, 0);
+
+  const connection = await pool.getConnection();
+  let newId;
+
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
+      `INSERT INTO staff
+        (FirstName, LastName, Role, Department, StartDate, EndDate, Email, PhoneNumber, CreatedAt, UpdatedAt, CreatedBy)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
+      [
+        staff.FirstName,
+        staff.LastName,
+        staff.Role,
+        staff.Department,
+        staff.StartDate,
+        staff.EndDate,
+        staff.Email,
+        staff.PhoneNumber,
+        staffId,
+      ]
+    );
+    newId = result.insertId;
+
+    await connection.query(
+      `INSERT INTO staffcredentials (StaffID, Password, CreatedAt, UpdatedAt)
+       VALUES (?, ?, NOW(), NOW())`,
+      [newId, hashPassword(password)]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  const newStaff = await findStaff(newId);
   return { status: 201, data: newStaff };
 }
 
@@ -172,6 +235,11 @@ async function updateStaff(params, body, staffId) {
   }
 
   await checkEmailIsFree(staff.Email, id);
+
+  let password = null;
+  if (body.Password !== undefined && body.Password !== null && body.Password !== "") {
+    password = checkNewPassword(body.Password);
+  }
 
   await pool.query(
     `UPDATE staff
@@ -189,6 +257,15 @@ async function updateStaff(params, body, staffId) {
       id,
     ]
   );
+
+  if (password !== null) {
+    await pool.query(
+      `INSERT INTO staffcredentials (StaffID, Password, CreatedAt, UpdatedAt)
+       VALUES (?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE Password = VALUES(Password), UpdatedAt = NOW()`,
+      [id, hashPassword(password)]
+    );
+  }
 
   const updatedStaff = await findStaff(id);
   return { status: 200, data: updatedStaff };
@@ -248,6 +325,7 @@ async function deleteStaff(params, body, staffId) {
 
 module.exports = [
   { method: "GET", path: "/api/staff", handler: getStaff },
+  { method: "POST", path: "/api/staff/login", handler: loginStaff },
   { method: "POST", path: "/api/staff", handler: addStaff, needsActor: true },
   { method: "PUT", path: "/api/staff/:id", handler: updateStaff, needsActor: true },
   { method: "DELETE", path: "/api/staff/:id", handler: deleteStaff, needsActor: true },

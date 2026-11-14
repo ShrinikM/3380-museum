@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { RoleContext } from './role'
 import { callApi } from '../api'
-import { ROLES, DEMO_LOGINS } from '../data/roles'
+import { ROLES } from '../data/roles'
 
 function getSavedUser(){
   try{
@@ -15,16 +15,24 @@ function getSavedUser(){
 function RoleProvider({ children }){
   const [user, setUser] = useState(getSavedUser)
 
-  const login = (username, password)=>{
-    const found = DEMO_LOGINS.find((item)=>
-      item.username === username && item.password === password
-    )
+  const login = async (username, password)=>{
+    let found
 
-    if(!found){
+    try{
+      found = await callApi('/api/staff/login', 'POST', {
+        Email: username,
+        Password: password,
+      })
+    }
+    catch{
       return false
     }
 
-    const loggedInUser = { username: found.username, role: found.role }
+    const loggedInUser = {
+      username: found.Email.toLowerCase(),
+      name: found.FirstName,
+      role: found.Role,
+    }
     localStorage.setItem('user', JSON.stringify(loggedInUser))
     setUser(loggedInUser)
     return true

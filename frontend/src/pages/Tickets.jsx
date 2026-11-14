@@ -10,7 +10,7 @@ const membershipTicketLimits = {
   Dual: { Adult: 2 },
   Family: { Adult: 2, Child: 2 },
   Student: { Adult: 2 },
-  Senior: { Senior: 20 },
+  Senior: { Senior: 2 },
 }
 
 const emptyForm = {

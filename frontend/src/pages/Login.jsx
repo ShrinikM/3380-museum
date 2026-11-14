@@ -78,13 +78,13 @@ function Login() {
 
     const loginEmail = username.trim().toLowerCase()
 
-    if (login(loginEmail, password)) {
-      return
-    }
-
     setBusy(true)
 
     try {
+      if (await login(loginEmail, password)) {
+        return
+      }
+
       await loginCustomer(loginEmail, password)
     } catch (err) {
       setError(err.message)
