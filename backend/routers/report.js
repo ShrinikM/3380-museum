@@ -249,7 +249,8 @@ async function getRevenueReport(params) {
     `SELECT
       ticket.TicketID AS TransactionID,
       DATE_FORMAT(ticket.SaleDate, '%Y-%m-%d') AS TransactionDate,
-      CONCAT(exhibition.Name, ' - ', ticket.TicketType) AS Detail,
+      exhibition.Name AS ExhibitionName,
+      ticket.TicketType AS TicketType,
       1 AS Quantity,
       ticket.Price AS Amount,
       COALESCE(ticket.PaymentMethod, 'Not recorded') AS PaymentMethod,
@@ -365,6 +366,8 @@ async function getRevenueReport(params) {
       TransactionID: Number(row.TransactionID),
       TransactionDate: row.TransactionDate,
       Detail: row.Detail,
+      ExhibitionName: row.ExhibitionName || null,
+      TicketType: row.TicketType || null,
       Quantity: Number(row.Quantity),
       Amount: Number(row.Amount),
       PaymentMethod: row.PaymentMethod || "-",

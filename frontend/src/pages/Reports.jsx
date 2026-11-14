@@ -175,6 +175,17 @@ const revenueTxnColumns = [
   { key: 'StaffName', label: 'Staff', title: 'Staff' },
 ]
 
+const ticketRevenueTxnColumns = [
+  { key: 'TransactionID', label: 'Txn #', title: 'Transaction ID' },
+  { key: 'TransactionDate', label: 'Date', title: 'Transaction Date' },
+  { key: 'ExhibitionName', label: 'Exhibition', title: 'Exhibition' },
+  { key: 'TicketType', label: 'Type', title: 'Ticket Type' },
+  { key: 'Amount', label: 'Amount', format: 'money', title: 'Amount' },
+  { key: 'PaymentMethod', label: 'Payment', title: 'Payment Method' },
+  { key: 'CustomerName', label: 'Customer', title: 'Customer' },
+  { key: 'StaffName', label: 'Staff', title: 'Staff' },
+]
+
 function findReport(id){
   return reportTypes.find((type)=>type.id === id)
 }
@@ -910,7 +921,7 @@ function Reports(){
                 rows={viewingItem.transactions[revenueSource] || []}
                 columns={
                   revenueSource === 'Tickets'
-                    ? revenueTxnColumns.filter((column)=>column.key !== 'Quantity')
+                    ? ticketRevenueTxnColumns
                     : revenueTxnColumns
                 }
                 caption={revenueSource + ' revenue transactions'}

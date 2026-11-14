@@ -874,6 +874,7 @@ async function getPurchases(params, body, customerId) {
       tickets: tickets.map((ticket) => ({
         ...ticket,
         TicketID: Number(ticket.TicketID),
+        ExhibitionID: Number(ticket.ExhibitionID),
         Price: Number(ticket.Price),
         CanRefund: Number(ticket.CanRefund) === 1,
         MuseumRefund: Number(ticket.MuseumRefund) === 1,
@@ -891,6 +892,103 @@ async function getPurchases(params, body, customerId) {
       })),
     },
   };
+}
+
+async function getAlertAcks(params, body, customerId) {
+  await findCustomer(customerId);
+
+  const [rows] = await pool.query(
+    `SELECT AlertType, AlertKey
+     FROM customeralertack
+     WHERE CustomerID = ?`,
+    [customerId]
+  );
+
+  const exhibitions = [];
+  const refunds = [];
+
+  for (const row of rows) {
+    if (row.AlertType === "exhibition") {
+      const exhibitionId = Number(row.AlertKey);
+
+      if (Number.isSafeInteger(exhibitionId) && exhibitionId > 0) {
+        exhibitions.push(exhibitionId);
+      }
+    } else if (row.AlertType === "refund") {
+      const ticketId = Number(row.AlertKey);
+
+      if (Number.isSafeInteger(ticketId) && ticketId > 0) {
+        refunds.push(ticketId);
+      }
+    }
+  }
+
+  return {
+    status: 200,
+    data: {
+      exhibitions: exhibitions,
+      refunds: refunds,
+    },
+  };
+}
+
+async function acknowledgeAlerts(params, body, customerId) {
+  await findCustomer(customerId);
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw makeError(400, "Invalid alert acknowledgment");
+  }
+
+  const exhibitionIds = Array.isArray(body.exhibitions)
+    ? body.exhibitions
+        .map((value) => Number(value))
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+    : [];
+
+  const refundIds = Array.isArray(body.refunds)
+    ? body.refunds
+        .map((value) => Number(value))
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+    : [];
+
+  if (exhibitionIds.length === 0 && refundIds.length === 0) {
+    return getAlertAcks(params, body, customerId);
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    for (const exhibitionId of exhibitionIds) {
+      await connection.query(
+        `INSERT INTO customeralertack
+           (CustomerID, AlertType, AlertKey, AcknowledgedAt)
+         VALUES (?, 'exhibition', ?, NOW())
+         ON DUPLICATE KEY UPDATE AcknowledgedAt = AcknowledgedAt`,
+        [customerId, String(exhibitionId)]
+      );
+    }
+
+    for (const ticketId of refundIds) {
+      await connection.query(
+        `INSERT INTO customeralertack
+           (CustomerID, AlertType, AlertKey, AcknowledgedAt)
+         VALUES (?, 'refund', ?, NOW())
+         ON DUPLICATE KEY UPDATE AcknowledgedAt = AcknowledgedAt`,
+        [customerId, String(ticketId)]
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return getAlertAcks(params, body, customerId);
 }
 
 async function getMyAlerts(params, body, customerId) {
@@ -911,6 +1009,13 @@ async function getMyAlerts(params, body, customerId) {
        AND t.NotificationStatus = 'Sent'
        AND e.CancelledAt IS NOT NULL
        AND t.UpdatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       AND NOT EXISTS (
+         SELECT 1
+         FROM customeralertack ack
+         WHERE ack.CustomerID = t.CustomerID
+           AND ack.AlertType = 'exhibition'
+           AND ack.AlertKey = CAST(e.ExhibitionID AS CHAR)
+       )
      GROUP BY e.ExhibitionID, e.Name, e.CancellationReason
      ORDER BY e.Name`,
     [customerId]
@@ -1764,6 +1869,18 @@ module.exports = [
     method: "GET",
     path: "/api/customer/alerts",
     handler: getMyAlerts,
+    needsCustomer: true,
+  },
+  {
+    method: "GET",
+    path: "/api/customer/alert-acks",
+    handler: getAlertAcks,
+    needsCustomer: true,
+  },
+  {
+    method: "POST",
+    path: "/api/customer/alert-acks",
+    handler: acknowledgeAlerts,
     needsCustomer: true,
   },
   {

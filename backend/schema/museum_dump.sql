@@ -311,6 +311,34 @@ INSERT INTO `customercredentials` VALUES (11,'d7e646a746e2697a1049ee08341ec276:2
 UNLOCK TABLES;
 
 --
+-- Table structure for table `customeralertack`
+--
+
+DROP TABLE IF EXISTS `customeralertack`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customeralertack` (
+  `CustomerID` bigint unsigned NOT NULL,
+  `AlertType` varchar(32) NOT NULL,
+  `AlertKey` varchar(255) NOT NULL,
+  `AcknowledgedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`CustomerID`,`AlertType`,`AlertKey`),
+  KEY `idx_customeralertack_customer` (`CustomerID`),
+  CONSTRAINT `fk_customeralertack_customer` FOREIGN KEY (`CustomerID`) REFERENCES `customer` (`CustomerID`),
+  CONSTRAINT `chk_customeralertack_type` CHECK ((`AlertType` in (_utf8mb4'exhibition',_utf8mb4'refund')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `customeralertack`
+--
+
+LOCK TABLES `customeralertack` WRITE;
+/*!40000 ALTER TABLE `customeralertack` DISABLE KEYS */;
+/*!40000 ALTER TABLE `customeralertack` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `donations`
 --
 

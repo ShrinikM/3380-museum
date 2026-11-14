@@ -1879,10 +1879,23 @@ function ShopTab({ items, account, onBought }) {
   )
 }
 
-function Notices({ purchases, waitlist, account, onLeave, onGo }) {
-  const acknowledgedKey = `acknowledged_alerts_${account?.customer?.CustomerID || 'guest'}`
-  const acknowledgedData = JSON.parse(localStorage.getItem(acknowledgedKey) || '{"exhibitions": [], "refunds": []}')
+function isRecentAlert(dateText) {
+  if (!dateText) {
+    return true
+  }
 
+  const stamp = new Date(`${dateText}T00:00:00`)
+
+  if (Number.isNaN(stamp.getTime())) {
+    return true
+  }
+
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 30)
+  return stamp >= cutoff
+}
+
+function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
   const cancelled = []
 
   for (const ticket of purchases.tickets) {
@@ -1892,17 +1905,22 @@ function Notices({ purchases, waitlist, account, onLeave, onGo }) {
       continue
     }
 
-    if (acknowledgedData.exhibitions.includes(ticket.ExhibitionName)) {
+    if (!isRecentAlert(ticket.UpdatedAt || ticket.CancelledAt)) {
       continue
     }
 
-    const existing = cancelled.find((item) => item.name === ticket.ExhibitionName)
+    if (alertAcks.exhibitions.includes(Number(ticket.ExhibitionID))) {
+      continue
+    }
+
+    const existing = cancelled.find((item) => item.id === Number(ticket.ExhibitionID))
 
     if (existing) {
       existing.count = existing.count + 1
     }
     else {
       cancelled.push({
+        id: Number(ticket.ExhibitionID),
         name: ticket.ExhibitionName,
         reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
         count: 1,
@@ -1960,20 +1978,29 @@ function CustomerPage() {
 
   const [customerModalOpen, setCustomerModalOpen] = useState(false)
   const [customerAlerts, setCustomerAlerts] = useState({ cancelledExhibitions: [], refundedTickets: [] })
+  const [alertAcks, setAlertAcks] = useState({ exhibitions: [], refunds: [] })
+  const [acksLoaded, setAcksLoaded] = useState(false)
+  const [acknowledging, setAcknowledging] = useState(false)
 
   const loadAll = useCallback(async () => {
     try {
-      const [accountData, exhibitionData, items, purchaseData] = await Promise.all([
+      const [accountData, exhibitionData, items, purchaseData, ackData] = await Promise.all([
         callApi('/api/customer/account', 'GET'),
         callApi('/api/customer/exhibitions', 'GET'),
         callApi('/api/customer/shop', 'GET'),
         callApi('/api/customer/purchases', 'GET'),
+        callApi('/api/customer/alert-acks', 'GET'),
       ])
 
       setAccount(accountData)
       setTicketData(exhibitionData)
       setShopItems(items)
       setPurchases(purchaseData)
+      setAlertAcks({
+        exhibitions: (ackData.exhibitions || []).map(Number),
+        refunds: (ackData.refunds || []).map(Number),
+      })
+      setAcksLoaded(true)
       setLoadError('')
     }
     catch (error) {
@@ -1986,10 +2013,7 @@ function CustomerPage() {
   }, [loadAll])
 
   useEffect(() => {
-    if (!purchases || !ticketData) return
-
-    const acknowledgedKey = `acknowledged_alerts_${account?.customer?.CustomerID || 'guest'}`
-    const acknowledgedData = JSON.parse(localStorage.getItem(acknowledgedKey) || '{"exhibitions": [], "refunds": []}')
+    if (!purchases || !ticketData || !acksLoaded) return
 
     const cancelled = []
     for (const ticket of purchases.tickets) {
@@ -1999,15 +2023,20 @@ function CustomerPage() {
         continue
       }
 
-      if (acknowledgedData.exhibitions.includes(ticket.ExhibitionName)) {
+      if (!isRecentAlert(ticket.UpdatedAt || ticket.CancelledAt)) {
         continue
       }
 
-      const existing = cancelled.find((item) => item.name === ticket.ExhibitionName)
+      if (alertAcks.exhibitions.includes(Number(ticket.ExhibitionID))) {
+        continue
+      }
+
+      const existing = cancelled.find((item) => item.id === Number(ticket.ExhibitionID))
       if (existing) {
         existing.count = existing.count + 1
       } else {
         cancelled.push({
+          id: Number(ticket.ExhibitionID),
           name: ticket.ExhibitionName,
           reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
           count: 1,
@@ -2016,7 +2045,10 @@ function CustomerPage() {
     }
 
     const refundedTix = (purchases.tickets || []).filter(
-      (tix) => tix.MuseumRefund && !acknowledgedData.refunds.includes(tix.TicketID)
+      (tix) =>
+        tix.MuseumRefund &&
+        isRecentAlert(tix.UpdatedAt) &&
+        !alertAcks.refunds.includes(Number(tix.TicketID))
     )
 
     if (cancelled.length > 0 || refundedTix.length > 0) {
@@ -2025,33 +2057,35 @@ function CustomerPage() {
         refundedTickets: refundedTix,
       })
       setCustomerModalOpen(true)
+    } else {
+      setCustomerModalOpen(false)
     }
-  }, [purchases, ticketData, account])
+  }, [purchases, ticketData, alertAcks, acksLoaded])
 
-  const handleAcknowledgeAlerts = () => {
-    const acknowledgedKey = `acknowledged_alerts_${account?.customer?.CustomerID || 'guest'}`
-    const currentStored = JSON.parse(localStorage.getItem(acknowledgedKey) || '{"exhibitions": [], "refunds": []}')
+  const handleAcknowledgeAlerts = async () => {
+    if (acknowledging) {
+      return
+    }
 
-    const newExhibitions = [
-      ...new Set([
-        ...currentStored.exhibitions,
-        ...customerAlerts.cancelledExhibitions.map((ex) => ex.name)
-      ])
-    ]
+    setAcknowledging(true)
 
-    const newRefunds = [
-      ...new Set([
-        ...currentStored.refunds,
-        ...customerAlerts.refundedTickets.map((tix) => tix.TicketID)
-      ])
-    ]
+    try {
+      const nextAcks = await callApi('/api/customer/alert-acks', 'POST', {
+        exhibitions: customerAlerts.cancelledExhibitions.map((ex) => ex.id),
+        refunds: customerAlerts.refundedTickets.map((tix) => tix.TicketID),
+      })
 
-    localStorage.setItem(
-      acknowledgedKey,
-      JSON.stringify({ exhibitions: newExhibitions, refunds: newRefunds })
-    )
-
-    setCustomerModalOpen(false)
+      setAlertAcks({
+        exhibitions: (nextAcks.exhibitions || []).map(Number),
+        refunds: (nextAcks.refunds || []).map(Number),
+      })
+      setCustomerModalOpen(false)
+    } catch (error) {
+      setMessage(error.message)
+      setCustomerModalOpen(false)
+    } finally {
+      setAcknowledging(false)
+    }
   }
 
   const switchTab = (id) => {
@@ -2104,11 +2138,11 @@ function CustomerPage() {
 
       {message && <p className="cp-success" role="status">{message}</p>}
 
-      {purchases && ticketData && (
+      {purchases && ticketData && acksLoaded && (
         <Notices
           purchases={purchases}
           waitlist={ticketData.waitlist}
-          account={account}
+          alertAcks={alertAcks}
           onLeave={handleLeave}
           onGo={() => switchTab('tickets')}
         />
@@ -2169,8 +2203,9 @@ function CustomerPage() {
               type="button"
               className="btn primary"
               onClick={handleAcknowledgeAlerts}
+              disabled={acknowledging}
             >
-              Acknowledge & Close
+              {acknowledging ? 'Saving...' : 'Acknowledge & Close'}
             </button>
           </div>
         </div>
