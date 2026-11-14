@@ -1629,6 +1629,10 @@ function TicketsTab({ data, account, purchases, onBought }) {
               </div>
             )}
 
+            {!isWaitlistMode && (
+              <p className="cp-note">All tickets are non-refundable.</p>
+            )}
+
             {isWaitlistMode && myWaitlistEntries.length > 0 && (
               <div className="cp-waitlist" style={{ marginBottom: '1rem' }}>
                 {myWaitlistEntries.map((entry) => (
