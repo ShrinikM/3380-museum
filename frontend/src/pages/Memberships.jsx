@@ -5,12 +5,6 @@ import { useRole } from '../context/role'
 import { useSelection } from '../hooks/useSelection'
 import { TablePager, usePagedList } from '../components/TablePager'
 
-const emptyFamilyMember = {
-  FirstName: '',
-  LastName: '',
-  DateOfBirth: '',
-}
-
 const emptyForm = {
   firstName: '',
   lastName: '',
@@ -24,7 +18,6 @@ const emptyForm = {
   price: '',
   discount: '',
   payment: '',
-  familyMembers: [],
 }
 
 function calculateAge(dateOfBirth, onDate) {
@@ -129,14 +122,6 @@ function Memberships() {
             discount: Number(member.DiscountPercent),
             payment: member.PaymentMethod,
             status: member.Status,
-            familyMembers: Array.isArray(member.FamilyMembers)
-              ? member.FamilyMembers.map((familyMember) => ({
-                  FamilyMemberID: familyMember.FamilyMemberID,
-                  FirstName: familyMember.FirstName || '',
-                  LastName: familyMember.LastName || '',
-                  DateOfBirth: familyMember.DateOfBirth || '',
-                }))
-              : [],
           }))
         )
 
@@ -206,10 +191,6 @@ function Memberships() {
         type: value,
         price: value ? membershipPrices[value] : '',
         discount: value ? membershipDiscounts[value] : '',
-        familyMembers:
-          value === 'Family'
-            ? current.familyMembers
-            : [],
       }))
       return
     }
@@ -228,45 +209,9 @@ function Memberships() {
     }))
   }
 
-  const handleFamilyMemberChange = (index, field, value) => {
-    setFormData((current) => ({
-      ...current,
-      familyMembers: current.familyMembers.map((member, i) =>
-        i === index ? { ...member, [field]: value } : member
-      ),
-    }))
-  }
-
-  const addFamilyMember = () => {
-    if (formData.familyMembers.length >= 7) {
-      setFormError(
-        'A Family membership can have at most 7 additional members, including no more than 1 additional adult and 6 children.'
-      )
-      return
-    }
-
-    setFormData((current) => ({
-      ...current,
-      familyMembers: [
-        ...current.familyMembers,
-        { ...emptyFamilyMember },
-      ],
-    }))
-  }
-
-  const removeFamilyMember = (index) => {
-    setFormData((current) => ({
-      ...current,
-      familyMembers: current.familyMembers.filter((_, i) => i !== index),
-    }))
-  }
-
   const resetForm = () => {
     setFormError('')
-    setFormData({
-      ...emptyForm,
-      familyMembers: [],
-    })
+    setFormData({ ...emptyForm })
   }
 
   const openAddModal = () => {
@@ -289,12 +234,6 @@ function Memberships() {
       price: String(member.price),
       discount: String(member.discount),
       payment: member.payment,
-      familyMembers: (member.familyMembers || []).map((familyMember) => ({
-        FamilyMemberID: familyMember.FamilyMemberID,
-        FirstName: familyMember.FirstName || '',
-        LastName: familyMember.LastName || '',
-        DateOfBirth: familyMember.DateOfBirth || '',
-      })),
     })
 
     setEditingId(member.id)
@@ -419,72 +358,6 @@ function Memberships() {
       return
     }
 
-    const validatedFamilyMembers = []
-
-    if (formData.type === 'Family') {
-      if (!Array.isArray(formData.familyMembers)) {
-        setFormError('Please check the family member list.')
-        return
-      }
-
-      let adults = 1
-      let children = 0
-
-      for (let i = 0; i < formData.familyMembers.length; i++) {
-        const member = formData.familyMembers[i]
-        const memberFirstName = member.FirstName.trim()
-        const memberLastName = member.LastName.trim()
-        const memberDob = member.DateOfBirth
-
-        if (
-          !textPattern.test(memberFirstName) ||
-          !textPattern.test(memberLastName)
-        ) {
-          setFormError(`Please enter a valid first and last name for family member ${i + 1}.`)
-          return
-        }
-
-        if (!memberDob) {
-          setFormError(`Please enter a date of birth for family member ${i + 1}.`)
-          return
-        }
-
-        const memberAge = calculateAge(memberDob, formData.startDate)
-
-        if (memberAge === null || memberAge < 0 || memberDob >= formData.startDate) {
-          setFormError(`Please enter a valid date of birth before the membership start date for family member ${i + 1}.`)
-          return
-        }
-
-        if (memberAge >= 18) {
-          adults++
-        } else {
-          children++
-        }
-
-        validatedFamilyMembers.push({
-          FirstName: memberFirstName,
-          LastName: memberLastName,
-          DateOfBirth: memberDob,
-        })
-      }
-
-      if (adults > 2) {
-        setFormError('Family memberships allow a maximum of 2 adults, including the primary account holder.')
-        return
-      }
-
-      if (children > 6) {
-        setFormError('Family memberships allow a maximum of 6 children under 18.')
-        return
-      }
-
-      if (1 + validatedFamilyMembers.length > 8) {
-        setFormError('Family memberships allow a maximum of 8 family members, including the primary account holder.')
-        return
-      }
-    }
-
     const membershipData = {
       FirstName: firstName,
       LastName: lastName,
@@ -501,10 +374,6 @@ function Memberships() {
       Price: price,
       PaymentMethod: formData.payment,
       DiscountPercent: discount,
-      FamilyMembers:
-        formData.type === 'Family'
-          ? validatedFamilyMembers
-          : [],
     }
 
     try {
@@ -736,11 +605,6 @@ function Memberships() {
                     {member.firstName} {member.lastName}
                   </div>
                   <div className="cell-sub mono">{member.email}</div>
-                  {member.type === 'Family' && member.familyMembers.length > 0 && (
-                    <div className="cell-sub">
-                      {member.familyMembers.length + 1} family members
-                    </div>
-                  )}
                 </td>
 
                 <td>
@@ -966,102 +830,6 @@ function Memberships() {
               ))}
             </select>
           </div>
-
-          {formData.type === 'Family' && (
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <h3>Additional Family Members</h3>
-              <p>
-                The primary account holder must be at least 18. You can add
-                at most one additional adult and six children under 18.
-                Eight family members total are allowed, including the primary
-                account holder.
-              </p>
-
-              {formData.familyMembers.map((member, index) => (
-                <div
-                  key={member.FamilyMemberID || `new-${index}`}
-                  className="form-grid"
-                  style={{
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    marginBottom: '12px',
-                  }}
-                >
-                  <div className="form-group">
-                    <label htmlFor={`family-first-${index}`}>
-                      Family Member {index + 1} First Name
-                    </label>
-                    <input
-                      id={`family-first-${index}`}
-                      type="text"
-                      maxLength={100}
-                      value={member.FirstName}
-                      onChange={(e) =>
-                        handleFamilyMemberChange(index, 'FirstName', e.target.value)
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor={`family-last-${index}`}>
-                      Last Name
-                    </label>
-                    <input
-                      id={`family-last-${index}`}
-                      type="text"
-                      maxLength={100}
-                      value={member.LastName}
-                      onChange={(e) =>
-                        handleFamilyMemberChange(index, 'LastName', e.target.value)
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor={`family-dob-${index}`}>
-                      Date of Birth
-                    </label>
-                    <input
-                      id={`family-dob-${index}`}
-                      type="date"
-                      value={member.DateOfBirth}
-                      max={formData.startDate || undefined}
-                      onChange={(e) =>
-                        handleFamilyMemberChange(index, 'DateOfBirth', e.target.value)
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group" style={{ alignSelf: 'end' }}>
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      onClick={() => removeFamilyMember(index)}
-                    >
-                      Remove Member
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={addFamilyMember}
-                disabled={formData.familyMembers.length >= 7}
-              >
-                Add Family Member
-              </button>
-
-              <p>
-                Total family members: {1 + formData.familyMembers.length} / 8
-              </p>
-            </div>
-          )}
 
           <div className="form-actions">
             <button

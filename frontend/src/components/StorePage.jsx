@@ -95,6 +95,10 @@ function StorePage({ kind }){
   const [recordToDelete, setRecordToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [restockItem, setRestockItem] = useState(null)
+  const [restockStock, setRestockStock] = useState('')
+  const [restocking, setRestocking] = useState(false)
+  const [restockError, setRestockError] = useState('')
 
   const loadStoreData = useCallback(async()=>{
     const [itemsData, paymentData] = await Promise.all([
@@ -139,7 +143,71 @@ function StorePage({ kind }){
   const selection = tab === 'items' ? itemSelection : saleSelection
 
   const revenue = sales.reduce((sum, sale)=>sum + saleTotal(sale), 0)
+  const lowStockCount = isGiftShop
+    ? items.filter((item)=>isLowStock(item)).length
+    : 0
 
+  const openRestockModal = (item)=>{
+    if(!allowEdit || !isGiftShop || !isLowStock(item)){
+      return
+    }
+
+    setRestockItem(item)
+    setRestockStock('')
+    setRestockError('')
+  }
+
+  const closeRestockModal = ()=>{
+    if(restocking){
+      return
+    }
+
+    setRestockItem(null)
+    setRestockStock('')
+    setRestockError('')
+  }
+
+  const handleConfirmRestock = async ()=>{
+    if(!restockItem){
+      return
+    }
+
+    const stock = Number(restockStock)
+
+    if(restockStock === '' || !Number.isInteger(stock) || stock < 0){
+      setRestockError('Enter a whole number of 0 or more.')
+      return
+    }
+
+    if(stock <= Number(restockItem.Stock)){
+      setRestockError(
+        `Enter a stock level above the current amount (${restockItem.Stock}).`
+      )
+      return
+    }
+
+    setRestocking(true)
+    setRestockError('')
+
+    try{
+      await callApi(`${base}/items/${restockItem.ItemID}`, 'PUT', {
+        ItemName: restockItem.ItemName,
+        Category: restockItem.Category,
+        Price: restockItem.Price,
+        StaffID: restockItem.StaffID || store.staffId,
+        Stock: stock,
+      })
+      setRestockItem(null)
+      setRestockStock('')
+      await loadStoreData()
+    }
+    catch(error){
+      setRestockError(error.message)
+    }
+    finally{
+      setRestocking(false)
+    }
+  }
 
   const openModal = (values, id)=>{
     setFormData({ ...emptyForm, ...values })
@@ -402,11 +470,11 @@ function StorePage({ kind }){
         </Panel>
 
         {isGiftShop && (
-          <Panel className="summary-card">
-            <div className="summary-value">
-              {items.filter((item)=>isLowStock(item)).length}
+          <Panel className={`summary-card${lowStockCount > 0 ? ' is-alert' : ''}`}>
+            <div className="summary-value">{lowStockCount}</div>
+            <div className="summary-label">
+              {lowStockCount === 1 ? 'Stock Issue' : 'Stock Issues'}
             </div>
-            <div className="summary-label">Low Stock Items</div>
           </Panel>
         )}
 
@@ -484,11 +552,19 @@ function StorePage({ kind }){
                 <th scope="col">Price</th>
                 {isGiftShop && <th scope="col">Stock</th>}
                 <th scope="col">Staff</th>
+                {isGiftShop && allowEdit && (
+                  <th scope="col" className="store-restock-col">
+                    <span className="sr-only">Restock</span>
+                  </th>
+                )}
               </tr>
             </thead>
 
             <tbody>
-              {pagedItems.visibleRows.map((item)=>(
+              {pagedItems.visibleRows.map((item)=>{
+                const low = isGiftShop && isLowStock(item)
+
+                return (
                 <tr
                   key={item.ItemID}
                   className={itemSelection.isSelected(item.ItemID) ? 'selected-row' : ''}
@@ -506,14 +582,41 @@ function StorePage({ kind }){
                   <td className="strong">{item.ItemName}</td>
                   <td>{item.Category}</td>
                   <td className="mono">${item.Price.toFixed(2)}</td>
-                  {isGiftShop && <td className="mono">{item.Stock}</td>}
+                  {isGiftShop && (
+                    <td className={`mono${low ? ' store-stock-low' : ''}`}>
+                      {item.Stock}
+                    </td>
+                  )}
                   <td>{item.StaffName}</td>
+                  {isGiftShop && allowEdit && (
+                    <td className="store-restock-col">
+                      {low ? (
+                        <button
+                          type="button"
+                          className="btn secondary store-restock-btn"
+                          onClick={()=>openRestockModal(item)}
+                        >
+                          Restock
+                        </button>
+                      ) : null}
+                    </td>
+                  )}
                 </tr>
-              ))}
+                )
+              })}
 
               {filteredItems.length === 0 && (
                 <tr>
-                  <td colSpan={(isGiftShop ? 5 : 4) + (allowEdit ? 1 : 0)} className="empty">No items found.</td>
+                  <td
+                    colSpan={
+                      (isGiftShop ? 5 : 4) +
+                      (allowEdit ? 1 : 0) +
+                      (isGiftShop && allowEdit ? 1 : 0)
+                    }
+                    className="empty"
+                  >
+                    No items found.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -768,6 +871,76 @@ function StorePage({ kind }){
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={restockItem !== null}
+        title="Restock Item"
+        onClose={closeRestockModal}
+      >
+        <form
+          className="form-grid"
+          onSubmit={(e)=>{
+            e.preventDefault()
+            handleConfirmRestock()
+          }}
+        >
+          <p
+            style={{
+              color: 'var(--muted-foreground)',
+              fontSize: '14px',
+              margin: '0 0 4px',
+              gridColumn: '1 / -1',
+            }}
+          >
+            <strong>{restockItem?.ItemName}</strong> currently has{' '}
+            {restockItem?.Stock ?? 0} in stock
+            {restockItem?.ReorderLevel != null
+              ? ` (reorder at ${restockItem.ReorderLevel})`
+              : ''}
+            . Enter the stock level to restock to.
+          </p>
+
+          <div className="form-group">
+            <label htmlFor="store-restock-stock">Restock to</label>
+            <input
+              id="store-restock-stock"
+              type="number"
+              min={(restockItem?.Stock ?? 0) + 1}
+              step="1"
+              value={restockStock}
+              onChange={(e)=>{
+                setRestockStock(e.target.value)
+                setRestockError('')
+              }}
+              autoFocus
+            />
+          </div>
+
+          {restockError && (
+            <p className="form-error form-full" role="alert">
+              {restockError}
+            </p>
+          )}
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={closeRestockModal}
+              disabled={restocking}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn primary"
+              disabled={restocking}
+            >
+              {restocking ? 'Restocking...' : 'Confirm Restock'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   )

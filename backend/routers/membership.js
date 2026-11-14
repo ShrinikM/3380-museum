@@ -140,7 +140,6 @@ async function validateMembership(body, allowedPayments) {
     StartDate,
     EndDate,
     PaymentMethod,
-    FamilyMembers = [],
   } = body;
 
   const plans = await getMembershipPlans();
@@ -256,8 +255,6 @@ async function validateMembership(body, allowedPayments) {
     );
   }
 
-  let validatedFamilyMembers = [];
-
   if (MembershipType === "Family") {
     if (!validatedDateOfBirth) {
       throw makeError(
@@ -272,100 +269,6 @@ async function validateMembership(body, allowedPayments) {
         "The primary account holder must be at least 18 years old when the Family membership starts."
       );
     }
-
-    if (!Array.isArray(FamilyMembers)) {
-      throw makeError(
-        400,
-        "Family members must be provided as a list."
-      );
-    }
-
-    validatedFamilyMembers = FamilyMembers.map((member, index) => {
-      if (
-        !member ||
-        typeof member !== "object" ||
-        Array.isArray(member)
-      ) {
-        throw makeError(
-          400,
-          `Family member ${index + 1} is invalid.`
-        );
-      }
-
-      const firstName =
-        typeof member.FirstName === "string"
-          ? member.FirstName.trim()
-          : "";
-
-      const lastName =
-        typeof member.LastName === "string"
-          ? member.LastName.trim()
-          : "";
-
-      if (!firstName || !lastName) {
-        throw makeError(
-          400,
-          `Family member ${index + 1} requires a first name and last name.`
-        );
-      }
-
-      const dob = validateDate(
-        member.DateOfBirth,
-        `date of birth for family member ${index + 1}`
-      );
-
-      if (dob >= StartDate) {
-        throw makeError(
-          400,
-          `Family member ${index + 1} must have a date of birth before the membership start date.`
-        );
-      }
-
-      return {
-        FirstName: firstName,
-        LastName: lastName,
-        DateOfBirth: dob,
-        Age: calculateAge(dob, StartDate),
-      };
-    });
-
-    const adults =
-      1 +
-      validatedFamilyMembers.filter((member) => member.Age >= 18).length;
-
-    const children =
-      validatedFamilyMembers.filter((member) => member.Age < 18).length;
-
-    const totalMembers = 1 + validatedFamilyMembers.length;
-
-    if (adults > 2) {
-      throw makeError(
-        400,
-        "Family memberships allow a maximum of 2 adults, including the primary account holder."
-      );
-    }
-
-    if (children > 6) {
-      throw makeError(
-        400,
-        "Family memberships allow a maximum of 6 children under 18."
-      );
-    }
-
-    if (totalMembers > 8) {
-      throw makeError(
-        400,
-        "Family memberships allow a maximum of 8 family members, including the primary account holder."
-      );
-    }
-  } else if (
-    !Array.isArray(FamilyMembers) ||
-    FamilyMembers.length > 0
-  ) {
-    throw makeError(
-      400,
-      "Additional family members can only be added to Family memberships."
-    );
   }
 
   return {
@@ -381,7 +284,6 @@ async function validateMembership(body, allowedPayments) {
     Price: plan.Price,
     PaymentMethod,
     DiscountPercent: plan.DiscountPercent,
-    FamilyMembers: validatedFamilyMembers,
   };
 }
 
@@ -395,52 +297,13 @@ function checkId(params) {
   return id;
 }
 
-async function addFamilyMembersToMemberships(rows, query = pool) {
-  if (!rows.length) {
-    return rows;
-  }
-
-  const ids = rows.map((row) => Number(row.MembershipID));
-  const placeholders = ids.map(() => "?").join(", ");
-
-  const [familyRows] = await query.query(
-    `SELECT
-       FamilyMemberID,
-       MembershipID,
-       FirstName,
-       LastName,
-       DATE_FORMAT(DateOfBirth, '%Y-%m-%d') AS DateOfBirth
-     FROM membershipfamilymember
-     WHERE MembershipID IN (${placeholders})
-     ORDER BY FamilyMemberID`,
-    ids
-  );
-
-  const familyByMembership = new Map();
-
-  for (const member of familyRows) {
-    const membershipId = Number(member.MembershipID);
-
-    if (!familyByMembership.has(membershipId)) {
-      familyByMembership.set(membershipId, []);
-    }
-
-    familyByMembership.get(membershipId).push({
-      FamilyMemberID: Number(member.FamilyMemberID),
-      FirstName: member.FirstName,
-      LastName: member.LastName,
-      DateOfBirth: member.DateOfBirth,
-    });
-  }
-
+function formatMemberships(rows) {
   return rows.map((row) => ({
     ...row,
     MembershipID: Number(row.MembershipID),
     CustomerID: Number(row.CustomerID),
     Price: Number(row.Price),
     DiscountPercent: Number(row.DiscountPercent),
-    FamilyMembers:
-      familyByMembership.get(Number(row.MembershipID)) || [],
   }));
 }
 
@@ -463,7 +326,7 @@ async function getMemberships() {
 
   return {
     status: 200,
-    data: await addFamilyMembersToMemberships(rows),
+    data: formatMemberships(rows),
   };
 }
 
@@ -477,29 +340,7 @@ async function findMembership(id) {
     throw makeError(404, "Membership not found.");
   }
 
-  const [membership] = await addFamilyMembersToMemberships(rows);
-
-  return membership;
-}
-
-async function insertFamilyMembers(connection, membershipId, members) {
-  for (const member of members) {
-    await connection.query(
-      `INSERT INTO membershipfamilymember (
-         MembershipID,
-         FirstName,
-         LastName,
-         DateOfBirth,
-         CreatedAt
-       ) VALUES (?, ?, ?, ?, NOW())`,
-      [
-        membershipId,
-        member.FirstName,
-        member.LastName,
-        member.DateOfBirth,
-      ]
-    );
-  }
+  return formatMemberships(rows)[0];
 }
 
 async function addMembership(params, body, staffId) {
@@ -633,19 +474,6 @@ async function addMembership(params, body, staffId) {
       ]
     );
 
-    await connection.query(
-      "DELETE FROM membershipfamilymember WHERE MembershipID = ?",
-      [membershipId]
-    );
-
-    if (membership.MembershipType === "Family") {
-      await insertFamilyMembers(
-        connection,
-        membershipId,
-        membership.FamilyMembers
-      );
-    }
-
     await connection.commit();
 
     return {
@@ -723,19 +551,6 @@ async function updateMembership(params, body) {
         id,
       ]
     );
-
-    await connection.query(
-      "DELETE FROM membershipfamilymember WHERE MembershipID = ?",
-      [id]
-    );
-
-    if (membership.MembershipType === "Family") {
-      await insertFamilyMembers(
-        connection,
-        id,
-        membership.FamilyMembers
-      );
-    }
 
     await connection.commit();
 

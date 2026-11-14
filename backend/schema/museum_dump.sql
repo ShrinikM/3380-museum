@@ -63,12 +63,13 @@ DROP TABLE IF EXISTS `artwork`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `artwork` (
-  `CollectionID` bigint unsigned NOT NULL,
+  `CollectionID` bigint unsigned DEFAULT NULL,
   `ArtworkID` bigint unsigned NOT NULL AUTO_INCREMENT,
   `Title` varchar(255) NOT NULL,
   `Type` varchar(255) NOT NULL,
   `YearCreated` smallint NOT NULL,
   `ArtistID` bigint unsigned NOT NULL,
+  `AcquisitionType` varchar(32) NOT NULL DEFAULT 'Bought',
   `CreatedAt` datetime NOT NULL,
   `UpdatedAt` datetime NOT NULL,
   `UpdatedBy` bigint unsigned DEFAULT NULL,
@@ -82,7 +83,8 @@ CREATE TABLE `artwork` (
   CONSTRAINT `fk_artwork_artist` FOREIGN KEY (`ArtistID`) REFERENCES `artist` (`ArtistID`),
   CONSTRAINT `fk_artwork_collection` FOREIGN KEY (`CollectionID`) REFERENCES `collection` (`CollectionID`),
   CONSTRAINT `fk_artwork_createdby` FOREIGN KEY (`CreatedBy`) REFERENCES `staff` (`StaffID`),
-  CONSTRAINT `fk_artwork_updatedby` FOREIGN KEY (`UpdatedBy`) REFERENCES `staff` (`StaffID`)
+  CONSTRAINT `fk_artwork_updatedby` FOREIGN KEY (`UpdatedBy`) REFERENCES `staff` (`StaffID`),
+  CONSTRAINT `chk_artwork_acquisition` CHECK ((`AcquisitionType` in (_utf8mb4'Bought',_utf8mb4'Loaned')))
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -92,7 +94,7 @@ CREATE TABLE `artwork` (
 
 LOCK TABLES `artwork` WRITE;
 /*!40000 ALTER TABLE `artwork` DISABLE KEYS */;
-INSERT INTO `artwork` VALUES (1,1,'Big DB','Painting',2022,2,'2026-10-17 20:16:05','2026-10-26 23:40:46',4,4,0),(1,2,'Garden in the Morning','Painting',1885,4,'2026-10-21 08:49:19','2026-10-24 23:13:09',4,4,0),(1,3,'Reflections at Dusk','Painting',1892,5,'2026-10-21 08:49:19','2026-10-24 23:13:59',4,4,0),(2,4,'Quiet Corners','Photography',1930,6,'2026-10-21 08:49:19','2026-10-24 23:13:31',4,4,0),(2,5,'Val','Sculpture',1900,6,'2026-10-26 23:41:14','2026-10-26 23:41:19',4,4,1),(2,6,'The Sea','Painting',1913,6,'2026-11-05 21:35:48','2026-11-14 05:18:36',4,4,0);
+INSERT INTO `artwork` VALUES (1,1,'Big DB','Painting',2022,2,'Bought','2026-10-17 20:16:05','2026-10-26 23:40:46',4,4,0),(1,2,'Garden in the Morning','Painting',1885,4,'Bought','2026-10-21 08:49:19','2026-10-24 23:13:09',4,4,0),(1,3,'Reflections at Dusk','Painting',1892,5,'Bought','2026-10-21 08:49:19','2026-10-24 23:13:59',4,4,0),(2,4,'Quiet Corners','Photography',1930,6,'Bought','2026-10-21 08:49:19','2026-10-24 23:13:31',4,4,0),(2,5,'Val','Sculpture',1900,6,'Bought','2026-10-26 23:41:14','2026-10-26 23:41:19',4,4,1),(2,6,'The Sea','Painting',1913,6,'Bought','2026-11-05 21:35:48','2026-11-14 05:18:36',4,4,0);
 /*!40000 ALTER TABLE `artwork` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -663,36 +665,6 @@ LOCK TABLES `membership` WRITE;
 /*!40000 ALTER TABLE `membership` DISABLE KEYS */;
 INSERT INTO `membership` VALUES (1,1,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(2,2,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(3,3,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(4,4,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(5,5,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(6,6,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(7,7,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(8,8,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(9,9,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(10,10,'2026-10-19 21:26:59','2026-10-19 21:26:59',4,0),(12,11,'2026-10-23 15:28:37','2026-11-14 03:39:32',NULL,0),(13,17,'2026-10-25 14:39:36','2026-10-25 14:39:36',NULL,0),(14,18,'2026-10-25 14:44:34','2026-10-25 14:44:34',NULL,0),(15,19,'2026-10-25 14:56:20','2026-10-25 16:42:00',NULL,0),(16,20,'2026-10-25 15:08:24','2026-10-25 16:12:48',NULL,1),(17,21,'2026-10-25 15:12:21','2026-10-25 16:12:48',NULL,1),(18,22,'2026-10-25 15:44:49','2026-10-25 15:44:49',NULL,0),(19,23,'2026-10-25 16:09:43','2026-10-25 16:53:14',NULL,1),(20,24,'2026-10-25 16:12:09','2026-10-25 16:12:09',NULL,0),(21,25,'2026-10-25 16:14:57','2026-10-25 16:14:57',NULL,0),(22,26,'2026-10-25 16:19:03','2026-10-25 16:52:04',NULL,0),(23,27,'2026-10-25 21:17:35','2026-10-25 21:17:35',NULL,0),(24,29,'2026-10-26 19:44:07','2026-10-26 19:44:14',NULL,0),(25,30,'2026-10-26 20:20:58','2026-11-10 04:17:59',NULL,1),(26,31,'2026-11-02 18:18:55','2026-11-02 18:18:55',NULL,0),(27,32,'2026-11-05 17:05:29','2026-11-05 17:05:29',NULL,0),(28,35,'2026-11-05 20:59:18','2026-11-05 20:59:18',NULL,0),(29,36,'2026-11-07 20:12:33','2026-11-07 20:12:33',NULL,0),(30,37,'2026-11-08 21:08:34','2026-11-08 21:38:59',NULL,0),(31,38,'2026-11-09 01:28:38','2026-11-09 01:29:13',NULL,1),(32,40,'2026-11-10 19:59:38','2026-11-10 19:59:38',NULL,0),(33,41,'2026-11-10 20:38:21','2026-11-10 20:38:21',NULL,0),(34,42,'2026-11-11 23:03:07','2026-11-11 23:03:07',NULL,0),(35,43,'2026-11-11 23:57:50','2026-11-11 23:57:50',NULL,0);
 /*!40000 ALTER TABLE `membership` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Table structure for table `membershipfamilymember`
---
-
-DROP TABLE IF EXISTS `membershipfamilymember`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `membershipfamilymember` (
-  `FamilyMemberID` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `MembershipID` bigint unsigned NOT NULL,
-  `FirstName` varchar(255) NOT NULL,
-  `LastName` varchar(255) NOT NULL,
-  `DateOfBirth` date NOT NULL,
-  `CreatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`FamilyMemberID`),
-  KEY `idx_familymember_membership` (`MembershipID`),
-  CONSTRAINT `fk_familymember_membership` FOREIGN KEY (`MembershipID`) REFERENCES `membership` (`MembershipID`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `membershipfamilymember`
---
-
-LOCK TABLES `membershipfamilymember` WRITE;
-/*!40000 ALTER TABLE `membershipfamilymember` DISABLE KEYS */;
-INSERT INTO `membershipfamilymember` VALUES (1,16,'Child','Test','2015-08-20','2026-10-25 15:08:24'),(2,17,'Adult','Two','1988-04-10','2026-10-25 15:12:21'),(3,17,'Child','One','2015-01-01','2026-10-25 15:12:21'),(4,17,'Child','Two','2016-02-02','2026-10-25 15:12:21'),(5,17,'Child','Three','2017-03-03','2026-10-25 15:12:21'),(6,17,'Child','Four','2018-04-04','2026-10-25 15:12:21'),(7,17,'Child','Five','2019-05-05','2026-10-25 15:12:22'),(8,17,'Child','Six','2020-06-06','2026-10-25 15:12:22'),(9,18,'Ben','Johnson','2024-07-04','2026-10-25 15:44:49'),(10,18,'David','Johnson','2025-07-19','2026-10-25 15:44:49'),(12,22,'Casey','FamilyTest','2015-05-20','2026-10-25 16:52:04');
-/*!40000 ALTER TABLE `membershipfamilymember` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --

@@ -6,6 +6,8 @@ import { useSelection } from '../hooks/useSelection'
 import { TablePager, usePagedList } from '../components/TablePager'
 import { ARTWORK_TYPES } from '../data/constants'
 
+const ACQUISITION_TYPES = ['Bought', 'Loaned']
+
 function Artworks() {
   const { user, canEdit } = useRole()
   const allowEdit = canEdit('/artworks')
@@ -34,6 +36,7 @@ function Artworks() {
     ArtistID: '',
     CollectionID: '',
     YearCreated: '',
+    AcquisitionType: 'Bought',
   })
 
   const filteredArtworkTypes = ARTWORK_TYPES.filter(
@@ -78,6 +81,7 @@ function Artworks() {
       ArtistID: '',
       CollectionID: '',
       YearCreated: '',
+      AcquisitionType: 'Bought',
     })
     setFormError('')
   }
@@ -94,8 +98,9 @@ function Artworks() {
       Title: artwork.Title || '',
       Type: artwork.Type || '',
       ArtistID: String(artwork.ArtistID ?? ''),
-      CollectionID: String(artwork.CollectionID ?? ''),
+      CollectionID: artwork.CollectionID == null ? '' : String(artwork.CollectionID),
       YearCreated: String(artwork.YearCreated ?? ''),
+      AcquisitionType: artwork.AcquisitionType || 'Bought',
     })
 
     setEditingId(artwork.ArtworkID)
@@ -112,12 +117,21 @@ function Artworks() {
       return
     }
 
+    if (!ACQUISITION_TYPES.includes(formData.AcquisitionType)) {
+      setFormError('Please select Bought or Loaned.')
+      return
+    }
+
     const artworkData = {
       Title: formData.Title.trim(),
       Type: formData.Type,
       ArtistID: Number(formData.ArtistID),
-      CollectionID: Number(formData.CollectionID),
+      CollectionID:
+        formData.CollectionID === ''
+          ? null
+          : Number(formData.CollectionID),
       YearCreated: Number(formData.YearCreated),
+      AcquisitionType: formData.AcquisitionType,
     }
 
     try {
@@ -293,6 +307,7 @@ function Artworks() {
               <th scope="col">Artist</th>
               <th scope="col">Collection</th>
               <th scope="col">Type</th>
+              <th scope="col">Acquisition</th>
               <th scope="col">Year Created</th>
               {showAudit && <th scope="col">Created By</th>}
               {showAudit && <th scope="col">Last Updated By</th>}
@@ -319,7 +334,7 @@ function Artworks() {
                 <td className="strong">{item.Title}</td>
 
                 <td>{item.ArtistName}</td>
-                <td>{item.CollectionName}</td>
+                <td>{item.CollectionName || '—'}</td>
 
                 <td>
                   <Badge
@@ -327,6 +342,8 @@ function Artworks() {
                     label={item.Type || 'Unknown'}
                   />
                 </td>
+
+                <td>{item.AcquisitionType || '—'}</td>
 
                 <td className="mono">
                   {item.YearCreated ?? '-'}
@@ -340,7 +357,7 @@ function Artworks() {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={5 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
+                  colSpan={6 + (showAudit ? 2 : 0) + (allowEdit ? 1 : 0)}
                   className="empty"
                 >
                   No artworks found.
@@ -426,15 +443,31 @@ function Artworks() {
               name="CollectionID"
               value={formData.CollectionID}
               onChange={handleChange}
-              required
             >
-              <option value="">Select a collection</option>
+              <option value="">No collection</option>
               {collections.map((collection) => (
                 <option
                   key={collection.CollectionID}
                   value={collection.CollectionID}
                 >
                   {collection.Name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="artwork-acquisition">Acquisition</label>
+            <select
+              id="artwork-acquisition"
+              name="AcquisitionType"
+              value={formData.AcquisitionType}
+              onChange={handleChange}
+              required
+            >
+              {ACQUISITION_TYPES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
                 </option>
               ))}
             </select>

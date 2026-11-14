@@ -774,6 +774,36 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+.summary-card.is-alert {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-bg);
+}
+
+.summary-card.is-alert .summary-value {
+  color: var(--danger);
+}
+
+.summary-card.is-alert .summary-label {
+  color: var(--danger);
+}
+
+.store-stock-low {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.store-restock-col {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.store-restock-btn {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
 .price-card {
   padding: 12px 16px;
 }

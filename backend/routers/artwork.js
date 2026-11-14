@@ -1,5 +1,7 @@
 const pool = require("../db");
 
+const acquisitionTypes = ["Bought", "Loaned"];
+
 const selectArtworks = `
   SELECT
     artwork.ArtworkID,
@@ -10,6 +12,7 @@ const selectArtworks = `
     CONCAT(artist.FirstName, ' ', artist.LastName) AS ArtistName,
     artwork.CollectionID,
     collection.Name AS CollectionName,
+    artwork.AcquisitionType,
     artwork.CreatedAt,
     artwork.UpdatedAt,
     artwork.CreatedBy,
@@ -18,7 +21,7 @@ const selectArtworks = `
     CONCAT(updater.FirstName, ' ', updater.LastName) AS UpdatedByName
   FROM artwork
   JOIN artist ON artist.ArtistID = artwork.ArtistID
-  JOIN collection ON collection.CollectionID = artwork.CollectionID
+  LEFT JOIN collection ON collection.CollectionID = artwork.CollectionID
   LEFT JOIN staff AS creator ON creator.StaffID = artwork.CreatedBy
   LEFT JOIN staff AS updater ON updater.StaffID = artwork.UpdatedBy
   WHERE artwork.IsDeleted = 0`;
@@ -96,14 +99,31 @@ async function checkArtwork(body) {
     throw makeError(400, "Year created cannot be after the artist died (" + artists[0].DeathYear + ")");
   }
 
-  artwork.CollectionID = checkWholeNumber(body.CollectionID, "CollectionID");
-  const [collections] = await pool.query(
-    "SELECT CollectionID FROM collection WHERE CollectionID = ? AND IsDeleted = 0",
-    [artwork.CollectionID]
-  );
-  if (collections.length === 0) {
-    throw makeError(400, "CollectionID does not match any collection");
+  if (
+    body.CollectionID === undefined ||
+    body.CollectionID === null ||
+    body.CollectionID === ""
+  ) {
+    artwork.CollectionID = null;
+  } else {
+    artwork.CollectionID = checkWholeNumber(body.CollectionID, "CollectionID");
+    const [collections] = await pool.query(
+      "SELECT CollectionID FROM collection WHERE CollectionID = ? AND IsDeleted = 0",
+      [artwork.CollectionID]
+    );
+    if (collections.length === 0) {
+      throw makeError(400, "CollectionID does not match any collection");
+    }
   }
+
+  if (
+    typeof body.AcquisitionType !== "string" ||
+    !acquisitionTypes.includes(body.AcquisitionType)
+  ) {
+    throw makeError(400, "AcquisitionType must be Bought or Loaned");
+  }
+
+  artwork.AcquisitionType = body.AcquisitionType;
 
   return artwork;
 }
@@ -126,14 +146,16 @@ async function addArtwork(params, body, staffId) {
 
   const [result] = await pool.query(
     `INSERT INTO artwork
-      (Title, Type, YearCreated, ArtistID, CollectionID, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
-     VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?, ?)`,
+      (Title, Type, YearCreated, ArtistID, CollectionID, AcquisitionType,
+       CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
+     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?)`,
     [
       artwork.Title,
       artwork.Type,
       artwork.YearCreated,
       artwork.ArtistID,
       artwork.CollectionID,
+      artwork.AcquisitionType,
       staffId,
       staffId,
     ]
@@ -154,9 +176,19 @@ async function updateArtwork(params, body, staffId) {
 
   await pool.query(
     `UPDATE artwork
-     SET Title = ?, Type = ?, YearCreated = ?, ArtistID = ?, CollectionID = ?, UpdatedAt = NOW(), UpdatedBy = ?
+     SET Title = ?, Type = ?, YearCreated = ?, ArtistID = ?, CollectionID = ?,
+         AcquisitionType = ?, UpdatedAt = NOW(), UpdatedBy = ?
      WHERE ArtworkID = ?`,
-    [artwork.Title, artwork.Type, artwork.YearCreated, artwork.ArtistID, artwork.CollectionID, staffId, id]
+    [
+      artwork.Title,
+      artwork.Type,
+      artwork.YearCreated,
+      artwork.ArtistID,
+      artwork.CollectionID,
+      artwork.AcquisitionType,
+      staffId,
+      id,
+    ]
   );
 
   const updatedArtwork = await findArtwork(id);
@@ -173,9 +205,9 @@ async function deleteArtwork(params, body, staffId) {
 
   const [shows] = await pool.query(
     `SELECT e.Name, DATE_FORMAT(e.EndDate, '%Y-%m-%d') AS EndDate
-     FROM artwork a
-     JOIN exhibition e ON e.CollectionID = a.CollectionID
-     WHERE a.ArtworkID = ?
+     FROM artworkexhibition ae
+     JOIN exhibition e ON e.ExhibitionID = ae.ExhibitionID
+     WHERE ae.ArtworkID = ?
        AND e.IsDeleted = 0
        AND e.CancelledAt IS NULL
        AND e.EndDate >= CURDATE()
