@@ -38,6 +38,10 @@ function formatDate(value){
   return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function formatPrice(value){
+  return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`
+}
+
 function useExhibitions(){
   const [exhibitions, setExhibitions] = useState([])
 
@@ -69,10 +73,40 @@ function useExhibitions(){
   return exhibitions
 }
 
+function useLowestTicketPrice(){
+  const [lowest, setLowest] = useState(null)
+
+  useEffect(()=>{
+    let cancelled = false
+
+    callApi('/api/ticket-prices', 'GET')
+      .then((prices)=>{
+        if(cancelled){
+          return
+        }
+
+        const amounts = Object.values(prices).map(Number).filter((price)=>price > 0)
+
+        if(amounts.length > 0){
+          setLowest(Math.min(...amounts))
+        }
+      })
+      .catch(()=>{
+      })
+
+    return ()=>{
+      cancelled = true
+    }
+  }, [])
+
+  return lowest
+}
+
 function HomePage(){
   const ticketsLink = useAccountLink('tickets')
   const membershipLink = useAccountLink('membership')
   const exhibitions = useExhibitions()
+  const lowestTicketPrice = useLowestTicketPrice()
 
   return (
     <div className="hm-page">
@@ -100,7 +134,11 @@ function HomePage(){
         </div>
         <div>
           <span>Admission</span>
-          <strong>From $15</strong>
+          <strong>
+            {lowestTicketPrice === null
+              ? 'See ticket prices'
+              : `From ${formatPrice(lowestTicketPrice)}`}
+          </strong>
         </div>
         <div>
           <span>Hours</span>

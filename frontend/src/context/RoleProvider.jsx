@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RoleContext } from './role'
 import { callApi } from '../api'
-import { ROLES } from '../data/roles'
+import { CUSTOMER_PAGES } from '../data/roles'
 
 function getSavedUser(){
   try{
@@ -12,16 +12,23 @@ function getSavedUser(){
   }
 }
 
+function emptyPermissions(){
+  return { pages: [], edit: [] }
+}
+
 function RoleProvider({ children }){
   const [user, setUser] = useState(getSavedUser)
+  const permissionsLoaded = useRef(false)
 
   const startStaff = (data)=>{
     const loggedInUser = {
       username: data.Email,
       name: data.FirstName,
       role: data.Role,
+      permissions: data.Permissions || emptyPermissions(),
     }
 
+    permissionsLoaded.current = true
     localStorage.setItem('user', JSON.stringify(loggedInUser))
     setUser(loggedInUser)
   }
@@ -34,6 +41,7 @@ function RoleProvider({ children }){
       token: data.token,
     }
 
+    permissionsLoaded.current = true
     localStorage.setItem('user', JSON.stringify(loggedInUser))
     setUser(loggedInUser)
   }
@@ -67,24 +75,67 @@ function RoleProvider({ children }){
       callApi('/api/customer/logout', 'POST').catch(()=>{})
     }
 
+    permissionsLoaded.current = false
     localStorage.removeItem('user')
     setUser(null)
   }
+
+  useEffect(()=>{
+    if(
+      user === null ||
+      user.role === 'Customer' ||
+      user.token ||
+      permissionsLoaded.current ||
+      user.permissions?.pages?.length
+    ){
+      return
+    }
+
+    let cancelled = false
+    permissionsLoaded.current = true
+
+    callApi('/api/staff/permissions', 'GET')
+      .then((data)=>{
+        if(cancelled){
+          return
+        }
+
+        const nextUser = {
+          ...user,
+          role: data.Role || user.role,
+          permissions: data.Permissions || emptyPermissions(),
+        }
+
+        localStorage.setItem('user', JSON.stringify(nextUser))
+        setUser(nextUser)
+      })
+      .catch(()=>{
+        permissionsLoaded.current = false
+      })
+
+    return ()=>{
+      cancelled = true
+    }
+  }, [user])
 
   const canView = (path)=>{
     if(user === null){
       return false
     }
 
-    return ROLES[user.role]?.pages.includes(path) ?? false
+    if(user.role === 'Customer'){
+      return CUSTOMER_PAGES.includes(path)
+    }
+
+    return user.permissions?.pages?.includes(path) ?? false
   }
 
   const canEdit = (path)=>{
-    if(user === null){
+    if(user === null || user.role === 'Customer'){
       return false
     }
 
-    return ROLES[user.role]?.edit.includes(path) ?? false
+    return user.permissions?.edit?.includes(path) ?? false
   }
 
   return (
@@ -95,3 +146,4 @@ function RoleProvider({ children }){
 }
 
 export default RoleProvider
+

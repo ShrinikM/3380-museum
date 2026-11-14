@@ -163,9 +163,56 @@ async function checkEmailIsFree(email, ignoreId) {
   }
 }
 
+async function getPermissionsForRole(role) {
+  const [rows] = await pool.query(
+    `SELECT PagePath, CanView, CanEdit
+     FROM rolepermission
+     WHERE Role = ?
+     ORDER BY PagePath`,
+    [role]
+  );
+
+  const pages = [];
+  const edit = [];
+
+  for (const row of rows) {
+    if (Number(row.CanView) === 1) {
+      pages.push(row.PagePath);
+    }
+
+    if (Number(row.CanEdit) === 1) {
+      edit.push(row.PagePath);
+    }
+  }
+
+  return { pages, edit };
+}
+
 async function getStaff(params, body, staffId) {
   const [rows] = await pool.query(selectStaff + " ORDER BY LastName, FirstName");
   return { status: 200, data: rows };
+}
+
+async function getMyPermissions(params, body, staffId) {
+  const [rows] = await pool.query(
+    `SELECT Role
+     FROM staff
+     WHERE StaffID = ?
+       AND IsDeleted = 0`,
+    [staffId]
+  );
+
+  if (rows.length === 0) {
+    throw makeError(401, "Unknown user");
+  }
+
+  return {
+    status: 200,
+    data: {
+      Role: rows[0].Role,
+      Permissions: await getPermissionsForRole(rows[0].Role),
+    },
+  };
 }
 
 async function loginStaff(params, body) {
@@ -208,6 +255,7 @@ async function loginStaff(params, body) {
       Role: rows[0].Role,
       FirstName: rows[0].FirstName,
       LastName: rows[0].LastName,
+      Permissions: await getPermissionsForRole(rows[0].Role),
     },
   };
 }
@@ -344,6 +392,7 @@ async function deleteStaff(params, body, staffId) {
 
 module.exports = [
   { method: "POST", path: "/api/staff/login", handler: loginStaff },
+  { method: "GET", path: "/api/staff/permissions", handler: getMyPermissions, needsActor: true },
   { method: "GET", path: "/api/staff", handler: getStaff },
   { method: "POST", path: "/api/staff", handler: addStaff, needsActor: true },
   { method: "PUT", path: "/api/staff/:id", handler: updateStaff, needsActor: true },
