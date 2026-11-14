@@ -807,6 +807,7 @@ async function getPurchases(params, body, customerId) {
   const [tickets] = await pool.query(
     `SELECT
        t.TicketID,
+       t.ExhibitionID,
        e.Name AS ExhibitionName,
        e.CancellationReason,
        t.TicketType,

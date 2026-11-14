@@ -1482,7 +1482,7 @@ function TicketsTab({ data, account, purchases, onBought }) {
         <div className="cp-label">Step 2</div>
         <h2>
           {isWaitlistMode
-            ? 'That visit date is full — join the waitlist'
+            ? 'That visit date is full - join the waitlist'
             : 'Choose tickets and visit date'}
         </h2>
 

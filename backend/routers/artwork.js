@@ -82,11 +82,18 @@ async function checkArtwork(body) {
 
   artwork.ArtistID = checkWholeNumber(body.ArtistID, "ArtistID");
   const [artists] = await pool.query(
-    "SELECT ArtistID FROM artist WHERE ArtistID = ? AND IsDeleted = 0",
+    "SELECT ArtistID, BirthYear, DeathYear FROM artist WHERE ArtistID = ? AND IsDeleted = 0",
     [artwork.ArtistID]
   );
   if (artists.length === 0) {
     throw makeError(400, "ArtistID does not match any artist");
+  }
+  const birthYear = Number(artists[0].BirthYear);
+  if (artwork.YearCreated < birthYear) {
+    throw makeError(400, "Year created cannot be before the artist was born (" + birthYear + ")");
+  }
+  if (artists[0].DeathYear !== null && artwork.YearCreated > Number(artists[0].DeathYear)) {
+    throw makeError(400, "Year created cannot be after the artist died (" + artists[0].DeathYear + ")");
   }
 
   artwork.CollectionID = checkWholeNumber(body.CollectionID, "CollectionID");

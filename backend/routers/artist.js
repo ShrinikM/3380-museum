@@ -136,6 +136,21 @@ async function updateArtist(params, body, staffId) {
     throw makeError(404, "Artist not found");
   }
 
+  const [years] = await pool.query(
+    `SELECT MIN(YearCreated) AS FirstYear, MAX(YearCreated) AS LastYear
+     FROM artwork
+     WHERE ArtistID = ? AND IsDeleted = 0`,
+    [id]
+  );
+  const firstYear = years[0].FirstYear;
+  const lastYear = years[0].LastYear;
+  if (firstYear !== null && artist.BirthYear > Number(firstYear)) {
+    throw makeError(400, "This artist has an artwork from " + firstYear + ", so the birth year cannot be after it");
+  }
+  if (lastYear !== null && artist.DeathYear !== null && artist.DeathYear < Number(lastYear)) {
+    throw makeError(400, "This artist has an artwork from " + lastYear + ", so the death year cannot be before it");
+  }
+
   await pool.query(
     `UPDATE artist
      SET FirstName = ?, LastName = ?, BirthYear = ?, DeathYear = ?, Nationality = ?, UpdatedAt = NOW(), UpdatedBy = ?
