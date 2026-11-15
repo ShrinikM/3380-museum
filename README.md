@@ -16,14 +16,11 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 - `README.md` - this file
 
 ## How to run the project
+1. Download `3380-museum.zip` and `museum_dump.sql` from the Google Drive folder and unzip the zip file.
 
-**1. Download and unzip**
-Download `3380-museum.zip` and `museum_dump.sql` from the Google Drive folder and unzip the zip file.
+2. In MySQL Workbench: **Server -> Data Import -> Import from Self-Contained File**, select `museum_dump.sql` and click **Start Import**.
 
-**2. Import the database**
-In MySQL Workbench: **Server -> Data Import -> Import from Self-Contained File**, select `museum_dump.sql` and click **Start Import**.
-
-**3. Create `backend/.env`** with your MySQL login:
+3. Create `backend/.env`** with your MySQL login:
 
     DB_HOST=localhost
     DB_USER=root
@@ -31,14 +28,14 @@ In MySQL Workbench: **Server -> Data Import -> Import from Self-Contained File**
     DB_NAME=museum
     DB_PORT=3306
 
-**4. Install packages**
+4. Install packages
 
     cd 3380-museum/backend
     npm install
     cd ../frontend
     npm install
 
-**5. Start** (two terminals)
+5. Start (two terminals)
 
     cd 3380-museum/backend
     npm start
