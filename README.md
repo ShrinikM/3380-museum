@@ -3,7 +3,8 @@
 Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Madisetty
 
 **Website:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
-Checking the project is easy from the live site above (login info at bottom of this document). Below are instructions for running the project locally on your computer.
+
+Checking the project is easier from the live site above. Below are instructions for running the project locally on your computer.
 
 ## Technology Stack
 - Frontend: React (Vite)
@@ -12,7 +13,7 @@ Checking the project is easy from the live site above (login info at bottom of t
 
 ## Files in the Google Drive folder
 - `3380-museum.zip` - codebase
-- `museum_dump.sql` - SQL dump with data.
+- `museum_dump.sql` - SQL dump with data
 - `project_document.pdf` - data types, user roles, triggers, queries and reports
 - `README.md` - this file
 
@@ -41,9 +42,7 @@ In the `3380-museum/backend` folder, create a file `.env` with your own MySQL lo
     DB_NAME=museum
     DB_PORT=3306
 
-*backend is configured to connect to our Azure MySQL server with SSL, the live website is easier way to see the project.
-
-## Step 4. Install packages
+## Ste 4. Install npm
 Open a terminal in the `3380-museum` folder and run:
 
     cd backend
@@ -59,14 +58,14 @@ Terminal 1 (backend):
     cd 3380-museum/backend
     npm start
 
-Leave it running.
+Leave it and go to new terminal
 
 Terminal 2 (frontend):
 
     cd 3380-museum/frontend
     npm run dev
 
-Open the link that is shown (http://localhost:5173).
+Open the link that is shown (http://localhost:5173) in terminal 2
 
 ## Demo Logins:
 
