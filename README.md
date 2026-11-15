@@ -3,42 +3,45 @@
 Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Madisetty
 
 **Website:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
+Checking the project is easy from the live site above (login info at bottom of this document). Below are instructions for running the project locally on your computer.
 
-## Tech Stack
+## Technology Stack
 - Frontend: React (Vite)
 - Backend: Node.js
 - Database: MySQL
 
 ## Files in the Google Drive folder
-- `<3380-museum.zip>` - complete code base (frontend and backend)
-- `museum_dump.sql` - SQL dump with data. The same file is also inside the project at `backend/schema/museum_dump.sql`
-- `<project_document.pdf>` - data types, user roles, triggers, queries and reports
+- `3380-museum.zip` - codebase
+- `museum_dump.sql` - SQL dump with data.
+- `project_document.pdf` - data types, user roles, triggers, queries and reports
 - `README.md` - this file
 
-## What you need installed
+## Should be installed in order to run
 - https://nodejs.org
 - https://dev.mysql.com/downloads/
 
 ## Step 1. Download the project
 1. Open the Google Drive folder.
-2. Download `<3380-museum.zip>` and `museum_dump.sql`.
-3. Unzip `<3380-museum.zip>`. You will get a folder `3380-museum` with `backend` and `frontend` inside.
+2. Download `3380-museum.zip` and `museum_dump.sql`.
+3. Unzip `3380-museum.zip`. You will get a folder `3380-museum` with `backend` and `frontend` inside.
 
 ## Step 2. Create the database
 1. Open MySQL Workbench and connect to your local MySQL server.
 2. Go to **Server -> Data Import**.
-3. Choose **Import from Self-Contained File** and select `museum_dump.sql`.
-4. Click **Start Import**. This creates the `museum` database with all tables, data and triggers.
+3. Select **Import from Self-Contained File** and select `museum_dump.sql`.
+4. Click **Start Import**. It will create the `museum` database with all data.
 5. Click the refresh button in the **Schemas** panel. You should see `museum`.
 
-## Step 3. Connect the backend to your database
-In the `3380-museum/backend` folder, create a file named `.env` with your own MySQL login:
+## Step 3. Connect the backend* to your database
+In the `3380-museum/backend` folder, create a file `.env` with your own MySQL login:
 
     DB_HOST=localhost
     DB_USER=root
     DB_PASSWORD=yourMySQLPassword
     DB_NAME=museum
     DB_PORT=3306
+
+*backend is configured to connect to our Azure MySQL server with SSL, the live website is easier way to see the project.
 
 ## Step 4. Install packages
 Open a terminal in the `3380-museum` folder and run:
