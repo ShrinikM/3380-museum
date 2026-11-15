@@ -17,7 +17,13 @@ export function Panel({ children, className = '', ...rest }) {
   )
 }
 
-export function SelectionActions({ count, onEdit, onDelete, disabled = false }) {
+export function SelectionActions({
+  count,
+  onEdit,
+  onDelete,
+  onRefund,
+  disabled = false,
+}) {
   if (count === 0) return null
 
   return (
@@ -30,6 +36,17 @@ export function SelectionActions({ count, onEdit, onDelete, disabled = false }) 
           disabled={disabled}
         >
           Edit
+        </button>
+      )}
+
+      {typeof onRefund === 'function' && (
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={onRefund}
+          disabled={disabled}
+        >
+          Refund
         </button>
       )}
 

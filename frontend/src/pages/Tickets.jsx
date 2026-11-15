@@ -64,8 +64,12 @@ function Tickets() {
   const [member, setMember] = useState(null)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [ticketToDelete, setTicketToDelete] = useState(null)
+  const [ticketsToDelete, setTicketsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
+  const [refundModalOpen, setRefundModalOpen] = useState(false)
+  const [ticketsToRefund, setTicketsToRefund] = useState([])
+  const [refunding, setRefunding] = useState(false)
+  const [refundError, setRefundError] = useState('')
   const [pendingAction, setPendingAction] = useState(null)
   const [actionError, setActionError] = useState('')
   const [actionSaving, setActionSaving] = useState(false)
@@ -456,28 +460,92 @@ function Tickets() {
     openEditModal(selectedTickets[0])
   }
 
+  const handleRefundSelected = () => {
+    if (selectedTickets.length === 0) return
+    setTicketsToRefund(selectedTickets)
+    setRefundError('')
+    setRefundModalOpen(true)
+  }
+
+  const handleConfirmRefund = async () => {
+    if (ticketsToRefund.length === 0) return
+
+    setRefunding(true)
+    setRefundError('')
+
+    const failed = []
+
+    for (const ticket of ticketsToRefund) {
+      try {
+        await callApi('/api/tickets/' + ticket.TicketID + '/refund', 'POST')
+      } catch (err) {
+        failed.push(
+          '#' + String(ticket.TicketID).padStart(5, '0') + ': ' + err.message
+        )
+      }
+    }
+
+    if (failed.length > 0) {
+      setRefundError(
+        failed.length === ticketsToRefund.length
+          ? 'Could not refund: ' + failed.join(' ')
+          : 'Some tickets were refunded. Could not refund: ' + failed.join(' ')
+      )
+      clear()
+      refetchTickets()
+      setRefunding(false)
+      return
+    }
+
+    setRefundModalOpen(false)
+    setTicketsToRefund([])
+    clear()
+    refetchTickets()
+    setRefunding(false)
+  }
+
   const handleDeleteSelected = () => {
     if (selectedTickets.length === 0) return
-    setTicketToDelete(selectedTickets[0])
+    setTicketsToDelete(selectedTickets)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!ticketToDelete) return
+    if (ticketsToDelete.length === 0) return
 
     setDeleting(true)
-    try {
-      await callApi('/api/tickets/' + ticketToDelete.TicketID, 'DELETE')
-      setDeleteModalOpen(false)
-      setTicketToDelete(null)
+    setDeleteError('')
+
+    const failed = []
+
+    for (const ticket of ticketsToDelete) {
+      try {
+        await callApi('/api/tickets/' + ticket.TicketID, 'DELETE')
+      } catch (err) {
+        failed.push(
+          '#' + String(ticket.TicketID).padStart(5, '0') + ': ' + err.message
+        )
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === ticketsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some tickets were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchTickets()
-    } catch (err) {
-      setDeleteError('Could not delete ticket: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setTicketsToDelete([])
+    clear()
+    refetchTickets()
+    setDeleting(false)
   }
 
   return (
@@ -492,6 +560,7 @@ function Tickets() {
             <SelectionActions
               count={selectedTickets.length}
               onEdit={handleEditSelected}
+              onRefund={handleRefundSelected}
               onDelete={handleDeleteSelected}
             />
 
@@ -1039,9 +1108,76 @@ function Tickets() {
       </Modal>
 
       <Modal
+        open={refundModalOpen}
+        title={ticketsToRefund.length > 1 ? 'Refund Tickets' : 'Refund Ticket'}
+        onClose={() => {
+          setRefundModalOpen(false)
+          setRefundError('')
+          setTicketsToRefund([])
+        }}
+      >
+        <div className="form-grid">
+          {refundError && (
+            <p className="form-error form-full" role="alert">
+              {refundError}
+            </p>
+          )}
+
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
+            {ticketsToRefund.length > 1 ? (
+              <>
+                Refund <strong>{ticketsToRefund.length} tickets</strong> and
+                notify those customers? You can delete them after they are
+                refunded.
+              </>
+            ) : (
+              <>
+                Refund ticket{' '}
+                <strong>
+                  #{String(ticketsToRefund[0]?.TicketID || '').padStart(5, '0')}
+                </strong>{' '}
+                and notify the customer? You can delete it after it is refunded.
+              </>
+            )}
+          </p>
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => {
+                setRefundModalOpen(false)
+                setRefundError('')
+                setTicketsToRefund([])
+              }}
+              disabled={refunding}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleConfirmRefund}
+              disabled={refunding}
+            >
+              {refunding
+                ? 'Refunding...'
+                : ticketsToRefund.length > 1
+                  ? 'Refund Tickets'
+                  : 'Refund Ticket'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={deleteModalOpen}
-        title="Delete Ticket"
-        onClose={() => setDeleteModalOpen(false)}
+        title={ticketsToDelete.length > 1 ? 'Delete Tickets' : 'Delete Ticket'}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+          setTicketsToDelete([])
+        }}
       >
         <div className="form-grid">
           {deleteError && (
@@ -1051,14 +1187,31 @@ function Tickets() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete ticket <strong>#{String(ticketToDelete?.TicketID || '').padStart(5, '0')}</strong>? This action cannot be undone.
+            {ticketsToDelete.length > 1 ? (
+              <>
+                Delete <strong>{ticketsToDelete.length} tickets</strong>? Each
+                one must already be refunded. This cannot be undone.
+              </>
+            ) : (
+              <>
+                Delete ticket{' '}
+                <strong>
+                  #{String(ticketsToDelete[0]?.TicketID || '').padStart(5, '0')}
+                </strong>
+                ? It must already be refunded. This cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setDeleteModalOpen(false)}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+                setTicketsToDelete([])
+              }}
               disabled={deleting}
             >
               Cancel
@@ -1069,7 +1222,11 @@ function Tickets() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Ticket'}
+              {deleting
+                ? 'Deleting...'
+                : ticketsToDelete.length > 1
+                  ? 'Delete Tickets'
+                  : 'Delete Ticket'}
             </button>
           </div>
         </div>

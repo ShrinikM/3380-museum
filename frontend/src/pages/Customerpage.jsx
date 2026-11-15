@@ -143,8 +143,46 @@ function Stepper({ value, max, onChange, label }) {
   )
 }
 
-function MembershipTab({ account, onChanged }) {
+function groupWaitlistQueue(waitlist) {
+  const groups = new Map()
+
+  for (const entry of waitlist || []) {
+    if (entry.Status !== 'Waiting' && entry.Status !== 'Notified') {
+      continue
+    }
+
+    const id = Number(entry.ExhibitionID)
+    const existing = groups.get(id)
+    const position = Number(entry.QueuePosition) || 1
+
+    if (!existing) {
+      groups.set(id, {
+        ExhibitionID: id,
+        ExhibitionName: entry.ExhibitionName,
+        QueuePosition: position,
+        count: 1,
+        openedSpots: entry.Status === 'Notified' ? 1 : 0,
+      })
+      continue
+    }
+
+    existing.count += 1
+
+    if (entry.Status === 'Notified') {
+      existing.openedSpots += 1
+    }
+
+    if (position < existing.QueuePosition) {
+      existing.QueuePosition = position
+    }
+  }
+
+  return Array.from(groups.values())
+}
+
+function MembershipTab({ account, waitlist, onBuyTickets, onChanged }) {
   const { customer, membership, terms, plans } = account
+  const queue = groupWaitlistQueue(waitlist)
   const [renewing, setRenewing] = useState(false)
   const [plan, setPlan] = useState('')
   const [payment, setPayment] = useState('')
@@ -394,9 +432,41 @@ function MembershipTab({ account, onChanged }) {
     </section>
   )
 
+  const waitlistNote =
+    queue.length > 0 ? (
+      <div className="cp-waitlist-note" role="status">
+        {queue.map((item) => {
+          const canBuy = item.openedSpots > 0
+
+          return (
+            <p key={item.ExhibitionID}>
+              <strong>{item.ExhibitionName}</strong>
+              {' — '}
+              {canBuy ? (
+                <>
+                  #0 in line
+                  {' · '}
+                  <button
+                    type="button"
+                    className="cp-text-link"
+                    onClick={onBuyTickets}
+                  >
+                    Buy tickets
+                  </button>
+                </>
+              ) : (
+                <>#{item.QueuePosition} in line</>
+              )}
+            </p>
+          )
+        })}
+      </div>
+    ) : null
+
   if (!hasMembership) {
     return (
       <div className="cp-stack">
+        {waitlistNote}
         <section className="cp-card">
           <p className="cp-empty">You don't have a membership yet. Join to save on every ticket.</p>
         </section>
@@ -408,6 +478,8 @@ function MembershipTab({ account, onChanged }) {
 
   return (
     <div className="cp-stack">
+      {waitlistNote}
+
       <section className="cp-card cp-member">
         <div className="cp-member-head">
           <div>
@@ -807,13 +879,31 @@ function DetailsTab({ account, onUpdated }) {
   )
 }
 
-function PurchasesTab({ purchases }) {
+function PurchasesTab({ purchases, onChanged }) {
   const [view, setView] = useState('tickets')
+  const [leavingId, setLeavingId] = useState(null)
+  const [leaveError, setLeaveError] = useState('')
   const { tickets, orders, waitlist } = purchases
 
   const rows =
     view === 'tickets' ? tickets : view === 'orders' ? orders : waitlist
   const { visibleRows, page, total, setPage } = usePagedList(rows, view)
+
+  const handleLeave = async (waitlistId) => {
+    setLeavingId(waitlistId)
+    setLeaveError('')
+
+    try {
+      await callApi('/api/customer/waitlist/leave', 'POST', {
+        WaitlistID: waitlistId,
+      })
+      onChanged('You left the waitlist.')
+    } catch (error) {
+      setLeaveError(error.message)
+    } finally {
+      setLeavingId(null)
+    }
+  }
 
   return (
     <section className="cp-card">
@@ -945,6 +1035,12 @@ function PurchasesTab({ purchases }) {
           <p className="cp-empty">You haven't joined any waitlists yet.</p>
         ) : (
           <>
+            {leaveError && (
+              <p className="form-error" role="alert">
+                {leaveError}
+              </p>
+            )}
+
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
@@ -953,21 +1049,45 @@ function PurchasesTab({ purchases }) {
                     <th scope="col">Type</th>
                     <th scope="col">Joined</th>
                     <th scope="col">Status</th>
+                    <th scope="col" className="store-restock-col">
+                      <span className="sr-only">Leave waitlist</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((entry) => (
-                    <tr key={entry.WaitlistID}>
-                      <td className="strong">{entry.ExhibitionName}</td>
-                      <td>{entry.TicketType}</td>
-                      <td>{formatDate(entry.JoinedAt)}</td>
-                      <td>
-                        <span className={`badge badge-${waitlistStatus(entry).variant}`}>
-                          {waitlistStatus(entry).label}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {visibleRows.map((entry) => {
+                    const canLeave =
+                      entry.Status === 'Waiting' || entry.Status === 'Notified'
+
+                    return (
+                      <tr key={entry.WaitlistID}>
+                        <td className="strong">{entry.ExhibitionName}</td>
+                        <td>{entry.TicketType}</td>
+                        <td>{formatDate(entry.JoinedAt)}</td>
+                        <td>
+                          <span
+                            className={`badge badge-${waitlistStatus(entry).variant}`}
+                          >
+                            {waitlistStatus(entry).label}
+                          </span>
+                        </td>
+                        <td className="store-restock-col">
+                          {canLeave ? (
+                            <button
+                              type="button"
+                              className="btn secondary store-restock-btn"
+                              onClick={() => handleLeave(entry.WaitlistID)}
+                              disabled={leavingId === entry.WaitlistID}
+                            >
+                              {leavingId === entry.WaitlistID
+                                ? 'Leaving...'
+                                : 'Leave'}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1047,6 +1167,9 @@ function TicketsTab({ data, account, purchases, onBought }) {
   const myWaitlistEntries = selected
     ? waitlist.filter((entry) => entry.ExhibitionID === selected.ExhibitionID)
     : []
+  const myOpenedSpots = myWaitlistEntries.filter(
+    (entry) => entry.Status === 'Notified'
+  ).length
   const waitlistSlotsLeft = selected
     ? Math.max(waitlistLimit - selected.WaitlistCount, 0)
     : 0
@@ -1114,7 +1237,13 @@ function TicketsTab({ data, account, purchases, onBought }) {
     0
   )
 
-  const limit = selected ? selected.Remaining : 0
+  // When the only seats left are this customer's opened waitlist holds,
+  // don't let them buy more tickets than spots they were offered.
+  const limit = selected
+    ? myOpenedSpots > 0 && selected.Remaining <= myOpenedSpots
+      ? Math.min(selected.Remaining, myOpenedSpots)
+      : selected.Remaining
+    : 0
 
   const now = new Date()
   const today = [
@@ -1352,23 +1481,6 @@ function TicketsTab({ data, account, purchases, onBought }) {
     }
   }
 
-  const handleLeave = async (id) => {
-    setWaiting(true)
-    setError('')
-
-    try {
-      await callApi('/api/customer/waitlist/leave', 'POST', {
-        WaitlistID: id,
-      })
-
-      onBought('You left the waitlist.')
-    } catch (waitError) {
-      setError(waitError.message)
-    } finally {
-      setWaiting(false)
-    }
-  }
-
   if (exhibitions.length === 0) {
     return (
       <section className="cp-card">
@@ -1496,7 +1608,8 @@ function TicketsTab({ data, account, purchases, onBought }) {
                             {' - '}
                             {money(regularPrice)} × {regularCount}
                           </>
-                        ) : memberLimit > 0 ? (
+                        ) : memberLimit > 0 &&
+                          Number(memberPrice) < Number(regularPrice) ? (
                           <>
                             {money(memberPrice)}
                             <s>{money(regularPrice)}</s>
@@ -1548,24 +1661,19 @@ function TicketsTab({ data, account, purchases, onBought }) {
               <p className="cp-note">All tickets are non-refundable.</p>
             )}
 
+            {!isWaitlistMode && myOpenedSpots > 0 && (
+              <p className="cp-note">
+                {myOpenedSpots === 1
+                  ? '1 waitlist spot is open for you.'
+                  : `${myOpenedSpots} waitlist spots are open for you.`}
+              </p>
+            )}
+
             {isWaitlistMode && myWaitlistEntries.length > 0 && (
-              <div className="cp-waitlist" style={{ marginBottom: '1rem' }}>
-                {myWaitlistEntries.map((entry) => (
-                  <div key={entry.WaitlistID} className="cp-line">
-                    <span>
-                      {entry.TicketType} · {entry.Status}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn secondary cp-small-btn"
-                      onClick={() => handleLeave(entry.WaitlistID)}
-                      disabled={waiting}
-                    >
-                      Leave
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <p className="cp-note">
+                You are already on this waitlist. Manage or leave it from
+                Purchases → Waitlist.
+              </p>
             )}
 
             {error && (
@@ -1813,44 +1921,239 @@ function isRecentAlert(dateText) {
   return stamp >= cutoff
 }
 
-function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
-  const cancelled = []
+function cancelledExhibitionBullets(item) {
+  const bullets = []
 
-  for (const ticket of purchases.tickets) {
-    const isPendingRefund =
-      ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
-    const isCancelledExhibition =
-      ticket.CancelledAt && (isPendingRefund || ticket.MuseumRefund)
-    if (!isCancelledExhibition) {
-      continue
+  if (item.pendingCount > 0) {
+    bullets.push(
+      item.pendingCount === 1
+        ? '1 ticket refund pending'
+        : `${item.pendingCount} ticket refunds pending`
+    )
+  }
+
+  if (item.refundedCount > 0) {
+    bullets.push(
+      item.refundedCount === 1
+        ? `${money(item.refundedTotal)} refunded (1 ticket)`
+        : `${money(item.refundedTotal)} refunded (${item.refundedCount} tickets)`
+    )
+  }
+
+  if (item.waitlistCount > 0) {
+    bullets.push(
+      item.waitlistCount === 1
+        ? '1 waitlist spot removed'
+        : `${item.waitlistCount} waitlist spots removed`
+    )
+  }
+
+  return bullets
+}
+
+function CancelledExhibitionNotice({ item }) {
+  const bullets = cancelledExhibitionBullets(item)
+
+  return (
+    <div className="cp-alert-block">
+      <p className="cp-alert-title">
+        <strong>{item.name}</strong> was cancelled
+      </p>
+      {item.reason && (
+        <p className="cp-alert-reason">Reason: {item.reason}</p>
+      )}
+      {bullets.length > 0 && (
+        <ul className="cp-alert-bullets">
+          {bullets.map((text) => (
+            <li key={text}>{text}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function RefundGroupNotice({ group }) {
+  return (
+    <div className="cp-alert-block">
+      <p className="cp-alert-title">
+        <strong>{group.name}</strong> refund processed
+      </p>
+      <ul className="cp-alert-bullets">
+        <li>
+          {group.count === 1
+            ? `${money(group.total)} refunded (1 ticket)`
+            : `${money(group.total)} refunded (${group.count} tickets)`}
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+function buildCancelledExhibitionAlerts(purchases, alertAcks) {
+  const byId = new Map()
+
+  const ensure = (id, name, reason) => {
+    if (alertAcks.exhibitions.includes(id)) {
+      return null
     }
 
-    if (!isRecentAlert(ticket.UpdatedAt || ticket.CancelledAt)) {
-      continue
-    }
-
-    if (alertAcks.exhibitions.includes(Number(ticket.ExhibitionID))) {
-      continue
-    }
-
-    const existing = cancelled.find((item) => item.id === Number(ticket.ExhibitionID))
-
-    if (existing) {
-      existing.count = existing.count + 1
-      existing.pending = existing.pending || isPendingRefund
-    }
-    else {
-      cancelled.push({
-        id: Number(ticket.ExhibitionID),
-        name: ticket.ExhibitionName,
-        reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
-        count: 1,
-        pending: isPendingRefund,
+    if (!byId.has(id)) {
+      byId.set(id, {
+        id,
+        name,
+        reason: reason || 'Exhibition cancelled by administration',
+        pendingCount: 0,
+        refundedCount: 0,
+        refundedTotal: 0,
+        waitlistCount: 0,
+        fromNotifiedTickets: false,
+        refundTicketIds: [],
       })
+    }
+
+    return byId.get(id)
+  }
+
+  for (const ticket of purchases.tickets || []) {
+    if (!ticket.CancelledAt || !isRecentAlert(ticket.UpdatedAt || ticket.CancelledAt)) {
+      continue
+    }
+
+    const exhibitionId = Number(ticket.ExhibitionID)
+    const pendingNotice =
+      ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
+    const refundedNotice =
+      ticket.MuseumRefund && !alertAcks.refunds.includes(Number(ticket.TicketID))
+
+    if (!pendingNotice && !refundedNotice) {
+      continue
+    }
+
+    const item = ensure(
+      exhibitionId,
+      ticket.ExhibitionName,
+      ticket.CancellationReason
+    )
+
+    if (!item) {
+      continue
+    }
+
+    if (pendingNotice) {
+      item.pendingCount += 1
+      item.fromNotifiedTickets = true
+    }
+
+    if (refundedNotice) {
+      item.refundedCount += 1
+      item.refundedTotal += Number(ticket.Price) || 0
+      item.refundTicketIds.push(Number(ticket.TicketID))
+      item.fromNotifiedTickets = true
     }
   }
 
-  const openSpots = waitlist.filter((entry) => entry.Status === 'Notified')
+  for (const entry of purchases.waitlist || []) {
+    if (entry.Status !== 'Cancelled' || !entry.ExhibitionCancelled) {
+      continue
+    }
+
+    if (!isRecentAlert(entry.CancelledAt)) {
+      continue
+    }
+
+    const exhibitionId = Number(entry.ExhibitionID)
+    const hasTickets = (purchases.tickets || []).some(
+      (ticket) => Number(ticket.ExhibitionID) === exhibitionId
+    )
+    const item = ensure(
+      exhibitionId,
+      entry.ExhibitionName,
+      entry.CancellationReason
+    )
+
+    if (!item) {
+      continue
+    }
+
+    // Ticket holders get one combined notice after staff sends cancel notifications.
+    if (hasTickets && !item.fromNotifiedTickets) {
+      continue
+    }
+
+    item.waitlistCount += 1
+  }
+
+  return Array.from(byId.values()).filter(
+    (item) =>
+      item.pendingCount > 0 || item.refundedCount > 0 || item.waitlistCount > 0
+  )
+}
+
+function buildStandaloneRefundAlerts(purchases, alertAcks, cancelledIds) {
+  const byExhibition = new Map()
+
+  for (const ticket of purchases.tickets || []) {
+    const exhibitionId = Number(ticket.ExhibitionID)
+
+    if (cancelledIds.has(exhibitionId)) {
+      continue
+    }
+
+    if (
+      !ticket.MuseumRefund ||
+      !isRecentAlert(ticket.UpdatedAt) ||
+      alertAcks.refunds.includes(Number(ticket.TicketID))
+    ) {
+      continue
+    }
+
+    if (!byExhibition.has(exhibitionId)) {
+      byExhibition.set(exhibitionId, {
+        id: exhibitionId,
+        name: ticket.ExhibitionName || 'Ticket',
+        count: 0,
+        total: 0,
+        refundTicketIds: [],
+      })
+    }
+
+    const item = byExhibition.get(exhibitionId)
+    item.count += 1
+    item.total += Number(ticket.Price) || 0
+    item.refundTicketIds.push(Number(ticket.TicketID))
+  }
+
+  return Array.from(byExhibition.values())
+}
+
+function groupOpenedSpots(waitlist) {
+  const groups = new Map()
+
+  for (const entry of waitlist || []) {
+    if (entry.Status !== 'Notified') {
+      continue
+    }
+
+    const id = Number(entry.ExhibitionID)
+
+    if (!groups.has(id)) {
+      groups.set(id, {
+        ExhibitionID: id,
+        ExhibitionName: entry.ExhibitionName,
+        count: 0,
+      })
+    }
+
+    groups.get(id).count += 1
+  }
+
+  return Array.from(groups.values())
+}
+
+function Notices({ purchases, waitlist, alertAcks, onGo }) {
+  const cancelled = buildCancelledExhibitionAlerts(purchases, alertAcks)
+  const openSpots = groupOpenedSpots(waitlist)
 
   if (cancelled.length === 0 && openSpots.length === 0) {
     return null
@@ -1859,21 +2162,25 @@ function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
   return (
     <div className="cp-notices">
       {cancelled.map((item) => (
-        <p key={item.name} className="cp-notice" role="status">
-          <strong>{item.name}</strong> was cancelled due to "{item.reason}".{item.pending ? ' Your refund is processing.' : ''}
-        </p>
+        <div key={item.id} className="cp-notice" role="status">
+          <CancelledExhibitionNotice item={item} />
+        </div>
       ))}
 
-      {openSpots.map((entry) => (
-        <p key={entry.WaitlistID} className="cp-notice" role="status">
-          <span>
-            A spot opened up for <strong>{entry.ExhibitionName}</strong>. Buy your ticket before it is gone.
-          </span>
+      {openSpots.map((item) => (
+        <div key={item.ExhibitionID} className="cp-notice" role="status">
+          <p className="cp-alert-title">
+            {item.count === 1
+              ? '1 spot opened for '
+              : `${item.count} spots opened for `}
+            <strong>{item.ExhibitionName}</strong>
+          </p>
           <span className="cp-notice-actions">
-            <button type="button" className="btn secondary" onClick={onGo}>Buy Tickets</button>
-            <button type="button" className="btn secondary" onClick={() => onLeave(entry.WaitlistID)}>Leave Waitlist</button>
+            <button type="button" className="btn secondary" onClick={onGo}>
+              Buy Tickets
+            </button>
           </span>
-        </p>
+        </div>
       ))}
     </div>
   )
@@ -1899,7 +2206,10 @@ function CustomerPage() {
   const [message, setMessage] = useState('')
 
   const [customerModalOpen, setCustomerModalOpen] = useState(false)
-  const [customerAlerts, setCustomerAlerts] = useState({ cancelledExhibitions: [], refundedTickets: [] })
+  const [customerAlerts, setCustomerAlerts] = useState({
+    cancelledExhibitions: [],
+    refundedGroups: [],
+  })
   const [alertAcks, setAlertAcks] = useState({ exhibitions: [], refunds: [] })
   const [acksLoaded, setAcksLoaded] = useState(false)
   const [acknowledging, setAcknowledging] = useState(false)
@@ -1937,50 +2247,18 @@ function CustomerPage() {
   useEffect(() => {
     if (!purchases || !ticketData || !acksLoaded) return
 
-    const cancelled = []
-    for (const ticket of purchases.tickets) {
-      const isPendingRefund =
-        ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
-      const isCancelledExhibition =
-        ticket.CancelledAt && (isPendingRefund || ticket.MuseumRefund)
-      if (!isCancelledExhibition) {
-        continue
-      }
-
-      if (!isRecentAlert(ticket.UpdatedAt || ticket.CancelledAt)) {
-        continue
-      }
-
-      if (alertAcks.exhibitions.includes(Number(ticket.ExhibitionID))) {
-        continue
-      }
-
-      const existing = cancelled.find((item) => item.id === Number(ticket.ExhibitionID))
-      if (existing) {
-        existing.count = existing.count + 1
-        existing.pending = existing.pending || isPendingRefund
-      } else {
-        cancelled.push({
-          id: Number(ticket.ExhibitionID),
-          name: ticket.ExhibitionName,
-          reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
-          count: 1,
-          pending: isPendingRefund,
-        })
-      }
-    }
-
-    const refundedTix = (purchases.tickets || []).filter(
-      (tix) =>
-        tix.MuseumRefund &&
-        isRecentAlert(tix.UpdatedAt) &&
-        !alertAcks.refunds.includes(Number(tix.TicketID))
+    const cancelled = buildCancelledExhibitionAlerts(purchases, alertAcks)
+    const cancelledIds = new Set(cancelled.map((item) => item.id))
+    const refundedGroups = buildStandaloneRefundAlerts(
+      purchases,
+      alertAcks,
+      cancelledIds
     )
 
-    if (cancelled.length > 0 || refundedTix.length > 0) {
+    if (cancelled.length > 0 || refundedGroups.length > 0) {
       setCustomerAlerts({
         cancelledExhibitions: cancelled,
-        refundedTickets: refundedTix,
+        refundedGroups: refundedGroups,
       })
       setCustomerModalOpen(true)
     } else {
@@ -1995,10 +2273,19 @@ function CustomerPage() {
 
     setAcknowledging(true)
 
+    const refundIds = [
+      ...customerAlerts.cancelledExhibitions.flatMap(
+        (ex) => ex.refundTicketIds || []
+      ),
+      ...customerAlerts.refundedGroups.flatMap(
+        (group) => group.refundTicketIds || []
+      ),
+    ]
+
     try {
       const nextAcks = await callApi('/api/customer/alert-acks', 'POST', {
         exhibitions: customerAlerts.cancelledExhibitions.map((ex) => ex.id),
-        refunds: customerAlerts.refundedTickets.map((tix) => tix.TicketID),
+        refunds: refundIds,
       })
 
       setAlertAcks({
@@ -2027,16 +2314,6 @@ function CustomerPage() {
       top: 0,
       behavior: 'instant',
     })
-  }
-
-  const handleLeave = async (waitlistId) => {
-    try {
-      await callApi('/api/customer/waitlist/leave', 'POST', { WaitlistID: waitlistId })
-      handleBought('You left the waitlist.')
-    }
-    catch (leaveError) {
-      setMessage(leaveError.message)
-    }
   }
 
   const firstName = account ? account.customer.FirstName : ''
@@ -2069,7 +2346,6 @@ function CustomerPage() {
           purchases={purchases}
           waitlist={ticketData.waitlist}
           alertAcks={alertAcks}
-          onLeave={handleLeave}
           onGo={() => switchTab('tickets')}
         />
       )}
@@ -2080,58 +2356,48 @@ function CustomerPage() {
 
       {!loadError && account === null && <p className="cp-empty">Loading...</p>}
 
-      {account && tab === 'membership' && <MembershipTab account={account} onChanged={handleBought} />}
+      {account && tab === 'membership' && (
+        <MembershipTab
+          account={account}
+          waitlist={
+            (purchases?.waitlist?.length
+              ? purchases.waitlist
+              : ticketData?.waitlist) || []
+          }
+          onBuyTickets={() => switchTab('tickets')}
+          onChanged={handleBought}
+        />
+      )}
       {ticketData && tab === 'tickets' && <TicketsTab data={ticketData} account={account} purchases={purchases} onBought={handleBought} />}
       {shopItems && tab === 'shop' && (
         <ShopTab items={shopItems} account={account} onBought={handleBought} />
       )}
-      {purchases && tab === 'purchases' && <PurchasesTab purchases={purchases} onChanged={handleBought} />}
+      {purchases && tab === 'purchases' && (
+        <PurchasesTab purchases={purchases} onChanged={handleBought} />
+      )}
       {account && tab === 'details' && <DetailsTab account={account} onUpdated={handleBought} />}
 
       <Modal
         open={customerModalOpen}
-        title="Action Required"
+        title="Account Notice"
         onClose={handleAcknowledgeAlerts}
       >
-        <div className="form-grid">
-          <p style={{ fontSize: '14px', color: 'var(--muted-foreground)', margin: '0 0 12px', gridColumn: '1 / -1' }}>
-            There are important updates regarding your bookings or exhibition schedule:
-          </p>
+        <div className="cp-alert-modal">
+          {customerAlerts.cancelledExhibitions.map((ex) => (
+            <CancelledExhibitionNotice key={`cancel-${ex.id}`} item={ex} />
+          ))}
+          {customerAlerts.refundedGroups.map((group) => (
+            <RefundGroupNotice key={`refund-${group.id}`} group={group} />
+          ))}
 
-          {customerAlerts.cancelledExhibitions?.length > 0 && (
-            <div style={{ gridColumn: '1 / -1', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '15px', color: '#dc2626', marginBottom: '6px' }}>Cancelled Exhibitions</h3>
-              <ul style={{ paddingLeft: '20px', margin: 0 }}>
-                {customerAlerts.cancelledExhibitions.map((ex) => (
-                  <li key={ex.name} style={{ fontSize: '14px', marginBottom: '4px' }}>
-                    <strong>{ex.name}</strong> was cancelled due to "{ex.reason}".{ex.pending ? ' Your refund is processing.' : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {customerAlerts.refundedTickets?.length > 0 && (
-            <div style={{ gridColumn: '1 / -1', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '15px', color: '#dc2626', marginBottom: '6px' }}>Processed Refunds</h3>
-              <ul style={{ paddingLeft: '20px', margin: 0 }}>
-                {customerAlerts.refundedTickets.map((tix) => (
-                  <li key={tix.TicketID} style={{ fontSize: '14px' }}>
-                    <strong>{tix.ExhibitionName || 'Ticket'}</strong> ({tix.TicketType}) - your refund of {money(tix.Price)} was processed.
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="form-actions" style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+          <div className="form-actions">
             <button
               type="button"
               className="btn primary"
               onClick={handleAcknowledgeAlerts}
               disabled={acknowledging}
             >
-              {acknowledging ? 'Saving...' : 'Acknowledge & Close'}
+              {acknowledging ? 'Saving...' : 'Got it'}
             </button>
           </div>
         </div>

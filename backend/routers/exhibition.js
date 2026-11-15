@@ -489,37 +489,32 @@ async function deleteExhibition(params) {
     throw makeError(404, "Exhibition not found");
   }
 
-  const sold = Number(existing.Tickets);
-
-  if (sold > 0 && existing.Status === "cancelled") {
-    const [pendingRows] = await pool.query(
-      `SELECT COUNT(*) AS Pending
+  if (existing.Status === "cancelled") {
+    const [pending] = await pool.query(
+      `SELECT COUNT(*) AS Total
        FROM ticket
        WHERE ExhibitionID = ?
          AND IsDeleted = 0
          AND RefundStatus = 'Pending'`,
       [id]
     );
-    const pending = Number(pendingRows[0].Pending);
+    const waiting = Number(pending[0].Total);
 
-    if (pending > 0) {
+    if (waiting > 0) {
       throw makeError(
         400,
-        `This exhibition still has ${pending} ${pending === 1 ? "ticket" : "tickets"} waiting for a refund. Refund them on the Tickets page before deleting it.`
+        `This exhibition still has ${waiting} ${waiting === 1 ? "ticket" : "tickets"} waiting for a refund. Refund them on the Tickets page before deleting it.`
       );
     }
+  } else {
+    const sold = Number(existing.Tickets);
 
-    throw makeError(
-      400,
-      `This exhibition has ${sold} ${sold === 1 ? "ticket" : "tickets"} for visits before it was cancelled. They are part of the sales history, so it cannot be deleted.`
-    );
-  }
-
-  if (sold > 0) {
-    throw makeError(
-      400,
-      `This exhibition has ${sold} sold ${sold === 1 ? "ticket" : "tickets"}, so it cannot be deleted. Cancel it instead so visitors are notified and refunded.`
-    );
+    if (sold > 0) {
+      throw makeError(
+        400,
+        `This exhibition has ${sold} sold ${sold === 1 ? "ticket" : "tickets"}, so it cannot be deleted. Cancel it instead so visitors are notified and refunded.`
+      );
+    }
   }
 
   await pool.query(

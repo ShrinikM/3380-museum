@@ -418,13 +418,50 @@ async function updateTicket(params, body) {
   }
 }
 
+async function refundTicket(params) {
+  const id = checkId(params);
+
+  const [rows] = await pool.query(
+    `SELECT RefundStatus, IsDeleted
+     FROM ticket
+     WHERE TicketID = ?`,
+    [id]
+  );
+
+  if (rows.length === 0 || Number(rows[0].IsDeleted) === 1) {
+    throw makeError(404, "Ticket not found");
+  }
+
+  if (rows[0].RefundStatus === "Refunded") {
+    throw makeError(409, "This ticket was already refunded");
+  }
+
+  const [result] = await pool.query(
+    `UPDATE ticket
+     SET RefundStatus = 'Refunded',
+         NotificationStatus = 'Sent',
+         UpdatedAt = NOW()
+     WHERE TicketID = ?
+       AND IsDeleted = 0
+       AND RefundStatus IN ('None', 'Pending')`,
+    [id]
+  );
+
+  if (result.affectedRows === 0) {
+    throw makeError(409, "This ticket could not be refunded");
+  }
+
+  return {
+    status: 200,
+    data: { message: "Ticket refunded", TicketID: id },
+  };
+}
+
 async function deleteTicket(params) {
   const id = checkId(params);
 
   const [rows] = await pool.query(
-    `SELECT
-       RefundStatus,
-       COALESCE(VisitDate, SaleDate) < CURDATE() AS Used
+    `SELECT RefundStatus
      FROM ticket
      WHERE TicketID = ? AND IsDeleted = 0`,
     [id]
@@ -434,21 +471,10 @@ async function deleteTicket(params) {
     throw makeError(404, "Ticket not found");
   }
 
-  if (rows[0].RefundStatus === "Pending") {
+  if (rows[0].RefundStatus !== "Refunded") {
     throw makeError(
       409,
-      "This ticket is waiting for a refund. Use Refund on the Cancelled exhibitions table instead."
-    );
-  }
-
-  if (rows[0].RefundStatus === "Refunded") {
-    throw makeError(409, "This ticket was already refunded, so it cannot be deleted.");
-  }
-
-  if (Number(rows[0].Used) === 1) {
-    throw makeError(
-      409,
-      "This ticket's visit date has passed, so it is part of the sales history and cannot be deleted."
+      "Refund this ticket first, then you can delete it."
     );
   }
 
@@ -625,6 +651,12 @@ module.exports = [
     method: "PUT",
     path: "/api/tickets/:id",
     handler: updateTicket,
+    needsActor: true,
+  },
+  {
+    method: "POST",
+    path: "/api/tickets/:id/refund",
+    handler: refundTicket,
     needsActor: true,
   },
   {

@@ -6,10 +6,12 @@ const {
   getMembershipTypes,
   getMembershipLimits,
   claimWaitlistSeats,
+  countOpenedSpots,
   countMemberDiscounts,
   countReservedSeats,
   getMembershipTicketDiscount,
   lockWaitlist,
+  notifyNextWaitlistSeats,
 } = require("../prices");
 const { getPaymentMethods } = require("../paymentMethods");
 const { joinCurrentTerm, termStatus } = require("../terms");
@@ -26,6 +28,68 @@ function makeError(status, message) {
 
 function money(value) {
   return Number(Number(value).toFixed(2));
+}
+
+async function attachQueuePositions(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return entries;
+  }
+
+  const exhibitionIds = [
+    ...new Set(
+      entries
+        .filter(
+          (entry) =>
+            entry.Status === "Waiting" || entry.Status === "Notified"
+        )
+        .map((entry) => Number(entry.ExhibitionID))
+        .filter((id) => Number.isSafeInteger(id) && id > 0)
+    ),
+  ];
+
+  if (exhibitionIds.length === 0) {
+    return entries.map((entry) => ({
+      ...entry,
+      QueuePosition: null,
+    }));
+  }
+
+  const [ranked] = await pool.query(
+    `SELECT ExhibitionID, CustomerID, MIN(WaitlistID) AS FirstID
+     FROM waitlist
+     WHERE ExhibitionID IN (?)
+       AND Status IN ('Waiting', 'Notified')
+     GROUP BY ExhibitionID, CustomerID
+     ORDER BY ExhibitionID, FirstID`,
+    [exhibitionIds]
+  );
+
+  const positionByCustomer = new Map();
+
+  for (const row of ranked) {
+    const exhibitionId = Number(row.ExhibitionID);
+    const key = exhibitionId + ":" + Number(row.CustomerID);
+    const current = positionByCustomer.get(exhibitionId) || 0;
+    const next = current + 1;
+    positionByCustomer.set(exhibitionId, next);
+    positionByCustomer.set(key, next);
+  }
+
+  return entries.map((entry) => {
+    if (entry.Status !== "Waiting" && entry.Status !== "Notified") {
+      return { ...entry, QueuePosition: null };
+    }
+
+    const key =
+      Number(entry.ExhibitionID) + ":" + Number(entry.CustomerID);
+    const fromMap = positionByCustomer.get(key);
+
+    return {
+      ...entry,
+      QueuePosition:
+        fromMap == null ? Number(entry.QueuePosition) || null : fromMap,
+    };
+  });
 }
 
 function onlyDigits(value) {
@@ -986,7 +1050,8 @@ async function getPurchases(params, body, customerId) {
        DATE_FORMAT(t.VisitDate, '%Y-%m-%d') AS VisitDate,
        DATE_FORMAT(t.UpdatedAt, '%Y-%m-%d') AS UpdatedAt,
        DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt,
-       t.IsDeleted = 0 AND t.RefundStatus = 'Refunded' AS MuseumRefund
+       t.RefundStatus = 'Refunded'
+         AND t.NotificationStatus = 'Sent' AS MuseumRefund
      FROM ticket t
      JOIN exhibition e
        ON e.ExhibitionID = t.ExhibitionID
@@ -1015,18 +1080,32 @@ async function getPurchases(params, body, customerId) {
   const [waitlist] = await pool.query(
     `SELECT
        w.WaitlistID,
+       w.ExhibitionID,
+       w.CustomerID,
        e.Name AS ExhibitionName,
+       e.CancellationReason,
        w.TicketType,
        w.Status,
        e.CancelledAt IS NOT NULL AS ExhibitionCancelled,
        DATE_FORMAT(w.CreatedAt, '%Y-%m-%d') AS JoinedAt,
-       DATE_FORMAT(w.NotifiedAt, '%Y-%m-%d') AS NotifiedAt
+       DATE_FORMAT(w.NotifiedAt, '%Y-%m-%d') AS NotifiedAt,
+       DATE_FORMAT(e.CancelledAt, '%Y-%m-%d') AS CancelledAt
      FROM waitlist w
      JOIN exhibition e
        ON e.ExhibitionID = w.ExhibitionID
      WHERE w.CustomerID = ?
      ORDER BY w.WaitlistID DESC`,
     [customerId]
+  );
+
+  const waitlistWithPlaces = await attachQueuePositions(
+    waitlist.map((entry) => ({
+      ...entry,
+      WaitlistID: Number(entry.WaitlistID),
+      ExhibitionID: Number(entry.ExhibitionID),
+      CustomerID: Number(entry.CustomerID),
+      ExhibitionCancelled: Number(entry.ExhibitionCancelled) === 1,
+    }))
   );
 
   return {
@@ -1045,11 +1124,7 @@ async function getPurchases(params, body, customerId) {
         Quantity: Number(order.Quantity),
         Total: money(order.Total),
       })),
-      waitlist: waitlist.map((entry) => ({
-        ...entry,
-        WaitlistID: Number(entry.WaitlistID),
-        ExhibitionCancelled: Number(entry.ExhibitionCancelled) === 1,
-      })),
+      waitlist: waitlistWithPlaces,
     },
   };
 }
@@ -1157,29 +1232,54 @@ async function getMyAlerts(params, body, customerId) {
 
   const [cancelled] = await pool.query(
     `SELECT
+       e.ExhibitionID,
        e.Name,
        e.CancellationReason,
-       SUM(t.RefundStatus = 'Pending') AS Pending,
-       SUM(t.RefundStatus = 'Refunded') AS Refunded
-     FROM ticket t
-     JOIN exhibition e
-       ON e.ExhibitionID = t.ExhibitionID
-     WHERE t.IsDeleted = 0
-       AND t.CustomerID = ?
-       AND (t.NotificationStatus = 'Sent' OR t.RefundStatus = 'Refunded')
+       COALESCE(ticket_stats.Pending, 0) AS Pending,
+       COALESCE(ticket_stats.Refunded, 0) AS Refunded,
+       COALESCE(wait_stats.WaitlistCount, 0) AS WaitlistCount
+     FROM exhibition e
+     LEFT JOIN (
+       SELECT
+         ExhibitionID,
+         SUM(RefundStatus = 'Pending') AS Pending,
+         SUM(RefundStatus = 'Refunded') AS Refunded
+       FROM ticket
+       WHERE CustomerID = ?
+         AND IsDeleted = 0
+         AND NotificationStatus = 'Sent'
+         AND UpdatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       GROUP BY ExhibitionID
+     ) ticket_stats
+       ON ticket_stats.ExhibitionID = e.ExhibitionID
+     LEFT JOIN (
+       SELECT
+         ExhibitionID,
+         COUNT(*) AS WaitlistCount
+       FROM waitlist
+       WHERE CustomerID = ?
+         AND Status = 'Cancelled'
+       GROUP BY ExhibitionID
+     ) wait_stats
+       ON wait_stats.ExhibitionID = e.ExhibitionID
+     WHERE e.IsDeleted = 0
        AND e.CancelledAt IS NOT NULL
-       AND t.UpdatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       AND e.CancelledAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       AND (
+         COALESCE(ticket_stats.Pending, 0) > 0
+         OR COALESCE(ticket_stats.Refunded, 0) > 0
+         OR COALESCE(wait_stats.WaitlistCount, 0) > 0
+       )
        AND NOT EXISTS (
          SELECT 1
          FROM customeralertack ack
-         WHERE ack.CustomerID = t.CustomerID
+         WHERE ack.CustomerID = ?
            AND ack.AlertType = 'exhibition'
            AND ack.AlertKey = CAST(e.ExhibitionID AS CHAR)
              COLLATE utf8mb4_0900_ai_ci
        )
-     GROUP BY e.ExhibitionID, e.Name, e.CancellationReason
      ORDER BY e.Name`,
-    [customerId]
+    [customerId, customerId, customerId]
   );
 
   for (const item of cancelled) {
@@ -1187,13 +1287,26 @@ async function getMyAlerts(params, body, customerId) {
 
     if (Number(item.Pending) > 0) {
       parts.push(
-        Number(item.Pending) +
-          (Number(item.Pending) === 1 ? " refund pending" : " refunds pending")
+        Number(item.Pending) === 1
+          ? "1 ticket refund pending"
+          : Number(item.Pending) + " ticket refunds pending"
       );
     }
 
     if (Number(item.Refunded) > 0) {
-      parts.push(Number(item.Refunded) + " refunded");
+      parts.push(
+        Number(item.Refunded) === 1
+          ? "1 ticket refunded"
+          : Number(item.Refunded) + " tickets refunded"
+      );
+    }
+
+    if (Number(item.WaitlistCount) > 0) {
+      parts.push(
+        Number(item.WaitlistCount) === 1
+          ? "1 waitlist spot removed"
+          : Number(item.WaitlistCount) + " waitlist spots removed"
+      );
     }
 
     alerts.push({
@@ -1201,27 +1314,34 @@ async function getMyAlerts(params, body, customerId) {
       Message:
         item.Name +
         " was cancelled" +
-        (item.CancellationReason ? " (" + item.CancellationReason + ")" : "") +
-        ": " +
-        parts.join(", "),
+        (parts.length > 0 ? " — " + parts.join("; ") : ""),
     });
   }
 
   const [spots] = await pool.query(
-    `SELECT e.Name
+    `SELECT
+       e.ExhibitionID,
+       e.Name,
+       COUNT(*) AS SpotCount
      FROM waitlist w
      JOIN exhibition e
        ON e.ExhibitionID = w.ExhibitionID
      WHERE w.CustomerID = ?
        AND w.Status = 'Notified'
-     ORDER BY w.WaitlistID`,
+       AND e.CancelledAt IS NULL
+     GROUP BY e.ExhibitionID, e.Name
+     ORDER BY e.Name`,
     [customerId]
   );
 
   for (const spot of spots) {
+    const count = Number(spot.SpotCount);
     alerts.push({
       Paths: ["/account"],
-      Message: "A spot opened up for " + spot.Name,
+      Message:
+        count +
+        (count === 1 ? " spot opened for " : " spots opened for ") +
+        spot.Name,
     });
   }
 
@@ -1328,6 +1448,7 @@ async function getExhibitions(params, body, customerId) {
     `SELECT
        w.WaitlistID,
        w.ExhibitionID,
+       w.CustomerID,
        e.Name AS ExhibitionName,
        w.TicketType,
        w.Status
@@ -1338,6 +1459,15 @@ async function getExhibitions(params, body, customerId) {
        AND w.Status IN ('Waiting', 'Notified')
      ORDER BY w.WaitlistID`,
     [customerId]
+  );
+
+  const waitlistWithPlaces = await attachQueuePositions(
+    waitlist.map((entry) => ({
+      ...entry,
+      WaitlistID: Number(entry.WaitlistID),
+      ExhibitionID: Number(entry.ExhibitionID),
+      CustomerID: Number(entry.CustomerID),
+    }))
   );
 
   return {
@@ -1352,11 +1482,7 @@ async function getExhibitions(params, body, customerId) {
         WaitlistFull:
           Number(exhibition.WaitlistCount) >= waitlistLimit,
       })),
-      waitlist: waitlist.map((entry) => ({
-        ...entry,
-        WaitlistID: Number(entry.WaitlistID),
-        ExhibitionID: Number(entry.ExhibitionID),
-      })),
+      waitlist: waitlistWithPlaces,
       prices: ticketPrices,
       discount: getDiscount(membership),
       discounts: Object.fromEntries(
@@ -1503,12 +1629,28 @@ async function addTickets(params, body, customerId) {
       order.ExhibitionID,
       customerId
     );
+    const openedSpots = await countOpenedSpots(
+      connection,
+      customerId,
+      order.ExhibitionID
+    );
     const remaining = Number(exhibition.Capacity) - sold - reserved;
 
     if (order.Count > remaining) {
       throw makeError(
         400,
         "Not enough tickets left for that visit date"
+      );
+    }
+
+    // Opened waitlist seats are held for this customer; don't buy more of those
+    // held seats than they were offered (extra tickets may still use free capacity).
+    if (openedSpots > 0 && remaining <= openedSpots && order.Count > openedSpots) {
+      throw makeError(
+        400,
+        openedSpots === 1
+          ? "Only 1 opened waitlist spot is available to buy right now"
+          : "Only " + openedSpots + " opened waitlist spots are available to buy right now"
       );
     }
 
@@ -1722,6 +1864,25 @@ async function joinWaitlist(params, body, customerId) {
       }
     }
 
+    const [positionRows] = await connection.query(
+      `SELECT COUNT(*) AS QueuePosition
+       FROM (
+         SELECT CustomerID, MIN(WaitlistID) AS FirstID
+         FROM waitlist
+         WHERE ExhibitionID = ?
+           AND Status IN ('Waiting', 'Notified')
+         GROUP BY CustomerID
+       ) ranked
+       WHERE ranked.FirstID <= (
+         SELECT MIN(WaitlistID)
+         FROM waitlist
+         WHERE ExhibitionID = ?
+           AND CustomerID = ?
+           AND Status IN ('Waiting', 'Notified')
+       )`,
+      [exhibitionID, exhibitionID, customerId]
+    );
+
     await connection.commit();
 
     return {
@@ -1729,6 +1890,7 @@ async function joinWaitlist(params, body, customerId) {
       data: {
         message: "You are on the waitlist",
         count: total,
+        queuePosition: Number(positionRows[0].QueuePosition),
         schoolEmail: schoolEmail,
       },
     };
@@ -1743,24 +1905,54 @@ async function joinWaitlist(params, body, customerId) {
 async function leaveWaitlist(params, body, customerId) {
   await findCustomer(customerId);
   const waitlistID = checkPositiveId(body.WaitlistID, "waitlist entry");
+  const connection = await pool.getConnection();
 
-  const [result] = await pool.query(
-    `UPDATE waitlist
-     SET Status = 'Cancelled'
-     WHERE WaitlistID = ?
-       AND CustomerID = ?
-       AND Status IN ('Waiting', 'Notified')`,
-    [waitlistID, customerId]
-  );
+  try {
+    await connection.beginTransaction();
 
-  if (result.affectedRows === 0) {
-    throw makeError(404, "Waitlist entry not found");
+    const [rows] = await connection.query(
+      `SELECT WaitlistID, ExhibitionID, Status
+       FROM waitlist
+       WHERE WaitlistID = ?
+         AND CustomerID = ?
+         AND Status IN ('Waiting', 'Notified')
+       FOR UPDATE`,
+      [waitlistID, customerId]
+    );
+
+    if (rows.length === 0) {
+      throw makeError(404, "Waitlist entry not found");
+    }
+
+    const entry = rows[0];
+
+    await connection.query(
+      `DELETE FROM waitlist
+       WHERE WaitlistID = ?`,
+      [entry.WaitlistID]
+    );
+
+    // Freeing an opened seat should offer it to the next person in line.
+    if (entry.Status === "Notified") {
+      await notifyNextWaitlistSeats(
+        connection,
+        Number(entry.ExhibitionID),
+        1
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      status: 200,
+      data: { message: "You left the waitlist" },
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  return {
-    status: 200,
-    data: { message: "You left the waitlist" },
-  };
 }
 
 async function getShop() {

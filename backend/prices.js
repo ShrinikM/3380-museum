@@ -174,37 +174,109 @@ async function countReservedSeats(db, exhibitionId, customerId = null) {
   return Number(rows[0].Total);
 }
 
+async function countOpenedSpots(db, customerId, exhibitionId) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS Total
+     FROM waitlist
+     WHERE CustomerID = ?
+       AND ExhibitionID = ?
+       AND Status = 'Notified'`,
+    [customerId, exhibitionId]
+  );
+
+  return Number(rows[0].Total);
+}
+
 async function claimWaitlistSeats(db, customerId, exhibitionId, count) {
-  if (count < 1) {
-    return;
+  const seats = Math.trunc(Number(count));
+
+  if (!Number.isSafeInteger(seats) || seats < 1) {
+    return 0;
   }
 
+  // Only claim opened (Notified) seats — never pull still-Waiting rows.
+  // Inline LIMIT — bound placeholders for LIMIT are unreliable in MySQL.
   const [rows] = await db.query(
     `SELECT WaitlistID
      FROM waitlist
      WHERE CustomerID = ?
        AND ExhibitionID = ?
-       AND Status IN ('Notified', 'Waiting')
-     ORDER BY FIELD(Status, 'Notified', 'Waiting'), WaitlistID
-     LIMIT ?
+       AND Status = 'Notified'
+     ORDER BY WaitlistID
+     LIMIT ${seats}
      FOR UPDATE`,
-    [customerId, exhibitionId, count]
+    [customerId, exhibitionId]
   );
 
   if (rows.length === 0) {
-    return;
+    return 0;
   }
+
+  const ids = rows.map((row) => Number(row.WaitlistID));
 
   await db.query(
     `UPDATE waitlist
      SET Status = 'Claimed'
-     WHERE WaitlistID IN (?)`,
-    [rows.map((row) => row.WaitlistID)]
+     WHERE WaitlistID IN (?)
+       AND Status = 'Notified'`,
+    [ids]
   );
+
+  return ids.length;
+}
+
+async function notifyNextWaitlistSeats(db, exhibitionId, count) {
+  const seats = Math.trunc(Number(count));
+
+  if (!Number.isSafeInteger(seats) || seats < 1) {
+    return 0;
+  }
+
+  const [exhibitions] = await db.query(
+    `SELECT ExhibitionID
+     FROM exhibition
+     WHERE ExhibitionID = ?
+       AND IsDeleted = 0
+       AND CancelledAt IS NULL`,
+    [exhibitionId]
+  );
+
+  if (exhibitions.length === 0) {
+    return 0;
+  }
+
+  const [rows] = await db.query(
+    `SELECT WaitlistID
+     FROM waitlist
+     WHERE ExhibitionID = ?
+       AND Status = 'Waiting'
+     ORDER BY WaitlistID
+     LIMIT ${seats}
+     FOR UPDATE`,
+    [exhibitionId]
+  );
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const ids = rows.map((row) => Number(row.WaitlistID));
+
+  await db.query(
+    `UPDATE waitlist
+     SET Status = 'Notified',
+         NotifiedAt = NOW()
+     WHERE WaitlistID IN (?)
+       AND Status = 'Waiting'`,
+    [ids]
+  );
+
+  return ids.length;
 }
 
 module.exports = {
   claimWaitlistSeats,
+  countOpenedSpots,
   countMemberDiscounts,
   countReservedSeats,
   getTicketPrices,
@@ -214,4 +286,5 @@ module.exports = {
   getMembershipLimits,
   getMembershipTicketDiscount,
   lockWaitlist,
+  notifyNextWaitlistSeats,
 };

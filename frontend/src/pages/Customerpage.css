@@ -38,6 +38,43 @@
   background: var(--card);
 }
 
+.cp-waitlist-note {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cp-waitlist-note p {
+  margin: 0;
+}
+
+.cp-waitlist-note p + p {
+  margin-top: 4px;
+}
+
+.cp-waitlist-note strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.cp-text-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.cp-text-link:hover {
+  opacity: 0.85;
+}
+
 .cp-card h2 {
   margin: 0 0 16px;
   font-size: 20px;
@@ -89,7 +126,7 @@
 .cp-notice {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin: 0;
@@ -99,18 +136,68 @@
   background: var(--warning-bg);
   color: var(--warning);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .cp-notice-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .cp-notice-actions .btn {
   min-height: 32px;
   padding: 7px 12px;
   font-size: 12px;
+}
+
+.cp-alert-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cp-alert-modal .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.cp-alert-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cp-alert-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: inherit;
+}
+
+.cp-alert-reason {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+
+.cp-alert-bullets {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cp-alert-bullets li + li {
+  margin-top: 2px;
+}
+
+.cp-notice .cp-alert-title,
+.cp-notice .cp-alert-reason,
+.cp-notice .cp-alert-bullets {
+  color: inherit;
 }
 
 .cp-option.is-soldout {

@@ -34,7 +34,7 @@ function Exhibitions() {
   const [cancelError, setCancelError] = useState('')
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [exhibitionToDelete, setExhibitionToDelete] = useState(null)
+  const [exhibitionsToDelete, setExhibitionsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -374,26 +374,44 @@ function Exhibitions() {
 
   const handleDeleteSelected = () => {
     if (selectedExhibitions.length === 0) return
-    setExhibitionToDelete(selectedExhibitions[0])
+    setExhibitionsToDelete(selectedExhibitions)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!exhibitionToDelete) return
+    if (exhibitionsToDelete.length === 0) return
 
     setDeleting(true)
-    try {
-      await callApi(`/api/exhibitions/${exhibitionToDelete.ExhibitionID}`, 'DELETE')
-      setDeleteModalOpen(false)
-      setExhibitionToDelete(null)
+    setDeleteError('')
+
+    const failed = []
+
+    for (const exhibition of exhibitionsToDelete) {
+      try {
+        await callApi(`/api/exhibitions/${exhibition.ExhibitionID}`, 'DELETE')
+      } catch (err) {
+        failed.push(`${exhibition.Name}: ${err.message}`)
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === exhibitionsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some exhibitions were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       setReloadCount((count) => count + 1)
-    } catch (err) {
-      setDeleteError('Could not delete exhibition: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setExhibitionsToDelete([])
+    clear()
+    setReloadCount((count) => count + 1)
+    setDeleting(false)
   }
 
   return (
@@ -857,8 +875,16 @@ function Exhibitions() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Exhibition"
-        onClose={() => setDeleteModalOpen(false)}
+        title={
+          exhibitionsToDelete.length > 1
+            ? 'Delete Exhibitions'
+            : 'Delete Exhibition'
+        }
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+          setExhibitionsToDelete([])
+        }}
       >
         <div className="form-grid">
           {deleteError && (
@@ -868,14 +894,36 @@ function Exhibitions() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete <strong>{exhibitionToDelete?.Name}</strong>? This action cannot be undone.
+            {exhibitionsToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{exhibitionsToDelete.length} exhibitions</strong>
+                {exhibitionsToDelete.some((item) => item.Name) && (
+                  <>
+                    {' '}
+                    ({exhibitionsToDelete.map((item) => item.Name).join(', ')})
+                  </>
+                )}
+                ? This action cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{exhibitionsToDelete[0]?.Name}</strong>? This action
+                cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setDeleteModalOpen(false)}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+                setExhibitionsToDelete([])
+              }}
               disabled={deleting}
             >
               Cancel
@@ -886,7 +934,11 @@ function Exhibitions() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Exhibition'}
+              {deleting
+                ? 'Deleting...'
+                : exhibitionsToDelete.length > 1
+                  ? 'Delete Exhibitions'
+                  : 'Delete Exhibition'}
             </button>
           </div>
         </div>
