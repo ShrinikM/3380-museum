@@ -59,7 +59,7 @@ function Staff() {
   const [formData, setFormData] = useState(emptyForm)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [staffToDelete, setStaffToDelete] = useState(null)
+  const [staffToDeleteList, setStaffToDeleteList] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -240,28 +240,44 @@ function Staff() {
 
   const handleDeleteSelected = () => {
     if (selectedStaff.length === 0) return
-    setStaffToDelete(selectedStaff[0])
+    setStaffToDeleteList(selectedStaff)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!staffToDelete) return
+    if (staffToDeleteList.length === 0) return
 
     setDeleting(true)
     setDeleteError('')
 
-    try {
-      await callApi('/api/staff/' + staffToDelete.StaffID, 'DELETE')
-      setDeleteModalOpen(false)
-      setStaffToDelete(null)
+    const failed = []
+
+    for (const staff of staffToDeleteList) {
+      try {
+        await callApi('/api/staff/' + staff.StaffID, 'DELETE')
+      } catch (err) {
+        failed.push(staff.FirstName + ' ' + staff.LastName + ': ' + err.message)
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === staffToDeleteList.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some staff were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchStaff()
-    } catch (err) {
-      setDeleteError('Could not delete staff member: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setStaffToDeleteList([])
+    clear()
+    refetchStaff()
+    setDeleting(false)
   }
 
   return (
@@ -613,10 +629,15 @@ function Staff() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Staff Member"
+        title={
+          staffToDeleteList.length > 1
+            ? 'Delete Staff Members'
+            : 'Delete Staff Member'
+        }
         onClose={() => {
           setDeleteModalOpen(false)
           setDeleteError('')
+          setStaffToDeleteList([])
         }}
       >
         <div className="form-grid">
@@ -627,7 +648,22 @@ function Staff() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete staff member <strong>{staffToDelete?.FirstName} {staffToDelete?.LastName}</strong>? This action cannot be undone.
+            {staffToDeleteList.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{staffToDeleteList.length} staff members</strong>? This
+                cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete staff member{' '}
+                <strong>
+                  {staffToDeleteList[0]?.FirstName}{' '}
+                  {staffToDeleteList[0]?.LastName}
+                </strong>
+                ? This action cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
@@ -637,6 +673,7 @@ function Staff() {
               onClick={() => {
                 setDeleteModalOpen(false)
                 setDeleteError('')
+                setStaffToDeleteList([])
               }}
               disabled={deleting}
             >
@@ -648,7 +685,11 @@ function Staff() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Staff Member'}
+              {deleting
+                ? 'Deleting...'
+                : staffToDeleteList.length > 1
+                  ? 'Delete Staff Members'
+                  : 'Delete Staff Member'}
             </button>
           </div>
         </div>

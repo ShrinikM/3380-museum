@@ -26,7 +26,7 @@ function Artworks() {
   const [editingId, setEditingId] = useState(null)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [artworkToDelete, setArtworkToDelete] = useState(null)
+  const [artworksToDelete, setArtworksToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -187,26 +187,44 @@ function Artworks() {
 
   const handleDeleteSelected = () => {
     if (selectedArtworks.length === 0) return
-    setArtworkToDelete(selectedArtworks[0])
+    setArtworksToDelete(selectedArtworks)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!artworkToDelete) return
+    if (artworksToDelete.length === 0) return
 
     setDeleting(true)
-    try {
-      await callApi('/api/artworks/' + artworkToDelete.ArtworkID, 'DELETE')
-      setDeleteModalOpen(false)
-      setArtworkToDelete(null)
+    setDeleteError('')
+
+    const failed = []
+
+    for (const artwork of artworksToDelete) {
+      try {
+        await callApi('/api/artworks/' + artwork.ArtworkID, 'DELETE')
+      } catch (err) {
+        failed.push(artwork.Title + ': ' + err.message)
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === artworksToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some artworks were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchArtworks()
-    } catch (err) {
-      setDeleteError('Could not delete artwork: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setArtworksToDelete([])
+    clear()
+    refetchArtworks()
+    setDeleting(false)
   }
 
   return (
@@ -510,8 +528,12 @@ function Artworks() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Artwork"
-        onClose={() => setDeleteModalOpen(false)}
+        title={artworksToDelete.length > 1 ? 'Delete Artworks' : 'Delete Artwork'}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+          setArtworksToDelete([])
+        }}
       >
         <div className="form-grid">
           {deleteError && (
@@ -521,14 +543,30 @@ function Artworks() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete <strong>{artworkToDelete?.Title}</strong>? This action cannot be undone.
+            {artworksToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{artworksToDelete.length} artworks</strong>? This cannot
+                be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{artworksToDelete[0]?.Title}</strong>? This action
+                cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setDeleteModalOpen(false)}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+                setArtworksToDelete([])
+              }}
               disabled={deleting}
             >
               Cancel
@@ -539,7 +577,11 @@ function Artworks() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Artwork'}
+              {deleting
+                ? 'Deleting...'
+                : artworksToDelete.length > 1
+                  ? 'Delete Artworks'
+                  : 'Delete Artwork'}
             </button>
           </div>
         </div>

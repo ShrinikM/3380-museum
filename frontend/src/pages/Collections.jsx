@@ -19,7 +19,7 @@ function Collections() {
   const [editingId, setEditingId] = useState(null)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [collectionToDelete, setCollectionToDelete] = useState(null)
+  const [collectionsToDelete, setCollectionsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -142,26 +142,44 @@ function Collections() {
 
   const handleDeleteSelected = () => {
     if (selectedCollections.length === 0) return
-    setCollectionToDelete(selectedCollections[0])
+    setCollectionsToDelete(selectedCollections)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!collectionToDelete) return
+    if (collectionsToDelete.length === 0) return
 
     setDeleting(true)
-    try {
-      await callApi('/api/collections/' + collectionToDelete.CollectionID, 'DELETE')
-      setDeleteModalOpen(false)
-      setCollectionToDelete(null)
+    setDeleteError('')
+
+    const failed = []
+
+    for (const collection of collectionsToDelete) {
+      try {
+        await callApi('/api/collections/' + collection.CollectionID, 'DELETE')
+      } catch (err) {
+        failed.push(collection.Name + ': ' + err.message)
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === collectionsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some collections were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchCollections()
-    } catch (err) {
-      setDeleteError('Could not delete collection: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setCollectionsToDelete([])
+    clear()
+    refetchCollections()
+    setDeleting(false)
   }
 
   return (
@@ -347,8 +365,12 @@ function Collections() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Collection"
-        onClose={() => setDeleteModalOpen(false)}
+        title={collectionsToDelete.length > 1 ? 'Delete Collections' : 'Delete Collection'}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+          setCollectionsToDelete([])
+        }}
       >
         <div className="form-grid">
           {deleteError && (
@@ -358,14 +380,30 @@ function Collections() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete <strong>{collectionToDelete?.Name}</strong>? This action cannot be undone.
+            {collectionsToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{collectionsToDelete.length} collections</strong>? This
+                cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{collectionsToDelete[0]?.Name}</strong>? This action
+                cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setDeleteModalOpen(false)}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+                setCollectionsToDelete([])
+              }}
               disabled={deleting}
             >
               Cancel
@@ -376,7 +414,11 @@ function Collections() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Collection'}
+              {deleting
+                ? 'Deleting...'
+                : collectionsToDelete.length > 1
+                  ? 'Delete Collections'
+                  : 'Delete Collection'}
             </button>
           </div>
         </div>

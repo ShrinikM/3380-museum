@@ -65,7 +65,7 @@ function Memberships() {
 
   const [paymentMethods, setPaymentMethods] = useState([])
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [membershipToDelete, setMembershipToDelete] = useState(null)
+  const [membershipsToDelete, setMembershipsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -409,26 +409,46 @@ function Memberships() {
 
   const handleDeleteSelected = () => {
     if (selectedMemberships.length === 0) return
-    setMembershipToDelete(selectedMemberships[0])
+    setMembershipsToDelete(selectedMemberships)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!membershipToDelete) return
+    if (membershipsToDelete.length === 0) return
 
     setDeleting(true)
-    try {
-      await callApi('/api/memberships/' + membershipToDelete.id, 'DELETE')
-      setDeleteModalOpen(false)
-      setMembershipToDelete(null)
+    setDeleteError('')
+
+    const failed = []
+
+    for (const membership of membershipsToDelete) {
+      try {
+        await callApi('/api/memberships/' + membership.id, 'DELETE')
+      } catch (err) {
+        failed.push(
+          membership.firstName + ' ' + membership.lastName + ': ' + err.message
+        )
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === membershipsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some memberships were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchMemberships()
-    } catch (err) {
-      setDeleteError('Could not delete membership: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setMembershipsToDelete([])
+    clear()
+    refetchMemberships()
+    setDeleting(false)
   }
 
   return (
@@ -849,8 +869,12 @@ function Memberships() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Membership"
-        onClose={() => setDeleteModalOpen(false)}
+        title={membershipsToDelete.length > 1 ? 'Delete Memberships' : 'Delete Membership'}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+          setMembershipsToDelete([])
+        }}
       >
         <div className="form-grid">
           {deleteError && (
@@ -860,14 +884,33 @@ function Memberships() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete the membership for <strong>{membershipToDelete?.firstName} {membershipToDelete?.lastName}</strong>? This action cannot be undone.
+            {membershipsToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{membershipsToDelete.length} memberships</strong>? This
+                cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete the membership for{' '}
+                <strong>
+                  {membershipsToDelete[0]?.firstName}{' '}
+                  {membershipsToDelete[0]?.lastName}
+                </strong>
+                ? This action cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setDeleteModalOpen(false)}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+                setMembershipsToDelete([])
+              }}
               disabled={deleting}
             >
               Cancel
@@ -878,7 +921,11 @@ function Memberships() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Membership'}
+              {deleting
+                ? 'Deleting...'
+                : membershipsToDelete.length > 1
+                  ? 'Delete Memberships'
+                  : 'Delete Membership'}
             </button>
           </div>
         </div>

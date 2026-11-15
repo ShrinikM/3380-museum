@@ -20,7 +20,7 @@ function Artists() {
   const [editingId, setEditingId] = useState(null)
   
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [artistToDelete, setArtistToDelete] = useState(null)
+  const [artistsToDelete, setArtistsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -198,26 +198,46 @@ function Artists() {
 
   const handleDeleteSelected = () => {
     if (selectedArtists.length === 0) return
-    setArtistToDelete(selectedArtists[0])
+    setArtistsToDelete(selectedArtists)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!artistToDelete) return
+    if (artistsToDelete.length === 0) return
 
     setDeleting(true)
-    try {
-      await callApi('/api/artists/' + artistToDelete.ArtistID, 'DELETE')
-      setDeleteModalOpen(false)
-      setArtistToDelete(null)
+    setDeleteError('')
+
+    const failed = []
+
+    for (const artist of artistsToDelete) {
+      try {
+        await callApi('/api/artists/' + artist.ArtistID, 'DELETE')
+      } catch (err) {
+        failed.push(
+          artist.FirstName + ' ' + artist.LastName + ': ' + err.message
+        )
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === artistsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some artists were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchArtists()
-    } catch (err) {
-      setDeleteError('Could not delete artist: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setArtistsToDelete([])
+    clear()
+    refetchArtists()
+    setDeleting(false)
   }
 
   return (
@@ -454,8 +474,12 @@ function Artists() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Artist"
-        onClose={() => setDeleteModalOpen(false)}
+        title={artistsToDelete.length > 1 ? 'Delete Artists' : 'Delete Artist'}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeleteError('')
+          setArtistsToDelete([])
+        }}
       >
         <div className="form-grid">
           {deleteError && (
@@ -465,14 +489,33 @@ function Artists() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete <strong>{artistToDelete?.FirstName} {artistToDelete?.LastName}</strong>? This action cannot be undone.
+            {artistsToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{artistsToDelete.length} artists</strong>? This cannot
+                be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>
+                  {artistsToDelete[0]?.FirstName}{' '}
+                  {artistsToDelete[0]?.LastName}
+                </strong>
+                ? This action cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setDeleteModalOpen(false)}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteError('')
+                setArtistsToDelete([])
+              }}
               disabled={deleting}
             >
               Cancel
@@ -483,7 +526,11 @@ function Artists() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Artist'}
+              {deleting
+                ? 'Deleting...'
+                : artistsToDelete.length > 1
+                  ? 'Delete Artists'
+                  : 'Delete Artist'}
             </button>
           </div>
         </div>

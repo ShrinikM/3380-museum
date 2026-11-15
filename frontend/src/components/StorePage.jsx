@@ -92,7 +92,7 @@ function StorePage({ kind }){
   const [formError, setFormError] = useState('')
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [recordToDelete, setRecordToDelete] = useState(null)
+  const [recordsToDelete, setRecordsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [restockItem, setRestockItem] = useState(null)
@@ -378,46 +378,68 @@ function StorePage({ kind }){
   const handleDeleteSelected = ()=>{
     const currentSelection = tab === 'items' ? itemSelection : saleSelection
     if (currentSelection.selectedRows.length === 0) return
-    setRecordToDelete(currentSelection.selectedRows[0])
+    setRecordsToDelete(currentSelection.selectedRows)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!recordToDelete) return
+    if (recordsToDelete.length === 0) return
 
     setDeleting(true)
     setDeleteError('')
 
-    try {
-      if (tab === 'items') {
-        const hasSales = sales.some((sale)=>Number(sale.ItemID) === Number(recordToDelete.ItemID))
-        if (hasSales) {
-          throw new Error('This item has sales records. Delete those sales before deleting the item.')
-        }
-        await callApi(`${base}/items/${recordToDelete.ItemID}`, 'DELETE')
-      } else {
-        await callApi(`${base}/sales/${recordToDelete.SaleID}`, 'DELETE')
-      }
+    const failed = []
 
-      setDeleteModalOpen(false)
-      setRecordToDelete(null)
-      if (tab === 'items') {
-        itemSelection.clear()
-      } else {
-        saleSelection.clear()
-      }
-
+    for (const record of recordsToDelete) {
       try {
-        await loadStoreData()
-      } catch {
-        setLoadError('Deleted, but the lists could not be refreshed.')
+        if (tab === 'items') {
+          const hasSales = sales.some(
+            (sale) => Number(sale.ItemID) === Number(record.ItemID)
+          )
+          if (hasSales) {
+            throw new Error(
+              'This item has sales records. Delete those sales before deleting the item.'
+            )
+          }
+          await callApi(`${base}/items/${record.ItemID}`, 'DELETE')
+        } else {
+          await callApi(`${base}/sales/${record.SaleID}`, 'DELETE')
+        }
+      } catch (err) {
+        const label =
+          tab === 'items'
+            ? record.ItemName
+            : '#' + String(record.SaleID).padStart(5, '0')
+        failed.push(label + ': ' + err.message)
       }
-    } catch (err) {
-      setDeleteError(err.message)
-    } finally {
-      setDeleting(false)
     }
+
+    if (tab === 'items') {
+      itemSelection.clear()
+    } else {
+      saleSelection.clear()
+    }
+
+    try {
+      await loadStoreData()
+    } catch {
+      setLoadError('Deleted, but the lists could not be refreshed.')
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === recordsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some records were deleted. Could not delete: ' + failed.join(' ')
+      )
+      setDeleting(false)
+      return
+    }
+
+    setDeleteModalOpen(false)
+    setRecordsToDelete([])
+    setDeleting(false)
   }
 
   const switchTab = (name)=>{
@@ -832,10 +854,19 @@ function StorePage({ kind }){
 
       <Modal
         open={deleteModalOpen}
-        title={tab === 'items' ? 'Delete Item' : 'Delete Sale'}
+        title={
+          recordsToDelete.length > 1
+            ? tab === 'items'
+              ? 'Delete Items'
+              : 'Delete Sales'
+            : tab === 'items'
+              ? 'Delete Item'
+              : 'Delete Sale'
+        }
         onClose={() => {
           setDeleteModalOpen(false)
           setDeleteError('')
+          setRecordsToDelete([])
         }}
       >
         <div className="form-grid">
@@ -846,7 +877,27 @@ function StorePage({ kind }){
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete {tab === 'items' ? 'item' : 'sale'} <strong>{tab === 'items' ? recordToDelete?.ItemName : `#${String(recordToDelete?.SaleID || '').padStart(5, '0')}`}</strong>? This action cannot be undone.
+            {recordsToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>
+                  {recordsToDelete.length}{' '}
+                  {tab === 'items' ? 'items' : 'sales'}
+                </strong>
+                ? This cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete{' '}
+                {tab === 'items' ? 'item' : 'sale'}{' '}
+                <strong>
+                  {tab === 'items'
+                    ? recordsToDelete[0]?.ItemName
+                    : `#${String(recordsToDelete[0]?.SaleID || '').padStart(5, '0')}`}
+                </strong>
+                ? This action cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
@@ -856,6 +907,7 @@ function StorePage({ kind }){
               onClick={() => {
                 setDeleteModalOpen(false)
                 setDeleteError('')
+                setRecordsToDelete([])
               }}
               disabled={deleting}
             >
@@ -867,7 +919,15 @@ function StorePage({ kind }){
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : tab === 'items' ? 'Delete Item' : 'Delete Sale'}
+              {deleting
+                ? 'Deleting...'
+                : recordsToDelete.length > 1
+                  ? tab === 'items'
+                    ? 'Delete Items'
+                    : 'Delete Sales'
+                  : tab === 'items'
+                    ? 'Delete Item'
+                    : 'Delete Sale'}
             </button>
           </div>
         </div>

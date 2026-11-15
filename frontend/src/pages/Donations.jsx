@@ -31,7 +31,7 @@ function Donations() {
   const [formData, setFormData] = useState(emptyForm)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [donationToDelete, setDonationToDelete] = useState(null)
+  const [donationsToDelete, setDonationsToDelete] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -204,28 +204,49 @@ function Donations() {
 
   const handleDeleteSelected = () => {
     if (selectedDonations.length === 0) return
-    setDonationToDelete(selectedDonations[0])
+    setDonationsToDelete(selectedDonations)
     setDeleteError('')
     setDeleteModalOpen(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (!donationToDelete) return
+    if (donationsToDelete.length === 0) return
 
     setDeleting(true)
     setDeleteError('')
 
-    try {
-      await callApi('/api/donations/' + donationToDelete.DonationID, 'DELETE')
-      setDeleteModalOpen(false)
-      setDonationToDelete(null)
+    const failed = []
+
+    for (const donation of donationsToDelete) {
+      try {
+        await callApi('/api/donations/' + donation.DonationID, 'DELETE')
+      } catch (err) {
+        failed.push(
+          '#' +
+            String(donation.DonationID).padStart(5, '0') +
+            ': ' +
+            err.message
+        )
+      }
+    }
+
+    if (failed.length > 0) {
+      setDeleteError(
+        failed.length === donationsToDelete.length
+          ? 'Could not delete: ' + failed.join(' ')
+          : 'Some donations were deleted. Could not delete: ' + failed.join(' ')
+      )
       clear()
       refetchDonations()
-    } catch (err) {
-      setDeleteError('Could not delete donation: ' + err.message)
-    } finally {
       setDeleting(false)
+      return
     }
+
+    setDeleteModalOpen(false)
+    setDonationsToDelete([])
+    clear()
+    refetchDonations()
+    setDeleting(false)
   }
 
   return (
@@ -481,10 +502,11 @@ function Donations() {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Donation"
+        title={donationsToDelete.length > 1 ? 'Delete Donations' : 'Delete Donation'}
         onClose={() => {
           setDeleteModalOpen(false)
           setDeleteError('')
+          setDonationsToDelete([])
         }}
       >
         <div className="form-grid">
@@ -495,7 +517,26 @@ function Donations() {
           )}
 
           <p style={{ color: 'var(--muted-foreground)', fontSize: '14px', margin: '0 0 16px', gridColumn: '1 / -1' }}>
-            Are you sure you want to delete donation <strong>#{String(donationToDelete?.DonationID || '').padStart(5, '0')}</strong> from <strong>{donationToDelete?.FirstName} {donationToDelete?.LastName}</strong>? This action cannot be undone.
+            {donationsToDelete.length > 1 ? (
+              <>
+                Are you sure you want to delete{' '}
+                <strong>{donationsToDelete.length} donations</strong>? This
+                cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete donation{' '}
+                <strong>
+                  #{String(donationsToDelete[0]?.DonationID || '').padStart(5, '0')}
+                </strong>{' '}
+                from{' '}
+                <strong>
+                  {donationsToDelete[0]?.FirstName}{' '}
+                  {donationsToDelete[0]?.LastName}
+                </strong>
+                ? This action cannot be undone.
+              </>
+            )}
           </p>
 
           <div className="form-actions">
@@ -505,6 +546,7 @@ function Donations() {
               onClick={() => {
                 setDeleteModalOpen(false)
                 setDeleteError('')
+                setDonationsToDelete([])
               }}
               disabled={deleting}
             >
@@ -516,7 +558,11 @@ function Donations() {
               onClick={handleConfirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Donation'}
+              {deleting
+                ? 'Deleting...'
+                : donationsToDelete.length > 1
+                  ? 'Delete Donations'
+                  : 'Delete Donation'}
             </button>
           </div>
         </div>
