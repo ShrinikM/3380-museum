@@ -30,12 +30,15 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 
 4. Install packages
 
-    `cd 3380-museum/backend
+    cd 3380-museum/backend
+   
     npm install
+   
     cd ../frontend
-    npm install`
+   
+    npm install
 
-5. Start (two terminals)
+6. Start (two terminals)
 
     `cd 3380-museum/backend
     npm start`
