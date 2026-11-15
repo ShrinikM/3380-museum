@@ -50,7 +50,7 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
     npm run dev
     ```
 
-Open http://localhost:5173
+Open http://localhost:5173 in frontend terminal
 
 ## Demo Logins:
 
@@ -62,3 +62,5 @@ Password: staff123
 
 Username: customer@demo.test 
 Password: customer123
+
+(can create your own customer account)
