@@ -10,26 +10,20 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 - Database: MySQL
 
 ## Files in the Google Drive folder
-- `3380-museum.zip` - codebase
+- `3380-museum.zip` - code
 - `museum_dump.sql` - SQL dump with data
 - `project_document.pdf` - data types, user roles, triggers, queries and reports
 - `README.md` - this file
 
+## How to run the project
 
-## Step 1. Download the project
-1. Open the Google Drive folder.
-2. Download `3380-museum.zip` and `museum_dump.sql`.
-3. Unzip `3380-museum.zip`. You will get a folder `3380-museum` with `backend` and `frontend` inside.
+**1. Download and unzip**
+Download `3380-museum.zip` and `museum_dump.sql` from the Google Drive folder and unzip the zip file.
 
-## Step 2. Create the database
-1. Open MySQL Workbench and connect to your local MySQL server.
-2. Go to **Server -> Data Import**.
-3. Select **Import from Self-Contained File** and select `museum_dump.sql`.
-4. Click **Start Import**. It will create the `museum` database with all data.
-5. Click the refresh button in the **Schemas** panel. You should see `museum`.
+**2. Import the database**
+In MySQL Workbench: **Server -> Data Import -> Import from Self-Contained File**, select `museum_dump.sql` and click **Start Import**.
 
-## Step 3. Connect the backend* to your database
-In the `3380-museum/backend` folder, create a file `.env` with your own MySQL login:
+**3. Create `backend/.env`** with your MySQL login:
 
     DB_HOST=localhost
     DB_USER=root
@@ -37,30 +31,22 @@ In the `3380-museum/backend` folder, create a file `.env` with your own MySQL lo
     DB_NAME=museum
     DB_PORT=3306
 
-## Step 4. Install npm
-Open a terminal in the `3380-museum` folder and run:
+**4. Install packages**
 
-    cd backend
+    cd 3380-museum/backend
     npm install
     cd ../frontend
     npm install
 
-## Step 5. Run the project
-You need two terminals open at the same time.
-
-Terminal 1 (backend):
+**5. Start** (two terminals)
 
     cd 3380-museum/backend
     npm start
 
-Leave it and go to new terminal
-
-Terminal 2 (frontend):
-
     cd 3380-museum/frontend
     npm run dev
 
-Open the link that is shown (http://localhost:5173) in frontend terminal
+Open http://localhost:5173
 
 ## Demo Logins:
 
@@ -72,5 +58,3 @@ Password: staff123
 
 Username: customer@demo.test 
 Password: customer123
- 
-(can create your own customer account)
