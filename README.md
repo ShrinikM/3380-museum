@@ -4,8 +4,6 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 
 **Live site:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
 
-The live site is the easiest way to see the project. The steps below are for running it on your own computer.
-
 ## Tech Stack
 - Frontend: React (Vite)
 - Backend: Node.js
