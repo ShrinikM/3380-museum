@@ -4,8 +4,6 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 
 **Website:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
 
-Checking the project is easier from the live site above. Below are instructions for running the project locally on your computer.
-
 ## Technology Stack
 - Frontend: React (Vite)
 - Backend: Node.js
@@ -17,9 +15,6 @@ Checking the project is easier from the live site above. Below are instructions 
 - `project_document.pdf` - data types, user roles, triggers, queries and reports
 - `README.md` - this file
 
-## Should be installed in order to run
-- https://nodejs.org
-- https://dev.mysql.com/downloads/
 
 ## Step 1. Download the project
 1. Open the Google Drive folder.
@@ -42,7 +37,7 @@ In the `3380-museum/backend` folder, create a file `.env` with your own MySQL lo
     DB_NAME=museum
     DB_PORT=3306
 
-## Ste 4. Install npm
+## Step 4. Install npm
 Open a terminal in the `3380-museum` folder and run:
 
     cd backend
@@ -65,7 +60,7 @@ Terminal 2 (frontend):
     cd 3380-museum/frontend
     npm run dev
 
-Open the link that is shown (http://localhost:5173) in terminal 2
+Open the link that is shown (http://localhost:5173) in frontend terminal
 
 ## Demo Logins:
 
@@ -76,4 +71,6 @@ Username: staff@demo.test
 Password: staff123  
 
 Username: customer@demo.test 
-Password: customer123 
+Password: customer123
+ 
+(can create your own customer account)
