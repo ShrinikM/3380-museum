@@ -492,9 +492,26 @@ async function deleteExhibition(params) {
   const sold = Number(existing.Tickets);
 
   if (sold > 0 && existing.Status === "cancelled") {
+    const [pendingRows] = await pool.query(
+      `SELECT COUNT(*) AS Pending
+       FROM ticket
+       WHERE ExhibitionID = ?
+         AND IsDeleted = 0
+         AND RefundStatus = 'Pending'`,
+      [id]
+    );
+    const pending = Number(pendingRows[0].Pending);
+
+    if (pending > 0) {
+      throw makeError(
+        400,
+        `This exhibition still has ${pending} ${pending === 1 ? "ticket" : "tickets"} waiting for a refund. Refund them on the Tickets page before deleting it.`
+      );
+    }
+
     throw makeError(
       400,
-      `This exhibition still has ${sold} ${sold === 1 ? "ticket" : "tickets"} waiting for a refund. Refund them on the Tickets page before deleting it.`
+      `This exhibition has ${sold} ${sold === 1 ? "ticket" : "tickets"} for visits before it was cancelled. They are part of the sales history, so it cannot be deleted.`
     );
   }
 

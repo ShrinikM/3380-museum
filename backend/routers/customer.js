@@ -1166,7 +1166,7 @@ async function getMyAlerts(params, body, customerId) {
        ON e.ExhibitionID = t.ExhibitionID
      WHERE t.IsDeleted = 0
        AND t.CustomerID = ?
-       AND t.NotificationStatus = 'Sent'
+       AND (t.NotificationStatus = 'Sent' OR t.RefundStatus = 'Refunded')
        AND e.CancelledAt IS NOT NULL
        AND t.UpdatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
        AND NOT EXISTS (

@@ -1817,8 +1817,10 @@ function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
   const cancelled = []
 
   for (const ticket of purchases.tickets) {
-    const isCancelledExhibition =
+    const isPendingRefund =
       ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
+    const isCancelledExhibition =
+      ticket.CancelledAt && (isPendingRefund || ticket.MuseumRefund)
     if (!isCancelledExhibition) {
       continue
     }
@@ -1835,6 +1837,7 @@ function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
 
     if (existing) {
       existing.count = existing.count + 1
+      existing.pending = existing.pending || isPendingRefund
     }
     else {
       cancelled.push({
@@ -1842,6 +1845,7 @@ function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
         name: ticket.ExhibitionName,
         reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
         count: 1,
+        pending: isPendingRefund,
       })
     }
   }
@@ -1856,7 +1860,7 @@ function Notices({ purchases, waitlist, alertAcks, onLeave, onGo }) {
     <div className="cp-notices">
       {cancelled.map((item) => (
         <p key={item.name} className="cp-notice" role="status">
-          <strong>{item.name}</strong> was cancelled due to "{item.reason}". Your refund is processing.
+          <strong>{item.name}</strong> was cancelled due to "{item.reason}".{item.pending ? ' Your refund is processing.' : ''}
         </p>
       ))}
 
@@ -1935,8 +1939,10 @@ function CustomerPage() {
 
     const cancelled = []
     for (const ticket of purchases.tickets) {
-      const isCancelledExhibition =
+      const isPendingRefund =
         ticket.RefundStatus === 'Pending' && ticket.NotificationStatus === 'Sent'
+      const isCancelledExhibition =
+        ticket.CancelledAt && (isPendingRefund || ticket.MuseumRefund)
       if (!isCancelledExhibition) {
         continue
       }
@@ -1952,12 +1958,14 @@ function CustomerPage() {
       const existing = cancelled.find((item) => item.id === Number(ticket.ExhibitionID))
       if (existing) {
         existing.count = existing.count + 1
+        existing.pending = existing.pending || isPendingRefund
       } else {
         cancelled.push({
           id: Number(ticket.ExhibitionID),
           name: ticket.ExhibitionName,
           reason: ticket.CancellationReason || 'Exhibition cancelled by administration',
           count: 1,
+          pending: isPendingRefund,
         })
       }
     }
@@ -2096,7 +2104,7 @@ function CustomerPage() {
               <ul style={{ paddingLeft: '20px', margin: 0 }}>
                 {customerAlerts.cancelledExhibitions.map((ex) => (
                   <li key={ex.name} style={{ fontSize: '14px', marginBottom: '4px' }}>
-                    <strong>{ex.name}</strong> was cancelled due to "{ex.reason}". Your refund is processing.
+                    <strong>{ex.name}</strong> was cancelled due to "{ex.reason}".{ex.pending ? ' Your refund is processing.' : ''}
                   </li>
                 ))}
               </ul>

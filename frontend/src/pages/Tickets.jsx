@@ -813,39 +813,35 @@ function Tickets() {
                   </td>
 
                   <td className="center-cell">
-                    {ticket.RefundStatus === 'None' ? (
-                      <span
-                        className="status-dot is-off"
-                        role="img"
-                        aria-label="No refund"
-                        title="No refund"
-                      />
-                    ) : (
-                      <span
-                        className="status-dot is-on"
-                        role="img"
-                        aria-label={ticket.RefundStatus}
-                        title={ticket.RefundStatus}
-                      />
-                    )}
+                    <span
+                      className={
+                        'status-dot ' +
+                        (ticket.RefundStatus === 'Refunded'
+                          ? 'is-on'
+                          : ticket.RefundStatus === 'Pending'
+                            ? 'is-pending'
+                            : 'is-off')
+                      }
+                      role="img"
+                      aria-label={ticket.RefundStatus === 'None' ? 'No refund' : 'Refund ' + ticket.RefundStatus}
+                      title={ticket.RefundStatus === 'None' ? 'No refund' : 'Refund ' + ticket.RefundStatus}
+                    />
                   </td>
 
                   <td className="center-cell">
-                    {ticket.NotificationStatus === 'None' ? (
-                      <span
-                        className="status-dot is-off"
-                        role="img"
-                        aria-label="No notice"
-                        title="No notice"
-                      />
-                    ) : (
-                      <span
-                        className="status-dot is-on"
-                        role="img"
-                        aria-label={ticket.NotificationStatus}
-                        title={ticket.NotificationStatus}
-                      />
-                    )}
+                    <span
+                      className={
+                        'status-dot ' +
+                        (ticket.NotificationStatus === 'Sent'
+                          ? 'is-on'
+                          : ticket.NotificationStatus === 'Pending'
+                            ? 'is-pending'
+                            : 'is-off')
+                      }
+                      role="img"
+                      aria-label={ticket.NotificationStatus === 'None' ? 'No notice' : 'Notice ' + ticket.NotificationStatus}
+                      title={ticket.NotificationStatus === 'None' ? 'No notice' : 'Notice ' + ticket.NotificationStatus}
+                    />
                   </td>
                 </tr>
               )

@@ -1119,6 +1119,10 @@ textarea.input {
   background: var(--danger);
 }
 
+.status-dot.is-pending {
+  background: #e6a700;
+}
+
 .cell-sub {
   max-width: 320px;
   overflow: hidden;
