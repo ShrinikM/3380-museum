@@ -3,6 +3,7 @@
 Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Madisetty
 
 **Website:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
+
 Checking the project is easier from the live site above. Below are instructions for running the project locally on your computer.
 
 ## Technology Stack
@@ -12,7 +13,7 @@ Checking the project is easier from the live site above. Below are instructions 
 
 ## Files in the Google Drive folder
 - `3380-museum.zip` - codebase
-- `museum_dump.sql` - SQL dump with data.
+- `museum_dump.sql` - SQL dump with data
 - `project_document.pdf` - data types, user roles, triggers, queries and reports
 - `README.md` - this file
 
