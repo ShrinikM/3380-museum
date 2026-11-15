@@ -325,7 +325,6 @@ async function getRevenueReport(params) {
       term.TermID AS TransactionID,
       DATE_FORMAT(term.StartDate, '%Y-%m-%d') AS TransactionDate,
       CONCAT(term.MembershipType, ' membership') AS Detail,
-      1 AS Quantity,
       term.Price AS Amount,
       term.PaymentMethod AS PaymentMethod,
       TRIM(CONCAT(COALESCE(customer.FirstName, ''), ' ', COALESCE(customer.LastName, ''))) AS CustomerName,
@@ -346,7 +345,6 @@ async function getRevenueReport(params) {
       donations.DonationID AS TransactionID,
       DATE_FORMAT(donations.DonationDate, '%Y-%m-%d') AS TransactionDate,
       'Donation' AS Detail,
-      1 AS Quantity,
       donations.AmountDonated AS Amount,
       donations.PaymentMethod AS PaymentMethod,
       TRIM(CONCAT(donations.FirstName, ' ', donations.LastName)) AS CustomerName,
@@ -361,23 +359,29 @@ async function getRevenueReport(params) {
   );
 
   function mapRevenueTxn(row) {
-    return {
+    const item = {
       TransactionID: Number(row.TransactionID),
       TransactionDate: row.TransactionDate,
-      Detail: row.Detail,
+      Detail: row.Detail || null,
       ExhibitionName: row.ExhibitionName || null,
       TicketType: row.TicketType || null,
-      Quantity: Number(row.Quantity),
       Amount: Number(row.Amount),
       PaymentMethod: row.PaymentMethod || "-",
       CustomerName:
-        row.CustomerName && row.CustomerName.trim() !== ""
+        row.CustomerName && String(row.CustomerName).trim() !== ""
           ? row.CustomerName
           : "Walk-in",
-      StaffName: row.StaffName && row.StaffName.trim() !== ""
-        ? row.StaffName
-        : "-",
+      StaffName:
+        row.StaffName && String(row.StaffName).trim() !== ""
+          ? row.StaffName
+          : "-",
     };
+
+    if (row.Quantity !== undefined && row.Quantity !== null) {
+      item.Quantity = Number(row.Quantity);
+    }
+
+    return item;
   }
 
   return {
@@ -405,58 +409,77 @@ async function getTicketSalesReport(params) {
 
   const [rows] = await pool.query(
     `SELECT
-      exhibition.ExhibitionID,
-      exhibition.Name,
-      exhibition.Capacity,
-      COUNT(ticket.TicketID) AS TicketsSold,
-      COALESCE(SUM(ticket.Price), 0) AS Revenue,
-      SUM(CASE WHEN ticket.TicketType = 'Adult' THEN 1 ELSE 0 END) AS AdultTickets,
-      COALESCE(SUM(CASE WHEN ticket.TicketType = 'Adult' THEN ticket.Price ELSE 0 END), 0) AS AdultRevenue,
-      SUM(CASE WHEN ticket.TicketType = 'Senior' THEN 1 ELSE 0 END) AS SeniorTickets,
-      COALESCE(SUM(CASE WHEN ticket.TicketType = 'Senior' THEN ticket.Price ELSE 0 END), 0) AS SeniorRevenue,
-      SUM(CASE WHEN ticket.TicketType = 'Student' THEN 1 ELSE 0 END) AS StudentTickets,
-      COALESCE(SUM(CASE WHEN ticket.TicketType = 'Student' THEN ticket.Price ELSE 0 END), 0) AS StudentRevenue,
-      SUM(CASE WHEN ticket.TicketType = 'Child' THEN 1 ELSE 0 END) AS ChildTickets,
-      COALESCE(SUM(CASE WHEN ticket.TicketType = 'Child' THEN ticket.Price ELSE 0 END), 0) AS ChildRevenue,
-      COALESCE((
-        SELECT COUNT(*)
-        FROM ticket day_ticket
-        WHERE day_ticket.ExhibitionID = exhibition.ExhibitionID
-          AND day_ticket.IsDeleted = 0
-          AND day_ticket.RefundStatus <> 'Refunded'` +
+      ExhibitionID,
+      Name,
+      Capacity,
+      TicketsSold,
+      Revenue,
+      AdultTickets,
+      AdultRevenue,
+      SeniorTickets,
+      SeniorRevenue,
+      StudentTickets,
+      StudentRevenue,
+      ChildTickets,
+      ChildRevenue,
+      GREATEST(Capacity - PeakDayTickets, 0) AS SeatsLeft,
+      CASE
+        WHEN Capacity > 0 THEN ROUND(PeakDayTickets / Capacity * 100, 1)
+        ELSE 0
+      END AS PercentFull,
+      AvgTicketPrice
+    FROM (
+      SELECT
+        exhibition.ExhibitionID,
+        exhibition.Name,
+        exhibition.Capacity,
+        COUNT(ticket.TicketID) AS TicketsSold,
+        COALESCE(SUM(ticket.Price), 0) AS Revenue,
+        SUM(CASE WHEN ticket.TicketType = 'Adult' THEN 1 ELSE 0 END) AS AdultTickets,
+        COALESCE(SUM(CASE WHEN ticket.TicketType = 'Adult' THEN ticket.Price ELSE 0 END), 0) AS AdultRevenue,
+        SUM(CASE WHEN ticket.TicketType = 'Senior' THEN 1 ELSE 0 END) AS SeniorTickets,
+        COALESCE(SUM(CASE WHEN ticket.TicketType = 'Senior' THEN ticket.Price ELSE 0 END), 0) AS SeniorRevenue,
+        SUM(CASE WHEN ticket.TicketType = 'Student' THEN 1 ELSE 0 END) AS StudentTickets,
+        COALESCE(SUM(CASE WHEN ticket.TicketType = 'Student' THEN ticket.Price ELSE 0 END), 0) AS StudentRevenue,
+        SUM(CASE WHEN ticket.TicketType = 'Child' THEN 1 ELSE 0 END) AS ChildTickets,
+        COALESCE(SUM(CASE WHEN ticket.TicketType = 'Child' THEN ticket.Price ELSE 0 END), 0) AS ChildRevenue,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM ticket day_ticket
+          WHERE day_ticket.ExhibitionID = exhibition.ExhibitionID
+            AND day_ticket.IsDeleted = 0
+            AND day_ticket.RefundStatus <> 'Refunded'` +
       peakDates +
       `
-        GROUP BY day_ticket.VisitDate
-        ORDER BY COUNT(*) DESC
-        LIMIT 1
-      ), 0) AS PeakDayTickets,
-      CASE
-        WHEN COUNT(ticket.TicketID) > 0
-          THEN ROUND(COALESCE(SUM(ticket.Price), 0) / COUNT(ticket.TicketID), 2)
-        ELSE 0
-      END AS AvgTicketPrice
-    FROM exhibition
-    LEFT JOIN ticket
-      ON ticket.ExhibitionID = exhibition.ExhibitionID
-      AND ticket.IsDeleted = 0
-      AND ticket.RefundStatus <> 'Refunded'` +
+          GROUP BY day_ticket.VisitDate
+          ORDER BY COUNT(*) DESC
+          LIMIT 1
+        ), 0) AS PeakDayTickets,
+        CASE
+          WHEN COUNT(ticket.TicketID) > 0
+            THEN ROUND(COALESCE(SUM(ticket.Price), 0) / COUNT(ticket.TicketID), 2)
+          ELSE 0
+        END AS AvgTicketPrice
+      FROM exhibition
+      LEFT JOIN ticket
+        ON ticket.ExhibitionID = exhibition.ExhibitionID
+        AND ticket.IsDeleted = 0
+        AND ticket.RefundStatus <> 'Refunded'` +
       ticketDates +
       `
-    WHERE exhibition.IsDeleted = 0
-      AND exhibition.CancelledAt IS NULL
-    GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
-    ORDER BY TicketsSold DESC, exhibition.Name`,
+      WHERE exhibition.IsDeleted = 0
+        AND exhibition.CancelledAt IS NULL
+      GROUP BY exhibition.ExhibitionID, exhibition.Name, exhibition.Capacity
+    ) ticket_sales
+    ORDER BY TicketsSold DESC, Name`,
     peakValues.concat(values)
   );
 
   const summary = rows.map(function (row) {
-    const capacity = Number(row.Capacity);
-    const peakDayTickets = Number(row.PeakDayTickets);
-
     return {
       ExhibitionID: Number(row.ExhibitionID),
       Name: row.Name,
-      Capacity: capacity,
+      Capacity: Number(row.Capacity),
       TicketsSold: Number(row.TicketsSold),
       Revenue: Number(row.Revenue),
       AdultTickets: Number(row.AdultTickets),
@@ -467,11 +490,8 @@ async function getTicketSalesReport(params) {
       StudentRevenue: Number(row.StudentRevenue),
       ChildTickets: Number(row.ChildTickets),
       ChildRevenue: Number(row.ChildRevenue),
-      SeatsLeft: Math.max(capacity - peakDayTickets, 0),
-      PercentFull:
-        capacity > 0
-          ? Math.round((peakDayTickets / capacity) * 1000) / 10
-          : 0,
+      SeatsLeft: Number(row.SeatsLeft),
+      PercentFull: Number(row.PercentFull),
       AvgTicketPrice: Number(row.AvgTicketPrice),
     };
   });

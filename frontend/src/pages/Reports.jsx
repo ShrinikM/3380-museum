@@ -164,17 +164,6 @@ const ticketTxnColumns = [
 
 const revenueSourceOptions = ['Tickets', 'Gift', 'Café', 'Members', 'Donations']
 
-const revenueTxnColumns = [
-  { key: 'TransactionID', label: 'Txn #', title: 'Transaction ID' },
-  { key: 'TransactionDate', label: 'Date', title: 'Transaction Date' },
-  { key: 'Detail', label: 'Detail', title: 'Detail' },
-  { key: 'Quantity', label: 'Qty', title: 'Quantity' },
-  { key: 'Amount', label: 'Amount', format: 'money', title: 'Amount' },
-  { key: 'PaymentMethod', label: 'Payment', title: 'Payment Method' },
-  { key: 'CustomerName', label: 'Customer', title: 'Customer' },
-  { key: 'StaffName', label: 'Staff', title: 'Staff' },
-]
-
 const ticketRevenueTxnColumns = [
   { key: 'TransactionID', label: 'Txn #', title: 'Transaction ID' },
   { key: 'TransactionDate', label: 'Date', title: 'Transaction Date' },
@@ -185,6 +174,41 @@ const ticketRevenueTxnColumns = [
   { key: 'CustomerName', label: 'Customer', title: 'Customer' },
   { key: 'StaffName', label: 'Staff', title: 'Staff' },
 ]
+
+function getRevenueTxnColumns(source) {
+  if (source === 'Tickets') {
+    return ticketRevenueTxnColumns
+  }
+
+  const detailLabel =
+    source === 'Gift' || source === 'Café'
+      ? { label: 'Item', title: 'Item' }
+      : source === 'Members'
+        ? { label: 'Plan', title: 'Membership Plan' }
+        : source === 'Donations'
+          ? { label: 'Type', title: 'Donation Type' }
+          : { label: 'Detail', title: 'Detail' }
+
+  const columns = [
+    { key: 'TransactionID', label: 'Txn #', title: 'Transaction ID' },
+    { key: 'TransactionDate', label: 'Date', title: 'Transaction Date' },
+    { key: 'Detail', label: detailLabel.label, title: detailLabel.title },
+    { key: 'Amount', label: 'Amount', format: 'money', title: 'Amount' },
+    { key: 'PaymentMethod', label: 'Payment', title: 'Payment Method' },
+    { key: 'CustomerName', label: 'Customer', title: 'Customer' },
+    { key: 'StaffName', label: 'Staff', title: 'Staff' },
+  ]
+
+  if (source === 'Gift' || source === 'Café') {
+    columns.splice(3, 0, {
+      key: 'Quantity',
+      label: 'Qty',
+      title: 'Quantity',
+    })
+  }
+
+  return columns
+}
 
 function findReport(id){
   return reportTypes.find((type)=>type.id === id)
@@ -628,9 +652,7 @@ function Reports(){
       reportType: reportType,
       name: selectedReport.name,
       format: reportFormat,
-      startDate: selectedReport.usesDates
-        ? startDate || `Last 12 months (${rangeStart})`
-        : '-',
+      startDate: selectedReport.usesDates ? startDate || rangeStart : '-',
       endDate: selectedReport.usesDates ? endDate || rangeEnd : '-',
       runAt: new Date().toLocaleString(),
       rows: payload.rows,
@@ -919,11 +941,7 @@ function Reports(){
 
               <PagedReportTable
                 rows={viewingItem.transactions[revenueSource] || []}
-                columns={
-                  revenueSource === 'Tickets'
-                    ? ticketRevenueTxnColumns
-                    : revenueTxnColumns
-                }
+                columns={getRevenueTxnColumns(revenueSource)}
                 caption={revenueSource + ' revenue transactions'}
                 emptyText={'No ' + revenueSource.toLowerCase() + ' transactions in this date range.'}
                 resetKey={viewingItem.id + '|' + revenueSource}

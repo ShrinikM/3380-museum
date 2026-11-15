@@ -1661,14 +1661,6 @@ function TicketsTab({ data, account, purchases, onBought }) {
               <p className="cp-note">All tickets are non-refundable.</p>
             )}
 
-            {!isWaitlistMode && myOpenedSpots > 0 && (
-              <p className="cp-note">
-                {myOpenedSpots === 1
-                  ? '1 waitlist spot is open for you.'
-                  : `${myOpenedSpots} waitlist spots are open for you.`}
-              </p>
-            )}
-
             {isWaitlistMode && myWaitlistEntries.length > 0 && (
               <p className="cp-note">
                 You are already on this waitlist. Manage or leave it from
