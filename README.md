@@ -22,26 +22,26 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 
 3. Create `backend/.env`** with your MySQL login:
 
-    DB_HOST=localhost
+    `DB_HOST=localhost
     DB_USER=root
     DB_PASSWORD=yourMySQLPassword
     DB_NAME=museum
-    DB_PORT=3306
+    DB_PORT=3306`
 
 4. Install packages
 
-    cd 3380-museum/backend
+    `cd 3380-museum/backend
     npm install
     cd ../frontend
-    npm install
+    npm install`
 
 5. Start (two terminals)
 
-    cd 3380-museum/backend
-    npm start
+    `cd 3380-museum/backend
+    npm start`
 
-    cd 3380-museum/frontend
-    npm run dev
+    `cd 3380-museum/frontend
+    npm run dev`
 
 Open http://localhost:5173
 
