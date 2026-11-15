@@ -2,7 +2,7 @@
 
 Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Madisetty
 
-**Live site:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
+**Website:** https://coogmuseum-bxhea8dad0dwhhhb.westus3-01.azurewebsites.net
 
 ## Tech Stack
 - Frontend: React (Vite)
@@ -11,13 +11,13 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 
 ## Files in the Google Drive folder
 - `<3380-museum.zip>` - complete code base (frontend and backend)
-- `museum_dump.sql` - SQL dump of the populated `museum` database (tables, data and triggers). The same file is also inside the project at `backend/schema/museum_dump.sql`
+- `museum_dump.sql` - SQL dump with data. The same file is also inside the project at `backend/schema/museum_dump.sql`
 - `<project_document.pdf>` - data types, user roles, triggers, queries and reports
 - `README.md` - this file
 
 ## What you need installed
-- Node.js 18 or newer (includes npm): https://nodejs.org
-- MySQL Server 8 and MySQL Workbench: https://dev.mysql.com/downloads/
+- https://nodejs.org
+- https://dev.mysql.com/downloads/
 
 ## Step 1. Download the project
 1. Open the Google Drive folder.
@@ -32,7 +32,7 @@ Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Mad
 5. Click the refresh button in the **Schemas** panel. You should see `museum`.
 
 ## Step 3. Connect the backend to your database
-In the `3380-museum/backend` folder, create a file named `.env` (no other name, no extension) with your own MySQL login:
+In the `3380-museum/backend` folder, create a file named `.env` with your own MySQL login:
 
     DB_HOST=localhost
     DB_USER=root
@@ -63,7 +63,7 @@ Terminal 2 (frontend):
     cd 3380-museum/frontend
     npm run dev
 
-Open the link shown in the frontend terminal (usually http://localhost:5173).
+Open the link that is shown (http://localhost:5173).
 
 ## Demo Logins:
 
