@@ -1,4 +1,4 @@
-# Museum Database Project – COSC 3380
+# Museum Database Project - COSC 3380
 
 Team #3: Avery Hong, Ruben Reyna, Valeriia Krokhotina, Kensey Celis, Shrinik Madisetty
 
